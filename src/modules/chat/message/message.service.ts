@@ -4,7 +4,7 @@ import appConfig from '../../../config/app.config';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ChatRepository } from '../../../common/repository/chat/chat.repository';
-import { SojebStorage } from '../../../common/lib/Disk/SojebStorage';
+import { SazedStorage } from '../../../common/lib/Disk/SazedStorage';
 import { DateHelper } from '../../../common/helper/date.helper';
 import { MessageGateway } from './message.gateway';
 import { UserRepository } from '../../../common/repository/user/user.repository';
@@ -185,7 +185,7 @@ export class MessageService {
       // add attachment url
       for (const message of messages) {
         if (message.attachment) {
-          message.attachment['file_url'] = SojebStorage.url(
+          message.attachment['file_url'] = SazedStorage.url(
             appConfig().storageUrl.attachment + message.attachment.file,
           );
         }
@@ -194,12 +194,12 @@ export class MessageService {
       // add image url
       for (const message of messages) {
         if (message.sender && message.sender.avatar) {
-          message.sender['avatar_url'] = SojebStorage.url(
+          message.sender['avatar_url'] = SazedStorage.url(
             appConfig().storageUrl.avatar + message.sender.avatar,
           );
         }
         if (message.receiver && message.receiver.avatar) {
-          message.receiver['avatar_url'] = SojebStorage.url(
+          message.receiver['avatar_url'] = SazedStorage.url(
             appConfig().storageUrl.avatar + message.receiver.avatar,
           );
         }

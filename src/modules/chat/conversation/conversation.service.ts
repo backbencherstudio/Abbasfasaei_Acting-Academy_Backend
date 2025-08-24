@@ -4,7 +4,8 @@ import { UpdateConversationDto } from './dto/update-conversation.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PrismaClient } from '@prisma/client';
 import appConfig from '../../../config/app.config';
-import { SojebStorage } from '../../../common/lib/Disk/SojebStorage';
+// Update the import path below to the correct location of SazedStorage
+import { SazedStorage } from '../../../common/lib/disk/SazedStorage';
 import { DateHelper } from '../../../common/helper/date.helper';
 import { MessageGateway } from '../message/message.gateway';
 
@@ -114,12 +115,12 @@ export class ConversationService {
 
       // add image url
       if (conversation.creator.avatar) {
-        conversation.creator['avatar_url'] = SojebStorage.url(
+        conversation.creator['avatar_url'] = SazedStorage.url(
           appConfig().storageUrl.avatar + conversation.creator.avatar,
         );
       }
       if (conversation.participant.avatar) {
-        conversation.participant['avatar_url'] = SojebStorage.url(
+        conversation.participant['avatar_url'] = SazedStorage.url(
           appConfig().storageUrl.avatar + conversation.participant.avatar,
         );
       }
@@ -190,12 +191,12 @@ export class ConversationService {
       // add image url
       for (const conversation of conversations) {
         if (conversation.creator.avatar) {
-          conversation.creator['avatar_url'] = SojebStorage.url(
+          conversation.creator['avatar_url'] = SazedStorage.url(
             appConfig().storageUrl.avatar + conversation.creator.avatar,
           );
         }
         if (conversation.participant.avatar) {
-          conversation.participant['avatar_url'] = SojebStorage.url(
+          conversation.participant['avatar_url'] = SazedStorage.url(
             appConfig().storageUrl.avatar + conversation.participant.avatar,
           );
         }
@@ -242,7 +243,7 @@ export class ConversationService {
 
       // add image url
       if (conversation.creator.avatar) {
-        conversation.creator['avatar_url'] = SojebStorage.url(
+        conversation.creator['avatar_url'] = SazedStorage.url(
           appConfig().storageUrl.avatar + conversation.creator.avatar,
         );
       }

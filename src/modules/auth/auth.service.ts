@@ -11,7 +11,7 @@ import { UserRepository } from '../../common/repository/user/user.repository';
 import { MailService } from '../../mail/mail.service';
 import { UcodeRepository } from '../../common/repository/ucode/ucode.repository';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { SojebStorage } from '../../common/lib/Disk/SojebStorage';
+import { SazedStorage } from '../../common/lib/disk/SazedStorage';
 import { DateHelper } from '../../common/helper/date.helper';
 import { StripePayment } from '../../common/lib/Payment/stripe/StripePayment';
 import { StringHelper } from '../../common/helper/string.helper';
@@ -53,7 +53,7 @@ export class AuthService {
       }
 
       if (user.avatar) {
-        user['avatar_url'] = SojebStorage.url(
+        user['avatar_url'] = SazedStorage.url(
           appConfig().storageUrl.avatar + user.avatar,
         );
       }
@@ -127,14 +127,14 @@ export class AuthService {
           select: { avatar: true },
         });
         if (oldImage.avatar) {
-          await SojebStorage.delete(
+          await SazedStorage.delete(
             appConfig().storageUrl.avatar + oldImage.avatar,
           );
         }
 
         // upload file
         const fileName = `${StringHelper.randomString()}${image.originalname}`;
-        await SojebStorage.put(
+        await SazedStorage.put(
           appConfig().storageUrl.avatar + fileName,
           image.buffer,
         );

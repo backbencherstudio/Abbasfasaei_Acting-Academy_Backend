@@ -10,7 +10,7 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 import appConfig from './config/app.config';
 import { CustomExceptionFilter } from './common/exception/custom-exception.filter';
-import { SojebStorage } from './common/lib/Disk/SojebStorage';
+import { SazedStorage } from './common/lib/Disk/SazedStorage';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -47,7 +47,7 @@ async function bootstrap() {
   app.useGlobalFilters(new CustomExceptionFilter());
 
   // storage setup
-  SojebStorage.config({
+  SazedStorage.config({
     driver: 'local',
     connection: {
       rootUrl: appConfig().storageUrl.rootUrl,
