@@ -84,6 +84,7 @@ model User {
   role_users           RoleUser[]
   experience_levels    ExperienceLevel[]
   payment_transactions PaymentTransaction[]
+  UserProfile          UserProfile[]
 
   @@map("users")
 }
@@ -421,22 +422,6 @@ model UserSetting {
   @@map("user_settings")
 }
 
-// this table stores example
-// model Note {
-//   id                String  @id @default(cuid())
-//   created_at DateTime  @default(now())
-//   updated_at DateTime  @default(now())
-//   deleted_at DateTime?
-//   status     Int?      @default(1) @db.SmallInt
-
-//   title String?
-//   body  String? @db.Text
-
-//   tenant_id Int?
-//   tenant    Organization? @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
-//   @@map("posts")
-// }
-
 //-----------------------Enrollment------------------------
 model Enrollment {
   id         String   @id @default(cuid())
@@ -481,7 +466,7 @@ model EnrollmentPayment {
   created_at     DateTime    @default(now())
   updated_at     DateTime    @default(now())
   payment_type   PaymentType
-  payment_method String 
+  payment_method String
   account_holder String
   card_number    String
   card_expiry    String
@@ -492,4 +477,37 @@ model EnrollmentPayment {
 enum PaymentType {
   ONE_TIME
   MONTHLY_INSTALLMENTS
+}
+
+//------------end Enrollment------------------------
+
+//--------------profile/account-----------------------
+model UserProfile {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+
+  user_id String?
+  user    User?   @relation(fields: [user_id], references: [id])
+
+  membership_status MembershipStatus @default(PENDING)
+
+  avatar            String?
+  name              String
+  personal_info     Json? // Store address, phone, date of birth, etc.
+  account_settings  Json? // Store account preferences/settings
+  subscription      Json? // Payment/subscription details
+  contract_docs     Json? // Contract documents metadata
+  feedback          Json? // Feedback & certificates
+  push_notification Json? // Notification preferences
+  support           Json? // Support tickets or info
+
+  @@map("user_profiles")
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  SUSPENDED
 }
