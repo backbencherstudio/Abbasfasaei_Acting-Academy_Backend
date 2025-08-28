@@ -58,6 +58,7 @@ model User {
   zip_code      String?
   gender        String?
   date_of_birth DateTime? @db.Date
+  acting_goals  String?
 
   // billing id. e.g. stripe customer id
   billing_id String?
@@ -81,6 +82,7 @@ model User {
   ucodes               Ucode[]
   roles                Role[]
   role_users           RoleUser[]
+  experience_levels    ExperienceLevel[]
   payment_transactions PaymentTransaction[]
 
   @@map("users")
@@ -434,3 +436,60 @@ model UserSetting {
 //   tenant    Organization? @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
 //   @@map("posts")
 // }
+
+//-----------------------Enrollment------------------------
+model Enrollment {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+
+  course CourseType
+
+  full_name     String
+  email         String
+  phone         String
+  address       String
+  date_of_birth DateTime
+
+  experience_level ExperienceLevel
+  acting_goals     String
+
+  // Digital signature
+  digital_signature String
+  signature_date    DateTime
+  agreed_rules      Boolean  @default(false)
+
+  @@map("enrollments")
+}
+
+enum CourseType {
+  ONE_YEAR_ADULT
+  TWO_YEAR_ADULT
+  TWO_YEAR_KIDS
+  FULL_PACKAGE_KIDS
+  FULL_PACKAGE_ADULTS
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+model EnrollmentPayment {
+  id             String      @id @default(cuid())
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @default(now())
+  payment_type   PaymentType
+  payment_method String 
+  account_holder String
+  card_number    String
+  card_expiry    String
+  card_cvc       String
+  invoice_sent   Boolean     @default(false)
+}
+
+enum PaymentType {
+  ONE_TIME
+  MONTHLY_INSTALLMENTS
+}

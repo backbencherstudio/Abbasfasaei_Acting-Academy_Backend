@@ -21,7 +21,7 @@ export class MailService {
         to: member.email,
         from: from,
         subject: subject,
-        template: 'member-invitation',
+        template: 'member-invitation.ejs',
         context: {
           user: user,
           member: member,
@@ -44,7 +44,7 @@ export class MailService {
         to: email,
         from: from,
         subject: subject,
-        template: 'email-verification',
+        template: 'email-verification.ejs',
         context: {
           name: name,
           otp: otp,
@@ -68,7 +68,7 @@ export class MailService {
       await this.queue.add('sendVerificationLink', {
         to: params.email,
         subject: 'Verify Your Email',
-        template: './verification-link',
+        template: 'verification-link.ejs',
         context: {
           name: params.name,
           verificationLink,

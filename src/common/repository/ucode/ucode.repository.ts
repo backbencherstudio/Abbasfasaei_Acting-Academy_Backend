@@ -46,6 +46,36 @@ export class UcodeRepository {
     }
   }
 
+  static async validateTokenByTokenOnly({ token }: { token: string }) {
+    const date = DateHelper.now().toISOString();
+
+    const data = await prisma.ucode.findFirst({
+      where: {
+        AND: [
+          { token: token },
+          {
+            expired_at: {
+              gte: date,
+            },
+          },
+        ],
+      },
+    });
+
+    if (data) {
+      // delete token after successful verification
+      await prisma.ucode.delete({
+        where: {
+          id: data.id,
+        },
+      });
+
+      return true;
+    }
+
+    return false;
+  }
+
   /**
    * validate ucode token
    * @returns

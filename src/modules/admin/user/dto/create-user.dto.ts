@@ -29,4 +29,33 @@ export class CreateUserDto {
     example: 'user',
   })
   type?: string;
+
+  @IsOptional()
+  @ApiProperty({
+    description: 'The avatar of the user',
+    example: 'avatar.png',
+  })
+  avatar?: string;
+
+  @IsOptional()
+  @ApiProperty({
+    description: 'The date of birth of the user',
+    example: '1990-01-01',
+  })
+  date_of_birth?: string;
+
+  @IsOptional()
+  @ApiProperty({
+    description: 'The gender of the user',
+    example: 'male',
+  })
+  gender?: string;
+
+
+  @IsOptional()
+  @ApiProperty({
+    description: 'The location of the user',
+    example: 'New York, USA',
+  })
+  address?: string;
 }

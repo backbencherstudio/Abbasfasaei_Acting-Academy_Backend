@@ -14,10 +14,17 @@ import { createReadStream } from 'fs';
 import { join } from 'path';
 import { Response } from 'express';
 import { Readable } from 'stream';
+import { ok } from 'assert';
+import { get } from 'http';
 
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
+
+  @Get('/')
+  root() {
+    return { ok: true, message: 'Server is running' };
+  }
 
   @Get()
   getHello(): string {

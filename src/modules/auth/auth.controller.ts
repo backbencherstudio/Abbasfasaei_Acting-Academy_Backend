@@ -36,6 +36,7 @@ export class AuthController {
   @Get('me')
   async me(@Req() req: Request) {
     try {
+      // console.log(req.user);
       const user_id = req.user.userId;
 
       const response = await this.authService.me(user_id);
@@ -51,30 +52,12 @@ export class AuthController {
 
   @ApiOperation({ summary: 'Register a user' })
   @Post('register')
-  async create(@Body() data: CreateUserDto) {
+  async create(@Body() data: CreateUserDto, @Req() req: Request) {
     try {
-      const name = data.name;
-      const first_name = data.first_name;
-      const last_name = data.last_name;
       const email = data.email;
       const password = data.password;
       const type = data.type;
 
-      if (!name) {
-        throw new HttpException('Name not provided', HttpStatus.UNAUTHORIZED);
-      }
-      if (!first_name) {
-        throw new HttpException(
-          'First name not provided',
-          HttpStatus.UNAUTHORIZED,
-        );
-      }
-      if (!last_name) {
-        throw new HttpException(
-          'Last name not provided',
-          HttpStatus.UNAUTHORIZED,
-        );
-      }
       if (!email) {
         throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
       }
@@ -86,9 +69,6 @@ export class AuthController {
       }
 
       const response = await this.authService.register({
-        name: name,
-        first_name: first_name,
-        last_name: last_name,
         email: email,
         password: password,
         type: type,
@@ -109,6 +89,7 @@ export class AuthController {
   @Post('login')
   async login(@Req() req: Request, @Res() res: Response) {
     try {
+      // console.log("user", req.user);
       const user_id = req.user.id;
 
       const user_email = req.user.email;
@@ -235,7 +216,7 @@ export class AuthController {
   async forgotPassword(@Body() data: { email: string }) {
     try {
       const email = data.email;
-      if (!email) {
+      if (!email) { 
         throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
       }
       return await this.authService.forgotPassword(email);
@@ -253,7 +234,7 @@ export class AuthController {
   async verifyEmail(@Body() data: VerifyEmailDto) {
     try {
       const email = data.email;
-      const token = data.token;
+      const token = data.otp;
       if (!email) {
         throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
       }
@@ -294,12 +275,12 @@ export class AuthController {
   @ApiOperation({ summary: 'Reset password' })
   @Post('reset-password')
   async resetPassword(
-    @Body() data: { email: string; token: string; password: string },
+    @Body() data: { email: string; otp: string; new_password: string },
   ) {
     try {
       const email = data.email;
-      const token = data.token;
-      const password = data.password;
+      const token = data.otp;
+      const password = data.new_password;
       if (!email) {
         throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
       }

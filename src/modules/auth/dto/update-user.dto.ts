@@ -5,38 +5,10 @@ import { IsOptional } from 'class-validator';
 export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsOptional()
   @ApiProperty({
-    description: 'Country',
-    example: 'Nigeria',
+    description: 'Full name',
+    example: 'John Doe',
   })
-  country?: string;
-
-  @IsOptional()
-  @ApiProperty({
-    description: 'State',
-    example: 'Lagos',
-  })
-  state?: string;
-
-  @IsOptional()
-  @ApiProperty({
-    description: 'City',
-    example: 'Lagos',
-  })
-  city?: string;
-
-  @IsOptional()
-  @ApiProperty({
-    description: 'Local government',
-    example: 'Lagos',
-  })
-  local_government?: string;
-
-  @IsOptional()
-  @ApiProperty({
-    description: 'Zip code',
-    example: '123456',
-  })
-  zip_code?: string;
+  name?: string;
 
   @IsOptional()
   @ApiProperty({
@@ -47,22 +19,29 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
 
   @IsOptional()
   @ApiProperty({
-    description: 'Address',
-    example: 'New York, USA',
-  })
-  address?: string;
-
-  @IsOptional()
-  @ApiProperty({
-    description: 'Gender',
-    example: 'male',
-  })
-  gender?: string;
-
-  @IsOptional()
-  @ApiProperty({
-    description: 'Date of birth',
+    description: 'Date of Birth',
     example: '14/11/2001',
   })
   date_of_birth?: string;
+
+  @IsOptional()
+  @ApiProperty({
+    description: 'Experience Level',
+    example: 'Intermediate',
+  })
+  experience_levels?: string[];
+
+  @IsOptional()
+  @ApiProperty({
+    description: 'Acting Goals',
+    example: 'Become a lead actor in a major film',
+  })
+  acting_goals?: string;
+
+  @IsOptional()
+  @ApiProperty({
+    description: 'Profile image',
+    example: 'http://localhost:4000/api/users/avatar/1234567890',
+  })
+  avatar?: string;
 }

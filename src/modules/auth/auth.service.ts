@@ -41,6 +41,8 @@ export class AuthService {
           type: true,
           gender: true,
           date_of_birth: true,
+          experience_levels: true,
+          acting_goals: true,
           created_at: true,
         },
       });
@@ -87,35 +89,14 @@ export class AuthService {
       if (updateUserDto.name) {
         data.name = updateUserDto.name;
       }
-      if (updateUserDto.first_name) {
-        data.first_name = updateUserDto.first_name;
-      }
-      if (updateUserDto.last_name) {
-        data.last_name = updateUserDto.last_name;
-      }
       if (updateUserDto.phone_number) {
         data.phone_number = updateUserDto.phone_number;
       }
-      if (updateUserDto.country) {
-        data.country = updateUserDto.country;
+      if (updateUserDto.experience_levels) {
+        data.experience_levels = updateUserDto.experience_levels;
       }
-      if (updateUserDto.state) {
-        data.state = updateUserDto.state;
-      }
-      if (updateUserDto.local_government) {
-        data.local_government = updateUserDto.local_government;
-      }
-      if (updateUserDto.city) {
-        data.city = updateUserDto.city;
-      }
-      if (updateUserDto.zip_code) {
-        data.zip_code = updateUserDto.zip_code;
-      }
-      if (updateUserDto.address) {
-        data.address = updateUserDto.address;
-      }
-      if (updateUserDto.gender) {
-        data.gender = updateUserDto.gender;
+      if (updateUserDto.acting_goals) {
+        data.acting_goals = updateUserDto.acting_goals;
       }
       if (updateUserDto.date_of_birth) {
         data.date_of_birth = DateHelper.format(updateUserDto.date_of_birth);
@@ -326,16 +307,10 @@ export class AuthService {
   }
 
   async register({
-    name,
-    first_name,
-    last_name,
     email,
     password,
     type,
   }: {
-    name: string;
-    first_name: string;
-    last_name: string;
     email: string;
     password: string;
     type?: string;
@@ -355,9 +330,6 @@ export class AuthService {
       }
 
       const user = await UserRepository.createUser({
-        name: name,
-        first_name: first_name,
-        last_name: last_name,
         email: email,
         password: password,
         type: type,
@@ -371,22 +343,22 @@ export class AuthService {
       }
 
       // create stripe customer account
-      const stripeCustomer = await StripePayment.createCustomer({
-        user_id: user.data.id,
-        email: email,
-        name: name,
-      });
+      // const stripeCustomer = await StripePayment.createCustomer({
+      //   user_id: user.data.id,
+      //   email: email,
+      //   name: name,
+      // });
 
-      if (stripeCustomer) {
-        await this.prisma.user.update({
-          where: {
-            id: user.data.id,
-          },
-          data: {
-            billing_id: stripeCustomer.id,
-          },
-        });
-      }
+      // if (stripeCustomer) {
+      //   await this.prisma.user.update({
+      //     where: {
+      //       id: user.data.id,
+      //     },
+      //     data: {
+      //       billing_id: stripeCustomer.id,
+      //     },
+      //   });
+      // }
 
       // ----------------------------------------------------
       // // create otp code
@@ -410,22 +382,27 @@ export class AuthService {
       // ----------------------------------------------------
 
       // Generate verification token
-      const token = await UcodeRepository.createVerificationToken({
-        userId: user.data.id,
-        email: email,
-      });
+      // const token = await UcodeRepository.createVerificationToken({
+      //   userId: user.data.id,
+      //   email: email,
+      // });
 
-      // Send verification email with token
-      await this.mailService.sendVerificationLink({
-        email,
-        name: email,
-        token: token.token,
-        type: type,
-      });
+      // // Send verification email with token
+      // await this.mailService.sendVerificationLink({
+      //   email,
+      //   name: email,
+      //   token: token.token,
+      //   type: type,
+      // });
+
+      // return {
+      //   success: true,
+      //   message: 'We have sent a verification link to your email',
+      // };
 
       return {
         success: true,
-        message: 'We have sent a verification link to your email',
+        message: 'You have successfully registered',
       };
     } catch (error) {
       return {
@@ -471,6 +448,32 @@ export class AuthService {
       };
     }
   }
+
+  // // verify otp
+  // async verifyOtp({ token }) {
+  //   try {
+  //     const existToken = await UcodeRepository.validateOtp({
+  //       token: token,
+  //     });
+
+  //     if (existToken) {
+  //       return {
+  //         success: true,
+  //         message: 'OTP verified successfully',
+  //       };
+  //     } else {
+  //       return {
+  //         success: false,
+  //         message: 'Invalid OTP',
+  //       };
+  //     }
+  //   } catch (error) {
+  //     return {
+  //       success: false,
+  //       message: error.message,
+  //     };
+  //   }
+  // }
 
   async resetPassword({ email, token, password }) {
     try {
