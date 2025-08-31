@@ -18,9 +18,13 @@ import { AbilityModule } from './ability/ability.module';
 import { MailModule } from './mail/mail.module';
 import { ApplicationModule } from './modules/application/application.module';
 import { AdminModule } from './modules/admin/admin.module';
-import { ChatModule } from './modules/chat/chat.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { CoursesModule } from './modules/enrollment/courses/courses.module';
+import { PresenceModule } from './modules/chat/presence/presence.module';
+import { UploadsModule } from './modules/chat/uploads/uploads.module';
+import { MessagesModule } from './modules/chat/messages/messages.module';
+import { ConversationsModule } from './modules/chat/conversations/conversations.module';
+import { RealtimeModule } from './modules/chat/realtime/realtime.module';
 
 @Module({
   imports: [
@@ -73,7 +77,11 @@ import { CoursesModule } from './modules/enrollment/courses/courses.module';
     MailModule,
     ApplicationModule,
     AdminModule,
-    ChatModule,
+    RealtimeModule,
+    ConversationsModule,
+    MessagesModule,
+    UploadsModule,
+    PresenceModule,
     PaymentModule,
     CoursesModule,
   ],
