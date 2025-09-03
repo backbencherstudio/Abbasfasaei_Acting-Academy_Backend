@@ -10,7 +10,7 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 import appConfig from './config/app.config';
 import { CustomExceptionFilter } from './common/exception/custom-exception.filter';
-import { SazedStorage } from './common/lib/Disk/SazedStorage';
+import { SazedStorage } from './common/lib/disk/SazedStorage';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {

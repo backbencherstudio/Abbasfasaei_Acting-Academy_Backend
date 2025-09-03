@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebRTC Chat Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    .video-area { display: flex; gap: 2em; margin-bottom: 1em; }
+    video { width: 320px; height: 240px; background: #222; border-radius: 8px; }
+    .controls { margin-bottom: 1em; }
+    .status { margin-top: 1em; color: green; }
+  </style>
+</head>
+<body>
+  <h1>WebRTC DM/Group Call Demo</h1>
+  <div class="controls">
+    <input id="conversationId" placeholder="Conversation ID" value="testconv" />
+    <input id="userIds" placeholder="Comma-separated User IDs" value="user2" />
+    <button onclick="initiateCall()">Start Call</button>
+    <button onclick="endCall()">End Call</button>
+  </div>
+  <div class="video-area">
+    <div>
+      <h3>Local Video</h3>
+      <video id="localVideo" autoplay muted></video>
+    </div>
+    <div>
+      <h3>Remote Video</h3>
+      <video id="remoteVideo" autoplay></video>
+    </div>
+  </div>
+  <div class="status" id="status"></div>
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <script src="webrtc.js"></script>
+</body>
+</html>

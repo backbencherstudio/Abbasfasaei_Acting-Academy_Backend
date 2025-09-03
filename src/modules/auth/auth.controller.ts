@@ -35,7 +35,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async me(@Req() req: Request) {
-    try {
+    try { 
       // console.log(req.user);
       const user_id = req.user.userId;
 
