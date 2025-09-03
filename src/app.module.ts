@@ -25,6 +25,7 @@ import { UploadsModule } from './modules/chat/uploads/uploads.module';
 import { MessagesModule } from './modules/chat/messages/messages.module';
 import { ConversationsModule } from './modules/chat/conversations/conversations.module';
 import { RealtimeModule } from './modules/chat/realtime/realtime.module';
+import { CommunityModule } from './modules/community/community.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { RealtimeModule } from './modules/chat/realtime/realtime.module';
     PresenceModule,
     PaymentModule,
     CoursesModule,
+    CommunityModule,
   ],
   controllers: [AppController],
   providers: [

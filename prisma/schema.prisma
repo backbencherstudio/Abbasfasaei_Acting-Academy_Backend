@@ -52,6 +52,7 @@ model User {
   password   String? @db.VarChar(255)
   domain     String? @unique
   avatar     String?
+  about      String?
 
   phone_number  String?
   country       String?
@@ -63,7 +64,7 @@ model User {
   date_of_birth DateTime? @db.Date
   acting_goals  String?
 
-  billing_id String?
+  billing_id        String?
   type              String?   @default("user")
   email_verified_at DateTime?
 
@@ -88,19 +89,33 @@ model User {
   payment_transactions PaymentTransaction[]
   UserProfile          UserProfile[]
 
+  // Community post relation
+  authoredPosts     CommunityPost[]    @relation("authoredPosts")
+  communityShares   CommunityShare[]
+  communityLikes    CommunityLike[]
+  communityComments CommunityComment[]
+
+  // CommunityPoolVote relation
+  communityPoolVotes CommunityPoolVote[]
+
   // Chat schema relations
-  memberships     Membership[]
-  messages        Message[]    @relation("MessageSender")
-  deletedMessages Message[]    @relation("MessageDeletedBy")
-  blocksInitiated Block[]      @relation("UserBlocks")
-  blockedBy       Block[]      @relation("UserBlockedBy")
-  receipts        Receipt[]
-  reports         Report[]
+  memberships      Membership[]
+  messages         Message[]         @relation("MessageSender")
+  deletedMessages  Message[]         @relation("MessageDeletedBy")
+  blocksInitiated  Block[]           @relation("UserBlocks")
+  blockedBy        Block[]           @relation("UserBlockedBy")
+  receipts         Receipt[]
+  reports          Report[]
   callParticipants CallParticipant[]
+
+  // UserReport relations
+  reportedUsers UserReport[] @relation("ReportedUser")
+  reportsMade   UserReport[] @relation("Reporter")
 
   role UserRole @default(STUDENT)
 
-  lastSeenAt DateTime?
+  lastSeenAt           DateTime?
+  CommunityCommentLike CommunityCommentLike[]
 
   @@map("users")
 }
@@ -278,21 +293,145 @@ model PaymentTransaction {
 }
 
 //
+//--------------------- Community ---------------------
+//
+
+model CommunityPost {
+  id         String             @id @default(cuid())
+  author_Id  String
+  author     User               @relation("authoredPosts", fields: [author_Id], references: [id])
+  content    String
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  media_Url  String? // photo or video
+  mediaType  MediaType?
+  visibility PostVisibility     @default(PUBLIC)
+  likes      CommunityLike[]
+  comments   CommunityComment[]
+  shares     CommunityShare[]
+  pool       CommunityPool?
+}
+
+model CommunityLike {
+  id        String        @id @default(cuid())
+  postId    String
+  userId    String
+  name      String?
+  username  String?
+  avatar    String?
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
+}
+
+model CommunityComment {
+  id        String                 @id @default(cuid())
+  postId    String
+  userId    String
+  name      String?
+  username  String?
+  avatar    String?
+  content   String
+  createdAt DateTime               @default(now())
+  parentId  String?
+  post      CommunityPost          @relation(fields: [postId], references: [id])
+  user      User                   @relation(fields: [userId], references: [id])
+  replies   CommunityComment[]     @relation("CommentReplies")
+  parent    CommunityComment?      @relation("CommentReplies", fields: [parentId], references: [id])
+  likes     CommunityCommentLike[]
+}
+
+model CommunityCommentLike {
+  id        String           @id @default(cuid())
+  commentId String
+  userId    String
+  name      String?
+  username  String?
+  avatar    String?
+  createdAt DateTime         @default(now())
+  comment   CommunityComment @relation(fields: [commentId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
+}
+
+model CommunityShare {
+  id        String        @id @default(cuid())
+  postId    String
+  userId    String
+  name      String?
+  username  String?
+  avatar    String?
+  post      CommunityPost @relation(fields: [postId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
+  createdAt DateTime      @default(now())
+}
+
+model CommunityPool {
+  id       String              @id @default(cuid())
+  postId   String              @unique
+  question String
+  name     String?
+  username String?
+  avatar   String?
+  options  Json // array of options
+  votes    CommunityPoolVote[]
+
+  post CommunityPost @relation(fields: [postId], references: [id])
+}
+
+model CommunityPoolVote {
+  id        String        @id @default(cuid())
+  poolId    String
+  userId    String
+  name      String?
+  username  String?
+  avatar    String?
+  option    String
+  pool      CommunityPool @relation(fields: [poolId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
+  createdAt DateTime      @default(now())
+}
+
+
+model UserReport {
+  id            String   @id @default(cuid())
+  reporterId    String
+  reportedUserId String
+  reason        String
+  description   String?
+  createdAt     DateTime @default(now())
+  status        ReportStatus @default(OPEN)
+  reporter      User     @relation("Reporter", fields: [reporterId], references: [id])
+  reportedUser  User     @relation("ReportedUser", fields: [reportedUserId], references: [id])
+}
+
+
+enum MediaType {
+  PHOTO
+  VIDEO
+}
+
+enum PostVisibility {
+  PUBLIC
+  PRIVATE
+  FRIENDS
+}
+
+//
 // ---------------------- CHAT (MERGED) ----------------------
 //
 model Conversation {
-  id          String           @id @default(cuid())
-  type        ConversationType
-  title       String?
-  avatarUrl   String?
-  dmKey       String?          @unique
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  createdBy   String?
+  id        String           @id @default(cuid())
+  type      ConversationType
+  title     String?
+  avatarUrl String?
+  dmKey     String?          @unique
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  createdBy String?
 
-  memberships   Membership[]
-  messages      Message[]
-  callSessions  CallSession[]
+  memberships  Membership[]
+  messages     Message[]
+  callSessions CallSession[]
 
   creator_id     String?
   creator        User?   @relation("creator", fields: [creator_id], references: [id])
@@ -334,8 +473,8 @@ model Message {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   // Add receiver and sender relations for User model
-  receiver_id String?
-  receiver    User?   @relation("receiver", fields: [receiver_id], references: [id])
+  receiver_id    String?
+  receiver       User?   @relation("receiver", fields: [receiver_id], references: [id])
   sender_user_id String?
   sender_user    User?   @relation("sender", fields: [sender_user_id], references: [id])
 
@@ -549,9 +688,9 @@ enum MembershipStatus {
 }
 
 model Faq {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
   deleted_at DateTime?
 
   status     Int?    @default(1) @db.SmallInt
@@ -563,9 +702,9 @@ model Faq {
 }
 
 model Contact {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
   deleted_at DateTime?
 
   first_name   String?
@@ -578,9 +717,9 @@ model Contact {
 }
 
 model SocialMedia {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
   deleted_at DateTime?
 
   status     Int?    @default(1) @db.SmallInt
@@ -593,9 +732,9 @@ model SocialMedia {
 }
 
 model WebsiteInfo {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
   deleted_at DateTime?
 
   name                String?
@@ -611,9 +750,9 @@ model WebsiteInfo {
 }
 
 model Setting {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
   deleted_at DateTime?
 
   category      String?
@@ -628,9 +767,9 @@ model Setting {
 }
 
 model UserSetting {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
   deleted_at DateTime?
 
   user_id String?

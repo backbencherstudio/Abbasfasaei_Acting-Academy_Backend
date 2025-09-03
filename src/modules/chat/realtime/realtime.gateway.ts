@@ -12,7 +12,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, MessageKind } from '@prisma/client';
-import { TwilioVideoService } from './twilio-video.service';
+// import { TwilioVideoService } from './twilio-video.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PresenceService } from '../presence/presence.service';
 
@@ -32,7 +32,7 @@ export class RealtimeGateway
     private jwt: JwtService,
     private prisma: PrismaService,
     private presence: PresenceService,
-    private twilio: TwilioVideoService, // ⬅️ Twilio integration
+  // private twilio: TwilioVideoService, // ⬅️ Twilio integration
   ) {}
 
   afterInit() {}
@@ -201,7 +201,7 @@ export class RealtimeGateway
     this.io.to(this.room(msg.conversationId)).emit('message:read', { messageId: msg.id, userId });
   }
 
-  // ---------- Twilio calling (DM + Group) ----------
+  // Twilio calling (DM + Group) removed
   /**
    * Start a call: ensure room, mint token for starter, notify others to join.
    * payload: { conversationId: string, kind: 'AUDIO' | 'VIDEO' }
@@ -224,28 +224,23 @@ export class RealtimeGateway
     }
 
     socket.join(this.room(body.conversationId));
-    const room = await this.twilio.ensureRoom(body.conversationId);
-    const token = this.twilio.generateToken(body.conversationId, userId);
+  // Twilio integration removed
 
     // Notify others in the conversation to show “incoming call”
     socket.to(this.room(body.conversationId)).emit('call:ring', {
       conversationId: body.conversationId,
-      roomName: room.uniqueName,
       fromUserId: userId,
       kind: body.kind,
     });
 
-    // Give the starter a token to connect with Twilio Video JS SDK
+  // Twilio Video JS SDK integration removed
     socket.emit('call:started', {
       conversationId: body.conversationId,
-      roomName: room.uniqueName,
-      token,
       kind: body.kind,
     });
   }
 
   /**
-   * Join an ongoing call: mint a token and send back peers can connect via Twilio SDK.
    * payload: { conversationId: string }
    * emits to joiner: call:joined { roomName, token }
    * broadcasts:      call:peer-join { userId }
@@ -265,13 +260,10 @@ export class RealtimeGateway
     }
 
     socket.join(this.room(body.conversationId));
-    const room = await this.twilio.ensureRoom(body.conversationId);
-    const token = this.twilio.generateToken(body.conversationId, userId);
+  // Twilio integration removed
 
     socket.emit('call:joined', {
       conversationId: body.conversationId,
-      roomName: room.uniqueName,
-      token,
     });
 
     socket.to(this.room(body.conversationId)).emit('call:peer-join', {
@@ -296,7 +288,7 @@ export class RealtimeGateway
     const isMember = await this.ensureMembership(body.conversationId, userId);
     if (!isMember) return;
 
-    await this.twilio.endRoom(body.conversationId);
+  // Twilio integration removed
 
     this.io.to(this.room(body.conversationId)).emit('call:ended', {
       conversationId: body.conversationId,
