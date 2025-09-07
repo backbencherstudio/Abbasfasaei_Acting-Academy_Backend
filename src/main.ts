@@ -38,7 +38,6 @@ async function bootstrap() {
     redirect: false,
   });
 
-  
   app.useStaticAssets(join(__dirname, '..', 'public/storage'), {
     index: false,
     prefix: '/storage',
@@ -50,9 +49,19 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new CustomExceptionFilter());
 
+  // Local storage setup
+  // SazedStorage.config({
+  //   driver: 'local',
+  //   connection: {
+  //     rootUrl: appConfig().storageUrl.rootUrl, // ./public/storage
+  //     publicUrl: appConfig().storageUrl.rootUrlPublic, // /public/storage
+  //   },
+  // });
+
+  // minio storage setup
   // storage setup
   SazedStorage.config({
-    driver: 'local',
+    driver: 's3',
     connection: {
       rootUrl: appConfig().storageUrl.rootUrl,
       publicUrl: appConfig().storageUrl.rootUrlPublic,

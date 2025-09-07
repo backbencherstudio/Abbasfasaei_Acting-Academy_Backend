@@ -24,6 +24,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import appConfig from '../../config/app.config';
 import { AuthGuard } from '@nestjs/passport';
+import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -35,7 +36,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async me(@Req() req: Request) {
-    try { 
+    try {
       // console.log(req.user);
       const user_id = req.user.userId;
 
@@ -178,17 +179,6 @@ export class AuthController {
   @Patch('update')
   @UseInterceptors(
     FileInterceptor('image', {
-      // storage: diskStorage({
-      //   destination:
-      //     appConfig().storageUrl.rootUrl + appConfig().storageUrl.avatar,
-      //   filename: (req, file, cb) => {
-      //     const randomName = Array(32)
-      //       .fill(null)
-      //       .map(() => Math.round(Math.random() * 16).toString(16))
-      //       .join('');
-      //     return cb(null, `${randomName}${file.originalname}`);
-      //   },
-      // }),
       storage: memoryStorage(),
     }),
   )
@@ -200,6 +190,10 @@ export class AuthController {
     try {
       const user_id = req.user.userId;
       const response = await this.authService.updateUser(user_id, data, image);
+      console.log('user_id', user_id);
+      console.log('data', data);
+      console.log('image', image);
+      console.log('response', response);
       return response;
     } catch (error) {
       return {
@@ -216,7 +210,7 @@ export class AuthController {
   async forgotPassword(@Body() data: { email: string }) {
     try {
       const email = data.email;
-      if (!email) { 
+      if (!email) {
         throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
       }
       return await this.authService.forgotPassword(email);

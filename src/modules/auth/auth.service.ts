@@ -15,6 +15,7 @@ import { SazedStorage } from '../../common/lib/disk/SazedStorage';
 import { DateHelper } from '../../common/helper/date.helper';
 import { StripePayment } from '../../common/lib/Payment/stripe/StripePayment';
 import { StringHelper } from '../../common/helper/string.helper';
+import { ExperienceLevel } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -28,9 +29,7 @@ export class AuthService {
   async me(userId: string) {
     try {
       const user = await this.prisma.user.findFirst({
-        where: {
-          id: userId,
-        },
+        where: { id: userId },
         select: {
           id: true,
           name: true,
@@ -41,8 +40,8 @@ export class AuthService {
           type: true,
           gender: true,
           date_of_birth: true,
-          experience_levels: true,
-          acting_goals: true,
+          experience_level: true,
+          ActingGoals: true,
           created_at: true,
         },
       });
@@ -55,22 +54,16 @@ export class AuthService {
       }
 
       if (user.avatar) {
+        // Generate the avatar URL using SazedStorage
         user['avatar_url'] = SazedStorage.url(
           appConfig().storageUrl.avatar + user.avatar,
         );
       }
 
-      if (user) {
-        return {
-          success: true,
-          data: user,
-        };
-      } else {
-        return {
-          success: false,
-          message: 'User not found',
-        };
-      }
+      return {
+        success: true,
+        data: user,
+      };
     } catch (error) {
       return {
         success: false,
@@ -79,6 +72,8 @@ export class AuthService {
     }
   }
 
+  // In your updateUser method
+
   async updateUser(
     userId: string,
     updateUserDto: UpdateUserDto,
@@ -86,21 +81,28 @@ export class AuthService {
   ) {
     try {
       const data: any = {};
+
+      // Update user data fields if provided
       if (updateUserDto.name) {
         data.name = updateUserDto.name;
       }
+
       if (updateUserDto.phone_number) {
         data.phone_number = updateUserDto.phone_number;
       }
-      if (updateUserDto.experience_levels) {
-        data.experience_levels = updateUserDto.experience_levels;
+
+      if (updateUserDto.experience_level) {
+        data.experience_level = updateUserDto.experience_level;
       }
+
       if (updateUserDto.acting_goals) {
-        data.acting_goals = updateUserDto.acting_goals;
+        data.ActingGoals = updateUserDto.acting_goals;
       }
+
       if (updateUserDto.date_of_birth) {
         data.date_of_birth = DateHelper.format(updateUserDto.date_of_birth);
       }
+
       if (image) {
         // delete old image from storage
         const oldImage = await this.prisma.user.findFirst({
