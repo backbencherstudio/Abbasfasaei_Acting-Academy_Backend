@@ -3,6 +3,10 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { id } from 'date-fns/locale';
 import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import { mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { StringHelper } from 'src/common/helper/string.helper';
+import appConfig from 'src/config/app.config';
 
 @Injectable()
 export class CommunityService {
@@ -11,32 +15,61 @@ export class CommunityService {
   async createPost(
     authorId: string,
     content: string,
-    mediaUrl?: string,
     mediaType?: 'PHOTO' | 'VIDEO',
     visibility: 'PUBLIC' | 'PRIVATE' | 'FRIENDS' = 'PUBLIC',
     file?: Express.Multer.File,
   ) {
-    let storedMediaUrl = mediaUrl;
+    let mediaUrl: string | undefined = undefined;
 
+    // if (file) {
+    //   // Ensure uploads directory exists
+    //   const uploadDir = join(process.cwd(), 'public', 'storage', 'community');
+    //   mkdirSync(uploadDir, { recursive: true });
+
+    //   // Save file
+    //   const fileName = `${Date.now()}_${file.originalname}`;
+    //   const filePath = join(uploadDir, fileName);
+    //   writeFileSync(filePath, file.buffer);
+
+    //   // Set mediaUrl to public path
+    //   mediaUrl = `http://localhost:${process.env.PORT}/storage/community/${fileName}`;
+    // }
+
+    // upload file to S3 or MinIO
     if (file) {
-      // Generate a unique key for the file
-      const ext = file.originalname.split('.').pop();
-      const key = `community/${Date.now()}_${authorId}.${ext}`;
+      const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
 
-      // Store file using SazedStorage (local or S3 based on config)
-      await SazedStorage.put(key, file.buffer);
+      if (mediaType === 'PHOTO') {
+        await SazedStorage.put(
+          appConfig().storageUrl.communityPhoto + `/${filename}`,
+          file.buffer,
+        );
 
-      // Get public URL for the file
-      storedMediaUrl = SazedStorage.url(key);
+        mediaUrl =
+          process.env.AWS_S3_ENDPOINT +
+          '/' +
+          process.env.AWS_S3_BUCKET +
+          appConfig().storageUrl.communityPhoto +
+          `/${filename}`;
+      } else if (mediaType === 'VIDEO') {
+        await SazedStorage.put(
+          appConfig().storageUrl.communityVideo + `/${filename}`,
+          file.buffer,
+        );
+
+        mediaUrl =
+          process.env.AWS_S3_ENDPOINT +
+          '/' +
+          process.env.AWS_S3_BUCKET +
+          appConfig().storageUrl.communityVideo +
+          `/${filename}`;
+      }
     }
-
-    
-
     return this.prisma.communityPost.create({
       data: {
         author_Id: authorId,
         content,
-        media_Url: storedMediaUrl,
+        media_Url: mediaUrl,
         mediaType,
         visibility,
       },
@@ -60,8 +93,60 @@ export class CommunityService {
     });
   }
 
-  async updatePost(postId: string, userId: string, dto: any) {
+  async updatePost(
+    postId: string,
+    userId: string,
+    dto: any,
+    mediaType?: 'PHOTO' | 'VIDEO',
+    visibility: 'PUBLIC' | 'PRIVATE' | 'FRIENDS' = 'PUBLIC',
+    file?: Express.Multer.File,
+  ) {
     try {
+      let mediaUrl: string | undefined = undefined;
+
+      if (file) {
+        const oldfile = await this.prisma.communityPost.findUnique({
+          where: { id: postId },
+          select: { media_Url: true },
+        });
+
+        // delete old file from s3 or minio
+        if (oldfile?.media_Url) {
+          const urlParts = oldfile.media_Url.split('/');
+          const key = urlParts.slice(3).join('/'); // Adjust index based on your URL structure
+          await SazedStorage.delete(key);
+        }
+
+        // upload new file to s3 or minio
+        const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+
+        if (mediaType === 'PHOTO') {
+          await SazedStorage.put(
+            appConfig().storageUrl.communityPhoto + `/${filename}`,
+            file.buffer,
+          );
+
+          mediaUrl =
+            process.env.AWS_S3_ENDPOINT +
+            '/' +
+            process.env.AWS_S3_BUCKET +
+            appConfig().storageUrl.communityPhoto +
+            `/${filename}`;
+        } else if (mediaType === 'VIDEO') {
+          await SazedStorage.put(
+            appConfig().storageUrl.communityVideo + `/${filename}`,
+            file.buffer,
+          );
+
+          mediaUrl =
+            process.env.AWS_S3_ENDPOINT +
+            '/' +
+            process.env.AWS_S3_BUCKET +
+            appConfig().storageUrl.communityVideo +
+            `/${filename}`;
+        }
+      }
+
       const post = await this.prisma.communityPost.findUnique({
         where: { id: postId },
       });
@@ -73,14 +158,14 @@ export class CommunityService {
       if (post.author_Id !== userId) {
         return { success: false, message: 'Unauthorized' };
       }
-
+      // update post
       await this.prisma.communityPost.update({
         where: { id: postId },
         data: {
           content: dto.content,
-          media_Url: dto.mediaUrl,
-          mediaType: dto.mediaType,
-          visibility: dto.visibility,
+          media_Url: mediaUrl,
+          mediaType,
+          visibility,
         },
       });
 
@@ -92,6 +177,13 @@ export class CommunityService {
       throw new Error(error.message || 'Error updating post');
     }
   }
+
+  //   {
+  //   "content": "Final testing from Updateding post",
+  //   "mediaUrl": "https://example.com/media/photo.jpg",
+  //   "mediaType": "PHOTO",
+  //   "visibility": "PUBLIC"
+  // }
 
   async getFeed(userId: string) {
     const posts = await this.prisma.communityPost.findMany({
@@ -189,40 +281,7 @@ export class CommunityService {
     });
     return { likes, likesCount: likes.length };
   }
-
-  // async commentPost(postId: string, userId: string, content: string) {
-  //   try {
-  //     const user = await this.prisma.user.findUnique({
-  //       where: { id: userId },
-  //       select: { name: true, username: true, avatar: true },
-  //     });
-
-  //     if (!user) {
-  //       throw new Error('User not found');
-  //     }
-
-  //     console.log('users', user);
-
-  //     await this.prisma.communityComment.create({
-  //       data: {
-  //         postId,
-  //         userId,
-  //         name: user?.name,
-  //         username: user?.username,
-  //         avatar: user?.avatar,
-  //         content,
-  //       },
-  //     });
-
-  //     return {
-  //       success: true,
-  //       message: 'Comment added successfully',
-  //     };
-  //   } catch (error) {
-  //     throw new Error('Error fetching user');
-  //   }
-  // }
-
+  // Add a comment to a post
   async commentPost(postId: string, userId: string, content: string) {
     try {
       const user = await this.prisma.user.findUnique({
@@ -254,8 +313,8 @@ export class CommunityService {
     }
   }
 
-  // Like a comment (toggle)
-  async likeComment(commentId: string, userId: string) {
+  // Like a comment or reply (toggle)
+  async likeCommentOrReply(commentId: string, userId: string) {
     const existingLike = await this.prisma.communityCommentLike.findFirst({
       where: { commentId, userId },
     });
@@ -264,7 +323,7 @@ export class CommunityService {
       await this.prisma.communityCommentLike.delete({
         where: { id: existingLike.id },
       });
-      return { liked: false };
+      return { liked: false }; 
     } else {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -279,6 +338,17 @@ export class CommunityService {
         return { success: false, message: 'User not found' };
       }
 
+      // Ensure the comment or reply exists
+      const comment = await this.prisma.communityComment.findFirst({
+        where: { id: commentId },
+        select: { id: true },
+      });
+
+      if (!comment) {
+        return { success: false, message: 'Comment or reply not found' };
+      }
+
+      // Create the like for the comment or reply
       await this.prisma.communityCommentLike.create({
         data: {
           commentId,
@@ -289,12 +359,12 @@ export class CommunityService {
           createdAt: new Date(),
         },
       });
-      return { liked: true, message: 'Like added successfully' };
+
+      return { liked: true, message: 'Like added successfully' }; // Return success message
     }
   }
 
-  // Reply to a comment
-  async replyComment(
+  async replyToCommentOrReply(
     postId: string,
     parentId: string,
     userId: string,
@@ -314,9 +384,9 @@ export class CommunityService {
         postId,
         userId,
         parentId,
-        name: user?.name,
-        username: user?.username,
-        avatar: user?.avatar,
+        name: user.name,
+        username: user.username,
+        avatar: user.avatar,
         content,
         createdAt: new Date(),
       },
@@ -331,26 +401,26 @@ export class CommunityService {
         user: {
           select: { id: true, name: true, username: true, avatar: true },
         },
+        likes: { select: { id: true } }, // Fetch likes for the main comment
         replies: {
           include: {
             user: {
               select: { id: true, name: true, username: true, avatar: true },
             },
-            likes: true,
+            likes: { select: { id: true } }, // Fetch likes for the replies
           },
         },
-        likes: true,
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    // Add like counts
+    // Return formatted data with like counts
     return comments.map((comment) => ({
       ...comment,
-      likeCount: comment.likes.length,
+      likeCount: comment.likes.length, // Count likes for the comment
       replies: comment.replies.map((reply) => ({
         ...reply,
-        likeCount: reply.likes.length,
+        likeCount: reply.likes.length, // Count likes for the reply
       })),
     }));
   }

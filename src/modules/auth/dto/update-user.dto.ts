@@ -29,7 +29,7 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
     description: 'Experience Level',
     example: 'Intermediate',
   })
-  experience_levels?: string[];
+  experience_level?: string;
 
   @IsOptional()
   @ApiProperty({

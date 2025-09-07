@@ -19,13 +19,13 @@ import { MailModule } from './mail/mail.module';
 import { ApplicationModule } from './modules/application/application.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { PaymentModule } from './modules/payment/payment.module';
-import { CoursesModule } from './modules/enrollment/courses/courses.module';
 import { PresenceModule } from './modules/chat/presence/presence.module';
 import { UploadsModule } from './modules/chat/uploads/uploads.module';
 import { MessagesModule } from './modules/chat/messages/messages.module';
 import { ConversationsModule } from './modules/chat/conversations/conversations.module';
 import { RealtimeModule } from './modules/chat/realtime/realtime.module';
 import { CommunityModule } from './modules/community/community.module';
+import { EnrollmentModule } from './modules/enrollment/enrollment.module';
 
 @Module({
   imports: [
@@ -84,8 +84,8 @@ import { CommunityModule } from './modules/community/community.module';
     UploadsModule,
     PresenceModule,
     PaymentModule,
-    CoursesModule,
     CommunityModule,
+    EnrollmentModule,
   ],
   controllers: [AppController],
   providers: [

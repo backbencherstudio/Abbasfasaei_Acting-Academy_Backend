@@ -21,32 +21,31 @@ import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 @Controller('community')
-@UseGuards(JwtAuthGuard)
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class CommunityController {
   constructor(private service: CommunityService) {}
 
   @Post('post')
-  @UseInterceptors(FileInterceptor('media'))
+  @UseInterceptors(
+    FileInterceptor('media', {
+      storage: memoryStorage(),
+    }),
+  )
   async createPost(
     @GetUser() user: any,
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: CreatePostDto,
   ) {
-    try {
-      return this.service.createPost(
-        user.userId,
-        dto.content,
-        dto.mediaUrl,
-        dto.mediaType,
-        dto.visibility,
-        file, // Pass file to service
-      );
-    } catch (error) {
-      throw new Error('Error creating post');
-    }
+    return this.service.createPost(
+      user.userId,
+      dto.content,
+      dto.mediaType,
+      dto.visibility,
+      file, // pass file to service
+    );
   }
 
   @Get('feed')
@@ -67,14 +66,28 @@ export class CommunityController {
     }
   }
 
+  // Update post
   @Patch('post/:postId')
-  updatePost(
+  @UseInterceptors(
+    FileInterceptor('media', {
+      storage: memoryStorage(),
+    }),
+  )
+  async updatePost(
     @Param('postId') postId: string,
     @GetUser() user: any,
+    @UploadedFile() file: Express.Multer.File,
     @Body() dto: CreatePostDto,
   ) {
     try {
-      return this.service.updatePost(postId, user.userId, dto);
+      return this.service.updatePost(
+        postId,
+        user.userId,
+        dto,
+        dto.mediaType,
+        dto.visibility,
+        file,
+      );
     } catch (error) {
       throw new Error('Error updating post');
     }
@@ -99,12 +112,20 @@ export class CommunityController {
   }
 
   @Post('comment/:postId')
-  commentPost(
+  async commentPost(
     @GetUser() user: any,
     @Param('postId') postId: string,
     @Body() dto: CommentPostDto,
   ) {
     try {
+      console.log(
+        'user id',
+        user.userId,
+        'postId',
+        postId,
+        'content',
+        dto.content,
+      );
       return this.service.commentPost(postId, user.userId, dto.content);
     } catch (error) {
       throw new Error('Error commenting on post');
@@ -121,21 +142,32 @@ export class CommunityController {
   }
 
   @Post('comment/reply/:commentId')
-  async replyComment(
+  async replyToCommentOrReply(
     @GetUser() user: any,
     @Param('commentId') parentId: string,
     @Body('postId') postId: string,
     @Body('content') content: string,
   ) {
-    return this.service.replyComment(postId, parentId, user.userId, content);
+    return this.service.replyToCommentOrReply(
+      postId,
+      parentId,
+      user.userId,
+      content,
+    );
   }
 
-  @Post('comment/like')
-  likeComment(@GetUser() user: any, @Body('commentId') commentId: string) {
+  // Controller for liking a comment or reply
+  @Post('comments')
+  async likeCommentOrReply(
+    @GetUser() user: any,
+    @Body('commentId') commentId: string,
+  ) {
     try {
-      return this.service.likeComment(commentId, user.userId);
+      // Call the service method to like/unlike the comment or reply
+      return await this.service.likeCommentOrReply(commentId, user.userId);
     } catch (error) {
-      throw new Error('Error liking comment');
+      // Return a generic error message
+      throw new Error('Error liking comment or reply');
     }
   }
 
