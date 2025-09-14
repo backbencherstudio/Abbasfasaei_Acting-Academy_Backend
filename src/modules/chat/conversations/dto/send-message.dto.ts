@@ -7,5 +7,10 @@ export class SendMessageDto {
   kind?: MessageKind = MessageKind.TEXT;
 
   @IsObject()
-  content: Record<string, any>;
+  @IsOptional()
+  content?: Record<string, any>; // <-- Make sure @IsOptional() is present
+
+  @IsOptional()
+  @IsString()
+  media_Url?: string;
 }

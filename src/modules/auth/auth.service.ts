@@ -319,6 +319,7 @@ export class AuthService {
   }) {
     try {
       // Check if email already exist
+
       const userEmailExist = await UserRepository.exist({
         field: 'email',
         value: String(email),
@@ -326,7 +327,7 @@ export class AuthService {
 
       if (userEmailExist) {
         return {
-          statusCode: 401,
+          success: false,
           message: 'Email already exist',
         };
       }

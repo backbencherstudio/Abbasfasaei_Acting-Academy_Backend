@@ -6,7 +6,7 @@ export class VerifyOtpDto{
   @IsNotEmpty()
   @ApiProperty({
     description: 'The OTP code to verify',
-    example: '123456',
+    example: '1234',
   })
   otp: string;
 

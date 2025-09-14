@@ -53,34 +53,40 @@ export class AuthController {
 
   @ApiOperation({ summary: 'Register a user' })
   @Post('register')
-  async create(@Body() data: CreateUserDto, @Req() req: Request) {
+  async create(@Body() data: CreateUserDto, @Res() res: Response) {
     try {
-      const email = data.email;
-      const password = data.password;
-      const type = data.type;
+      const { email, password, type } = data;
 
       if (!email) {
-        throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          success: false,
+          message: 'Email not provided',
+        });
       }
       if (!password) {
-        throw new HttpException(
-          'Password not provided',
-          HttpStatus.UNAUTHORIZED,
-        );
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          success: false,
+          message: 'Password not provided',
+        });
       }
 
-      const response = await this.authService.register({
-        email: email,
-        password: password,
-        type: type,
-      });
+      const result = await this.authService.register({ email, password, type });
 
-      return response;
+      if (result.success) {
+        return res.status(HttpStatus.CREATED).json(result);
+      } else if (
+        result.message &&
+        result.message.toLowerCase().includes('email already exist')
+      ) {
+        return res.status(HttpStatus.CONFLICT).json(result);
+      } else {
+        return res.status(HttpStatus.BAD_REQUEST).json(result);
+      }
     } catch (error) {
-      return {
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         success: false,
         message: error.message,
-      };
+      });
     }
   }
 

@@ -96,6 +96,7 @@ export default () => ({
     communityVideo: '/community/video',
     communityPhoto: '/community/photo',
     communityDocument: '/community/document',
+    media: '/media',
   },
 
   defaultUser: {

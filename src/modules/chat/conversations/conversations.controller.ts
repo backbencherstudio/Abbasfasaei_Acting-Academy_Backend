@@ -37,6 +37,11 @@ export class ConversationsController {
     );
   }
 
+  @Get('group-conversations')
+  listGroupConversations(@GetUser() user: any) {
+    return this.service.listGroupConversations(user.userId);
+  }
+
   @Get()
   listMine(
     @GetUser() user: any,

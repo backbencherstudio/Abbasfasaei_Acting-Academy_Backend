@@ -8,6 +8,9 @@ import { Prisma, MessageKind, ConversationType } from '@prisma/client';
 import { ConversationsService } from '../conversations/conversations.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import appConfig from 'src/config/app.config';
+import { StringHelper } from 'src/common/helper/string.helper';
 
 @Injectable()
 export class MessagesService {
@@ -25,7 +28,7 @@ export class MessagesService {
     conversationId: string,
     userId: string,
     cursor?: string,
-    take = 20,
+    take = 500,
   ) {
     await this.conv.ensureMember(conversationId, userId);
 
@@ -43,7 +46,7 @@ export class MessagesService {
         deletedAt: null,
         createdAt: { gt: floor }, // hide everything cleared for THIS user
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'asc' },
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       select: {
@@ -61,24 +64,40 @@ export class MessagesService {
     return { items, nextCursor };
   }
 
-  /**
-   * Send a message. For DMs, prevents sending if either user has blocked the other.
-   */
-  async send(
+  async sendMessage(
     conversationId: string,
     userId: string,
     kind: MessageKind | undefined,
-    content: Prisma.InputJsonValue,
+    content: any,
+    file?: Express.Multer.File,
+    mediaUrl?: string,
   ) {
-    await this.conv.ensureMember(conversationId, userId);
+    await this.conv.ensureMember(conversationId, userId); // Ensuring the user is a member of the conversation
 
     const conv = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       select: { type: true, id: true },
     });
+
     if (!conv) throw new Error('Conversation not found');
 
-    // For DMs, respect block list in either direction
+    if (file) {
+      const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+
+      await SazedStorage.put(
+        appConfig().storageUrl.attachment + `/${filename}`,
+        file.buffer,
+      );
+
+      mediaUrl =
+        process.env.AWS_S3_ENDPOINT +
+        '/' +
+        process.env.AWS_S3_BUCKET +
+        appConfig().storageUrl.attachment +
+        `/${filename}`;
+    }
+
+    // For Direct Messages (DM), respect block list
     if (conv.type === ConversationType.DM) {
       const members = await this.prisma.membership.findMany({
         where: { conversationId },
@@ -92,12 +111,21 @@ export class MessagesService {
       }
     }
 
+    // console.log('Creating message...', {
+    //   conversationId,
+    //   userId,
+    //   kind,
+    //   content,
+    // });
+
     const msg = await this.prisma.message.create({
       data: {
         conversationId,
         senderId: userId,
         kind: kind ?? 'TEXT',
-        content,
+        content : content ?? {},
+        media_Url: mediaUrl,
+        
       },
       select: {
         id: true,
@@ -106,15 +134,38 @@ export class MessagesService {
         createdAt: true,
         senderId: true,
         conversationId: true,
+        media_Url: true,
       },
     });
 
+    // console.log('msg:', msg);
+
+    // Update the last message time for the conversation
     await this.prisma.conversation.update({
       where: { id: conversationId },
       data: { updatedAt: new Date() },
     });
 
     return msg;
+  }
+
+  // mark messages as read up to "at" timestamp (or now if not provided)
+  async markRead(conversationId: string, userId: string, at?: Date) {
+    const me = await this.prisma.membership.findFirst({
+      where: { conversationId, userId },
+      select: { clearedAt: true },
+    });
+    const floor = me?.clearedAt ?? new Date(0);
+
+    await this.prisma.message.updateMany({
+      where: {
+        conversationId,
+        senderId: { not: userId },
+        createdAt: { gt: floor },
+        ...(at ? { createdAt: { lte: at } } : {}),
+      },
+      data: { readAt: new Date() },
+    });
   }
 
   /**

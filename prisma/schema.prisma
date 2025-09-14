@@ -87,6 +87,7 @@ model User {
   experience_level     ExperienceLevel?
   payment_transactions PaymentTransaction[]
   UserProfile          UserProfile[]
+  teacherProfile       TeacherProfile[]
 
   // Community post relation
   authoredPosts     CommunityPost[]    @relation("authoredPosts")
@@ -210,6 +211,31 @@ model RoleUser {
   @@map("role_users")
 }
 
+
+//
+//---------------------TEACHERS & INSTRUCTORS ---------------------
+//  
+model TeacherProfile {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+  deleted_at DateTime?
+
+  user_id String
+  user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  teacher_name  String?
+  email         String?
+  phone_number  String?
+  bio          String?
+  qualifications String?
+  experience   String?
+  specialties  String?
+  availability String?
+
+  @@map("teacher_profiles")
+}
+
 //
 // ---------------------- NOTIFICATIONS ----------------------
 //
@@ -286,7 +312,7 @@ model PaymentTransaction {
   withdraw_via     String?  @default("wallet")
   provider         String?
   reference_number String?
-  status           String?  @default("pending")
+  status           String?  @default("pending") 
   raw_status       String?
   amount           Decimal?
   currency         String?
@@ -528,7 +554,7 @@ enum ExperienceLevel {
 }
 
 model EnrollmentProfile {
-  id                String     @id @default(cuid())
+  id                String      @id @default(cuid())
   enrollment        Enrollment @relation(fields: [enrollmentId], references: [id])
   enrollmentId      String     @unique
   avatar            String?
@@ -669,14 +695,16 @@ enum PostVisibility {
 // ---------------------- CHAT (MERGED) ----------------------
 //
 model Conversation {
-  id        String           @id @default(cuid())
-  type      ConversationType
-  title     String?
-  avatarUrl String?
-  dmKey     String?          @unique
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  createdBy String?
+  id            String           @id @default(cuid())
+  type          ConversationType
+  title         String?
+  senderTitle   String?
+  receiverTitle String?
+  avatarUrl     String?
+  dmKey         String?          @unique
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  createdBy     String?
 
   memberships  Membership[]
   messages     Message[]
@@ -718,14 +746,17 @@ model Message {
   senderId       String
   conversationId String
 
+  media_Url String?
+
   sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   // Add receiver and sender relations for User model
   receiver_id    String?
-  receiver       User?   @relation("receiver", fields: [receiver_id], references: [id])
+  receiver       User?     @relation("receiver", fields: [receiver_id], references: [id])
   sender_user_id String?
-  sender_user    User?   @relation("sender", fields: [sender_user_id], references: [id])
+  sender_user    User?     @relation("sender", fields: [sender_user_id], references: [id])
+  readAt         DateTime?
 
   receipts Receipt[]
 

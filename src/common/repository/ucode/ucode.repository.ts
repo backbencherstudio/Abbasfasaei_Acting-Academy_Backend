@@ -26,9 +26,9 @@ export class UcodeRepository {
     if (userDetails && userDetails.email) {
       let token: string;
       if (isOtp) {
-        // create 6 digit otp code
+        // create 4 digit otp code
         // token = String(Math.floor(100000 + Math.random() * 900000));
-        token = String(randomInt(100000, 1000000));
+        token = String(randomInt(1000, 10000));
       } else {
         token = uuid();
       }

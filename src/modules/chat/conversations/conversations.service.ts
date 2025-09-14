@@ -8,7 +8,6 @@ import { ConversationType, MemberRole, Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 
-
 @Injectable()
 export class ConversationsService {
   constructor(
@@ -37,9 +36,12 @@ export class ConversationsService {
     if (m.role !== MemberRole.ADMIN) throw new ForbiddenException('Admin only');
   }
 
+  // ---- conversation management ----
   async createDm(currentUserId: string, otherUserId: string) {
-    if (currentUserId === otherUserId)
+    if (currentUserId === otherUserId) {
       throw new BadRequestException('Cannot DM yourself');
+    }
+
     const key = this.dmKeyFor(currentUserId, otherUserId);
 
     if (await this.users.isBlocked(currentUserId, otherUserId)) {
@@ -50,12 +52,42 @@ export class ConversationsService {
       where: { type: ConversationType.DM, dmKey: key },
       include: { memberships: true },
     });
+
     if (existing) return existing;
 
-    return this.prisma.conversation.create({
+    const otherUser = await this.prisma.user.findUnique({
+      where: { id: otherUserId },
+      select: { name: true },
+    });
+
+    if (!otherUser) {
+      throw new BadRequestException('The recipient does not exist');
+    }
+
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { name: true },
+    });
+
+    if (!currentUser) {
+      throw new BadRequestException('The sender does not exist');
+    }
+
+    const senderTitle = currentUser.name || 'Unknown';
+    const receiverTitle = otherUser.name || 'Unknown';
+
+    const conversation = await this.prisma.conversation.create({
       data: {
         type: ConversationType.DM,
         dmKey: key,
+        senderTitle,
+        receiverTitle,
+        createdBy: currentUserId,
+        avatarUrl: otherUserId,
+        creator_id: currentUserId,
+
+        participant_id: otherUserId,
+
         memberships: {
           create: [
             { userId: currentUserId, lastReadAt: new Date() },
@@ -65,8 +97,11 @@ export class ConversationsService {
       },
       include: { memberships: true },
     });
+
+    return conversation;
   }
 
+  // ---- group conversation management ----
   async createGroup(
     currentUserId: string,
     title: string,
@@ -93,6 +128,8 @@ export class ConversationsService {
     });
   }
 
+
+  // list conversations the user is in
   async myConversations(
     userId: string,
     take = 20,
@@ -103,6 +140,7 @@ export class ConversationsService {
       to?: Date;
     },
   ) {
+    console.log("hit in myConversations service");
     const convs = await this.prisma.conversation.findMany({
       where: {
         memberships: { some: { userId, archivedAt: null } },
@@ -157,10 +195,36 @@ export class ConversationsService {
     return opts?.unreadOnly ? results.filter((c) => c.unread > 0) : results;
   }
 
+
+  async listGroupConversations(userId: string) {
+    const groups = await this.prisma.conversation.findMany({
+      where: {
+        type: ConversationType.GROUP,
+        memberships: { some: { userId } },
+      },
+      include: {
+        memberships: {
+          select: {
+            userId: true,
+            role: true,
+            lastReadAt: true,
+            clearedAt: true,
+          },
+        },
+        messages: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    return groups;
+  }
+
+  // mark read up to now or specific timestamp
   async markRead(conversationId: string, userId: string, upTo?: Date) {
     await this.ensureMember(conversationId, userId);
 
-    // Use latest message createdAt if not provided
     let at = upTo;
     if (!at) {
       const last = await this.prisma.message.findFirst({
@@ -171,7 +235,6 @@ export class ConversationsService {
       at = last?.createdAt ?? new Date();
     }
 
-    // Update membership.lastReadAt to max(current, at)
     const m = await this.prisma.membership.findFirst({
       where: { conversationId, userId },
       select: { lastReadAt: true },
@@ -179,14 +242,14 @@ export class ConversationsService {
 
     const floor = m?.lastReadAt ?? new Date(0);
     const candidate = at < floor ? floor : at;
-    const next = m?.lastReadAt && m.lastReadAt > candidate ? m.lastReadAt : candidate;
+    const next =
+      m?.lastReadAt && m.lastReadAt > candidate ? m.lastReadAt : candidate;
 
     await this.prisma.membership.updateMany({
       where: { conversationId, userId },
       data: { lastReadAt: next },
     });
 
-    // Return new unread count
     const unread = await this.prisma.message.count({
       where: {
         conversationId,
@@ -197,61 +260,63 @@ export class ConversationsService {
     return { conversationId, lastReadAt: next, unread };
   }
 
+
   // ---- member management ----
-async addMembers(
-  conversationId: string,
-  currentUserId: string,
-  memberIds: string[],
-) {
-  await this.requireAdmin(conversationId, currentUserId);
+  async addMembers(
+    conversationId: string,
+    currentUserId: string,
+    memberIds: string[],
+  ) {
+    await this.requireAdmin(conversationId, currentUserId);
 
-  const unique = Array.from(new Set(memberIds));
+    const unique = Array.from(new Set(memberIds));
 
-  // Find existing members
-  const existing = await this.prisma.membership.findMany({
-    where: {
-      conversationId,
-      userId: { in: unique },
-    },
-    select: { userId: true },
-  });
-  const existingIds = new Set(existing.map(m => m.userId));
+    const existing = await this.prisma.membership.findMany({
+      where: {
+        conversationId,
+        userId: { in: unique },
+      },
+      select: { userId: true },
+    });
+    const existingIds = new Set(existing.map((m) => m.userId));
 
-  // Filter out already existing members
-  const toAdd = unique.filter(uid => !existingIds.has(uid));
-  if (toAdd.length === 0) {
-    return { ok: false, message: 'All members already exist' };
+    const toAdd = unique.filter((uid) => !existingIds.has(uid));
+    if (toAdd.length === 0) {
+      return { ok: false, message: 'All members already exist' };
+    }
+
+    await this.prisma.membership.createMany({
+      data: toAdd.map((uid) => ({
+        conversationId,
+        userId: uid,
+        role: 'MEMBER',
+        lastReadAt: new Date(),
+      })),
+      skipDuplicates: true,
+    });
+    return { ok: true, added: toAdd };
   }
 
-  await this.prisma.membership.createMany({
-    data: toAdd.map((uid) => ({
-      conversationId,
-      userId: uid,
-      role: 'MEMBER',
-      lastReadAt: new Date(),
-    })),
-    skipDuplicates: true,
-  });
-  return { ok: true, added: toAdd };
-}
 
-
+  // list members of a group conversation
   async getGroupMembers(conversationId: string) {
     const members = await this.prisma.membership.findMany({
       where: { conversationId },
       select: {
         userId: true,
         role: true,
-        user: { select: { name: true } }, 
+        user: { select: { name: true } },
       },
     });
-    return members.map(m => ({
+    return members.map((m) => ({
       userId: m.userId,
-      displayName: m.user.name, 
+      displayName: m.user.name,
       role: m.role,
     }));
   }
 
+
+  // change role of a member (admin only)
   async removeMember(
     conversationId: string,
     currentUserId: string,
@@ -264,6 +329,8 @@ async addMembers(
     return { ok: true };
   }
 
+
+  // change role of a member (admin only)
   async setRole(
     conversationId: string,
     currentUserId: string,
@@ -278,6 +345,8 @@ async addMembers(
     return { ok: true };
   }
 
+
+  // get unread count for a conversation
   async unreadFor(conversationId: string, userId: string) {
     const me = await this.prisma.membership.findFirst({
       where: { conversationId, userId },
@@ -294,6 +363,8 @@ async addMembers(
     return { conversationId, unread };
   }
 
+
+  //------ clear conversation for me----
   async clearForUser(conversationId: string, userId: string, upTo?: Date) {
     await this.ensureMember(conversationId, userId);
 

@@ -1,5 +1,6 @@
 import type { Express } from 'express';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -12,11 +13,12 @@ import {
 import { MessagesService } from './messages.service';
 import { UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import { extname } from 'path';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { SendMessageDto } from '../conversations/dto/send-message.dto';
+import { text } from 'stream/consumers';
 
 const MAX_SIZE = 10 * 1024 * 1024;
 function fname(_, file, cb) {
@@ -34,24 +36,24 @@ export class MessagesController {
     @Param('id') conversationId: string,
     @GetUser() user: any,
     @Query('cursor') cursor?: string,
-    @Query('take') take = '20',
+    @Query('take') take = '500',
   ) {
     return this.service.list(conversationId, user.userId, cursor, Number(take));
   }
 
-  @Post('conversations/:id/messages')
-  send(
-    @Param('id') conversationId: string,
-    @GetUser() user: any,
-    @Body() dto: SendMessageDto,
-  ) {
-    return this.service.send(
-      conversationId,
-      user.userId,
-      dto.kind,
-      dto.content,
-    );
-  }
+  // @Post('conversations/:id/messages')
+  // sendMessage(
+  //   @Param('id') conversationId: string,
+  //   @GetUser() user: any,
+  //   @Body() dto: SendMessageDto,
+  // ) {
+  //   return this.service.sendMessage(
+  //     conversationId,
+  //     user.userId,
+  //     dto.kind,
+  //     dto.content,
+  //   );
+  // }
 
   // /messages/search?q=hello&conversationId=...&take=20&skip=0
   @Get('messages/search')
@@ -73,24 +75,36 @@ export class MessagesController {
 
   @Post('conversations/:id/messages/upload')
   @UseInterceptors(
-    FileInterceptor('file', {
-      storage: diskStorage({ destination: 'uploads', filename: fname }),
-      limits: { fileSize: MAX_SIZE },
+    FileInterceptor('media', {
+      storage: memoryStorage(),
     }),
   )
   async uploadAndSend(
     @Param('id') conversationId: string,
     @GetUser() user: any,
     @UploadedFile() file: Express.Multer.File,
-    @Query('kind') kind: 'IMAGE' | 'FILE' | 'AUDIO' | 'VIDEO' = 'FILE',
+    @Body() dto: SendMessageDto,
   ) {
-    const content = {
-      url: `/uploads/${file.filename}`,
-      name: file.originalname,
-      size: file.size,
-      mime: file.mimetype,
-    };
-    return this.service.send(conversationId, user.userId, kind, content);
+    // Accept empty string or '{}' for content
+    if (typeof dto.content === 'string') {
+      if (dto.content === '' || dto.content === '{}') {
+        dto.content = {};
+      } else {
+        try {
+          dto.content = JSON.parse(dto.content);
+        } catch {
+          throw new BadRequestException('content must be a valid JSON object');
+        }
+      }
+    }
+    return this.service.sendMessage(
+      conversationId,
+      user.userId,
+      dto.kind,
+      dto.content,
+      file,
+      dto.media_Url,
+    );
   }
 
   @Delete('messages/:messageId')

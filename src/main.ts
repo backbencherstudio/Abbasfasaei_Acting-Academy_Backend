@@ -23,7 +23,11 @@ async function bootstrap() {
   app.setGlobalPrefix('api', {
     exclude: [{ path: '/', method: RequestMethod.GET }],
   });
-  app.enableCors();
+  app.enableCors({
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    preflightContinue: false,
+  });
   app.use(helmet());
   // Enable it, if special charactrers not encoding perfectly
   // app.use((req, res, next) => {
@@ -33,6 +37,13 @@ async function bootstrap() {
   //   }
   //   next();
   // });
+
+  // chat app static files
+  app.useStaticAssets(join(__dirname, '..', 'public', 'frontend'), {
+    index: false,
+    prefix: '/frontend',
+  });
+
   app.useStaticAssets(join(__dirname, '..', 'public', 'site'), {
     index: ['index.html'],
     redirect: false,
@@ -48,6 +59,7 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new CustomExceptionFilter());
+  
 
   // Local storage setup
   // SazedStorage.config({
