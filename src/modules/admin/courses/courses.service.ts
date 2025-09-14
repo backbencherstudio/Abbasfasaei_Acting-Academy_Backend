@@ -185,9 +185,13 @@ export class CoursesService {
         return { message: 'Unauthorized', success: false };
       }
 
+      console.log('course id:', id);
+
       const course = await this.prisma.course.findUnique({
         where: { id: id },
       });
+
+      console.log('course:', course);
 
       if (!course) {
         return { message: 'Course not found', success: false };
@@ -201,7 +205,7 @@ export class CoursesService {
           seat_capacity: updateCourseDto.seat_capacity || course.seat_capacity,
           fee: parseFloat(updateCourseDto.fee.toString()) || course.fee,
           duration: updateCourseDto.duration || course.duration,
-          class_time: updateCourseDto.class_time || course.class_time, 
+          class_time: updateCourseDto.class_time || course.class_time,
           start_date: new Date(updateCourseDto.start_date) || course.start_date,
           instructorId: updateCourseDto.instructorId || course.instructorId,
         },
@@ -218,7 +222,203 @@ export class CoursesService {
     }
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} course`;
+  async deleteCourse(userId: string, id: string) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const course = await this.prisma.course.findUnique({
+        where: { id: id },
+      });
+
+      if (!course) {
+        return { message: 'Course not found', success: false };
+      }
+
+      await this.prisma.course.delete({
+        where: { id: id },
+      });
+
+      return {
+        message: 'Course deleted successfully',
+        success: true,
+      };
+    } catch (error) {
+      console.error('Error deleting course:', error);
+      throw new Error('Could not delete course');
+    }
+  }
+
+  async addModule(userId: string, courseId: string, createModuleDto: any) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const course = await this.prisma.course.findUnique({
+        where: { id: courseId },
+      });
+
+      if (!course) {
+        return { message: 'Course not found', success: false };
+      }
+
+      const module = await this.prisma.courseModule.create({
+        data: {
+          module_title: createModuleDto.module_title,
+          module_name: createModuleDto.module_name,
+          module_overview: createModuleDto.module_overview,
+          course: {
+            connect: { id: courseId },
+          },
+        },
+        select: {
+          id: true,
+          module_title: true,
+          module_name: true,
+          module_overview: true,
+          courseId: true,
+          createdAt: true,
+          updatedAt: true,
+          classes: true,
+        },
+      });
+
+      return {
+        message: 'Module added successfully',
+        success: true,
+        data: module,
+      };
+    } catch (error) {
+      console.error('Error adding module:', error);
+      throw new Error('Could not add module');
+    }
+  }
+
+  async getAllModules(userId: string, courseId: string) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const course = await this.prisma.course.findUnique({
+        where: { id: courseId },
+      });
+
+      if (!course) {
+        return { message: 'Course not found', success: false };
+      }
+
+      const modules = await this.prisma.courseModule.findMany({
+        where: { courseId: courseId },
+        select: {
+          id: true,
+          module_title: true,
+          module_name: true,
+          module_overview: true,
+          courseId: true,
+          createdAt: true,
+          updatedAt: true,
+          classes: true,
+        },
+      });
+
+      return {
+        message: 'Modules fetched successfully',
+        success: true,
+        data: modules,
+      };
+    } catch (error) {
+      console.error('Error fetching modules:', error);
+      throw new Error('Could not fetch modules');
+    }
+  }
+
+  async getModuleById(userId: string, moduleId: string) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const module = await this.prisma.courseModule.findUnique({
+        where: { id: moduleId },
+      });
+
+      if (!module) {
+        return { message: 'Module not found', success: false };
+      }
+
+      return {
+        message: 'Module fetched successfully',
+        success: true,
+        data: module,
+      };
+    } catch (error) {
+      console.error('Error fetching module:', error);
+      throw new Error('Could not fetch module');
+    }
+  }
+
+  async updateModule(userId: string, moduleId: string, updateModuleDto: any) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const module = await this.prisma.courseModule.findUnique({
+        where: { id: moduleId },
+      });
+
+      if (!module) {
+        return { message: 'Module not found', success: false };
+      }
+
+      const updatedModule = await this.prisma.courseModule.update({
+        where: { id: moduleId },
+        data: {
+          module_title: updateModuleDto.module_title,
+          module_name: updateModuleDto.module_name,
+          module_overview: updateModuleDto.module_overview,
+        },
+      });
+
+      return {
+        message: 'Module updated successfully',
+        success: true,
+        data: updatedModule,
+      };
+    } catch (error) {
+      console.error('Error updating module:', error);
+      throw new Error('Could not update module');
+    }
+  }
+
+  async deleteModule(userId: string, moduleId: string) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const module = await this.prisma.courseModule.findUnique({
+        where: { id: moduleId },
+      });
+
+      if (!module) {
+        return { message: 'Module not found', success: false };
+      }
+
+      await this.prisma.courseModule.delete({
+        where: { id: moduleId },
+      });
+
+      return {
+        message: 'Module deleted successfully',
+        success: true,
+      };
+    } catch (error) {
+      console.error('Error deleting module:', error);
+      throw new Error('Could not delete module');
+    }
   }
 }
