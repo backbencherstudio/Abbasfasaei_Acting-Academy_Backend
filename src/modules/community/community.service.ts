@@ -65,6 +65,7 @@ export class CommunityService {
           `/${filename}`;
       }
     }
+    
     return this.prisma.communityPost.create({
       data: {
         author_Id: authorId,

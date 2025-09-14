@@ -19,7 +19,7 @@ import { MailModule } from './mail/mail.module';
 import { ApplicationModule } from './modules/application/application.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { PaymentModule } from './modules/payment/payment.module';
-import { PresenceModule } from './modules/chat/presence/presence.module';
+// import { PresenceModule } from './modules/chat/presence/presence.module';
 import { UploadsModule } from './modules/chat/uploads/uploads.module';
 import { MessagesModule } from './modules/chat/messages/messages.module';
 import { ConversationsModule } from './modules/chat/conversations/conversations.module';
@@ -82,7 +82,7 @@ import { EnrollmentModule } from './modules/enrollment/enrollment.module';
     ConversationsModule,
     MessagesModule,
     UploadsModule,
-    PresenceModule,
+    // PresenceModule,
     PaymentModule,
     CommunityModule,
     EnrollmentModule,

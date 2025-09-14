@@ -1,325 +1,199 @@
-// src/realtime/realtime.gateway.ts
 import {
   ConnectedSocket,
   MessageBody,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-  OnGatewayInit,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
-import { Prisma, MessageKind } from '@prisma/client';
-// import { TwilioVideoService } from './twilio-video.service';
+import { MessagesService } from '../messages/messages.service';
+import { ConversationsService } from '../conversations/conversations.service';
+import { MessageKind } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { PresenceService } from '../presence/presence.service';
-
-type JwtPayload = { sub: string; email: string };
-type CallKind = 'AUDIO' | 'VIDEO';
 
 @WebSocketGateway({
-  cors: { origin: process.env.CLIENT_APP_URL || true, credentials: true },
+  cors: {
+    origin: process.env.CLIENT_APP_URL || 'http://127.0.0.1:5500',
+    credentials: true,
+  },
   namespace: '/ws',
 })
 export class RealtimeGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer() io: Server;
 
   constructor(
     private jwt: JwtService,
+    private messagesService: MessagesService,
+    private conversationsService: ConversationsService,
     private prisma: PrismaService,
-    private presence: PresenceService,
-  // private twilio: TwilioVideoService, // ⬅️ Twilio integration
   ) {}
 
-  afterInit() {}
-
+  // Handle incoming connection
   async handleConnection(socket: Socket) {
+    // console.log('Hit in handleConnection');
+
     try {
       const token =
         socket.handshake.auth?.token ||
-        (socket.handshake.headers.authorization?.split(' ')[1] ?? '');
-
+        socket.handshake.headers.authorization?.split(' ')[1];
       if (!token) throw new Error('No token');
 
-      const payload = this.jwt.verify<JwtPayload>(token, {
+      const payload = this.jwt.verify(token, {
         secret: process.env.JWT_SECRET,
       });
+
       socket.data.userId = payload.sub;
-
-      await this.presence.setOnline(payload.sub);
-      this.io.emit('presence:update', { userId: payload.sub, online: true });
-
       socket.join(`user:${payload.sub}`);
+
+      // Notify others that this user is online
+      await this.prisma.user.update({
+        where: { id: payload.sub },
+        data: { lastSeenAt: null }, // null means online
+      });
+
       socket.emit('connection:ok', { userId: payload.sub });
-    } catch {
+
+      this.io.emit('presence:update', { userId: payload.sub, online: true });
+      
+    } catch (err) {
       socket.emit('connection:error', { message: 'Unauthorized' });
       socket.disconnect(true);
     }
   }
 
+  // Handle disconnection
   async handleDisconnect(socket: Socket) {
     const userId = socket.data.userId as string;
+
     if (userId) {
-      await this.presence.setOffline(userId);
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { lastSeenAt: new Date() }, // This stores the time when user was last seen
+      });
+
       this.io.emit('presence:update', { userId, online: false });
     }
   }
 
-  // ---------- helpers ----------
-  private room(conversationId: string) {
-    return `conv:${conversationId}`;
-  }
-
-  private async ensureMembership(conversationId: string, userId: string) {
-    const membership = await this.prisma.membership.findFirst({
-      where: { conversationId, userId },
-      select: { id: true },
-    });
-    return !!membership;
-  }
-
-  // ---------- chat events ----------
+  // Join a conversation room
   @SubscribeMessage('conversation:join')
   async onJoin(
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: { conversationId: string },
   ) {
+    console.log('Hit in onJoin');
     const userId = socket.data.userId as string;
     if (!userId) return;
 
-    const isMember = await this.ensureMembership(body.conversationId, userId);
-    if (!isMember) {
-      socket.emit('error', { code: 'NOT_MEMBER', message: 'Not a member of this conversation' });
-      return;
-    }
+    console.log('Joining conversation:', body.conversationId);
 
-    socket.join(this.room(body.conversationId));
-    socket.emit('conversation:joined', { conversationId: body.conversationId });
-    socket.to(this.room(body.conversationId)).emit('presence:update', { userId, online: true });
+    try {
+      // Ensure the user is a member of the conversation
+      await this.conversationsService.ensureMember(body.conversationId, userId);
+
+      socket.join(`conv:${body.conversationId}`);
+      socket.emit('conversation:joined', {
+        conversationId: body.conversationId,
+      });
+
+      socket
+        .to(`conv:${body.conversationId}`)
+        .emit('presence:update', { userId, online: true });
+
+      console.log('OnJoin completed');
+    } catch (err) {
+      socket.emit('error', { message: 'Failed to join the conversation' });
+    }
   }
 
+  // Send a message
   @SubscribeMessage('message:send')
   async onSend(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() body: {
-      conversationId: string;
-      kind?: MessageKind;
-      content: any;
-      clientId?: string;
-    },
+    @MessageBody() body: { conversationId: string; kind: string; content: any },
   ) {
+    console.log('Hit in onSend');
+    const { conversationId, kind, content } = body;
     const userId = socket.data.userId as string;
-    if (!userId) return;
 
-    const member = await this.prisma.membership.findFirst({
-      where: { conversationId: body.conversationId, userId },
-      select: { id: true },
-    });
-    if (!member) {
-      socket.emit('error', { code: 'NOT_MEMBER', message: 'Not a member of this conversation' });
-      return;
+    if (!userId) {
+      return { error: 'User not authenticated' };
     }
 
     try {
-      const msg = await this.prisma.message.create({
-        data: {
-          conversationId: body.conversationId,
-          senderId: userId,
-          kind: body.kind ?? 'TEXT',
-          content: body.content as Prisma.InputJsonValue,
-        },
-        select: {
-          id: true, conversationId: true, senderId: true,
-          kind: true, content: true, createdAt: true,
-        },
-      });
+      // Ensure the user is part of the conversation
+      await this.conversationsService.ensureMember(conversationId, userId);
 
-      const otherMembers = await this.prisma.membership.findMany({
-        where: { conversationId: body.conversationId, userId: { not: userId } },
-        select: { userId: true },
-      });
-      if (otherMembers.length) {
-        await this.prisma.receipt.createMany({
-          data: otherMembers.map(m => ({ messageId: msg.id, userId: m.userId, status: 'DELIVERED' })),
-          skipDuplicates: true,
-        });
-      }
+      // Send the message
+      const msg = await this.messagesService.sendMessage(
+        conversationId,
+        userId,
+        kind as MessageKind,
+        content,
+      );
 
-      this.io.to(this.room(body.conversationId)).emit('message:new', { ...msg, clientId: body.clientId });
-      socket.emit('message:ack', { messageId: msg.id, clientId: body.clientId });
-    } catch {
-      socket.emit('error', { code: 'SEND_FAILED', message: 'Failed to send message' });
+      console.log('Message sent:', msg);
+
+      // Emit the message to all other members of the conversation
+      socket.to(`conv:${conversationId}`).emit('message:new', msg);
+
+      // Acknowledge the sender that the message has been sent
+      socket.emit('message:ack', { messageId: msg.id });
+    } catch (e) {
+      socket.emit('error', {
+        code: 'SEND_FAILED',
+        message: 'Failed to send message',
+      });
     }
   }
 
+  // Handle typing event
   @SubscribeMessage('typing')
-  onTyping(
+  async onTyping(
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: { conversationId: string; on: boolean },
   ) {
+    console.log('Hit in onTyping');
     const userId = socket.data.userId as string;
-    socket.to(this.room(body.conversationId)).emit('typing', { userId, on: body.on });
+
+    try {
+      // Fetch the user name
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      });
+
+      // Emit the typing event to the conversation
+      socket
+        .to(`conv:${body.conversationId}`)
+        .emit('typing', { userId, userName: user?.name, on: body.on });
+    } catch (error) {
+      console.error('Failed to fetch user data for typing event:', error);
+    }
   }
 
+  // Mark message as read
   @SubscribeMessage('message:read')
   async onRead(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() body: { messageId: string },
+    @MessageBody() b: { conversationId: string; at?: string },
   ) {
     const userId = socket.data.userId as string;
-    const msg = await this.prisma.message.findUnique({
-      where: { id: body.messageId },
-      select: { id: true, conversationId: true, createdAt: true },
-    });
-    if (!msg) return;
-
-    const isMember = await this.prisma.membership.findFirst({
-      where: { userId, conversationId: msg.conversationId },
-      select: { lastReadAt: true },
-    });
-    if (!isMember) return;
-
-    await this.prisma.receipt.upsert({
-      where: { messageId_userId: { messageId: msg.id, userId } },
-      create: { messageId: msg.id, userId, status: 'READ' },
-      update: { status: 'READ', at: new Date() },
-    });
-
-    const next = isMember.lastReadAt && isMember.lastReadAt > msg.createdAt
-      ? isMember.lastReadAt
-      : msg.createdAt;
-
-    await this.prisma.membership.updateMany({
-      where: { userId, conversationId: msg.conversationId },
-      data: { lastReadAt: next },
-    });
-
-    this.io.to(this.room(msg.conversationId)).emit('message:read', { messageId: msg.id, userId });
-  }
-
-  // Twilio calling (DM + Group) removed
-  /**
-   * Start a call: ensure room, mint token for starter, notify others to join.
-   * payload: { conversationId: string, kind: 'AUDIO' | 'VIDEO' }
-   * emits:
-   *  - to starter: call:started { roomName, token, kind }
-   *  - to others:  call:ring    { roomName, fromUserId, kind }
-   */
-  @SubscribeMessage('call:start')
-  async onCallStart(
-    @ConnectedSocket() socket: Socket,
-    @MessageBody() body: { conversationId: string; kind: CallKind },
-  ) {
-    const userId = socket.data.userId as string;
-    if (!userId) return;
-
-    const isMember = await this.ensureMembership(body.conversationId, userId);
-    if (!isMember) {
-      socket.emit('error', { code: 'NOT_MEMBER', message: 'Not a member' });
-      return;
-    }
-
-    socket.join(this.room(body.conversationId));
-  // Twilio integration removed
-
-    // Notify others in the conversation to show “incoming call”
-    socket.to(this.room(body.conversationId)).emit('call:ring', {
-      conversationId: body.conversationId,
-      fromUserId: userId,
-      kind: body.kind,
-    });
-
-  // Twilio Video JS SDK integration removed
-    socket.emit('call:started', {
-      conversationId: body.conversationId,
-      kind: body.kind,
-    });
-  }
-
-  /**
-   * payload: { conversationId: string }
-   * emits to joiner: call:joined { roomName, token }
-   * broadcasts:      call:peer-join { userId }
-   */
-  @SubscribeMessage('call:join')
-  async onCallJoin(
-    @ConnectedSocket() socket: Socket,
-    @MessageBody() body: { conversationId: string },
-  ) {
-    const userId = socket.data.userId as string;
-    if (!userId) return;
-
-    const isMember = await this.ensureMembership(body.conversationId, userId);
-    if (!isMember) {
-      socket.emit('error', { code: 'NOT_MEMBER', message: 'Not a member' });
-      return;
-    }
-
-    socket.join(this.room(body.conversationId));
-  // Twilio integration removed
-
-    socket.emit('call:joined', {
-      conversationId: body.conversationId,
-    });
-
-    socket.to(this.room(body.conversationId)).emit('call:peer-join', {
-      conversationId: body.conversationId,
+    await this.conversationsService.ensureMember(b.conversationId, userId);
+    await this.messagesService.markRead(
+      b.conversationId,
       userId,
-    });
-  }
-
-  /**
-   * End the call for everyone (server-complete the Room).
-   * payload: { conversationId: string }
-   * emits: call:ended
-   */
-  @SubscribeMessage('call:end')
-  async onCallEnd(
-    @ConnectedSocket() socket: Socket,
-    @MessageBody() body: { conversationId: string },
-  ) {
-    const userId = socket.data.userId as string;
-    if (!userId) return;
-
-    const isMember = await this.ensureMembership(body.conversationId, userId);
-    if (!isMember) return;
-
-  // Twilio integration removed
-
-    this.io.to(this.room(body.conversationId)).emit('call:ended', {
-      conversationId: body.conversationId,
-      endedBy: userId,
-    });
-  }
-
-  // Optional UX helpers
-  @SubscribeMessage('call:mute')
-  onCallMute(
-    @ConnectedSocket() socket: Socket,
-    @MessageBody() body: { conversationId: string; on: boolean },
-  ) {
-    const userId = socket.data.userId as string;
-    socket.to(this.room(body.conversationId)).emit('call:peer-mute', {
-      conversationId: body.conversationId,
+      b.at ? new Date(b.at) : undefined,
+    );
+    this.io.to(`conv:${b.conversationId}`).emit('message:read', {
+      conversationId: b.conversationId,
       userId,
-      on: body.on,
-    });
-  }
-
-  @SubscribeMessage('call:camera')
-  onCallCamera(
-    @ConnectedSocket() socket: Socket,
-    @MessageBody() body: { conversationId: string; on: boolean },
-  ) {
-    const userId = socket.data.userId as string;
-    socket.to(this.room(body.conversationId)).emit('call:peer-camera', {
-      conversationId: body.conversationId,
-      userId,
-      on: body.on,
+      at: b.at ?? new Date().toISOString(),
     });
   }
 }
