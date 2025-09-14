@@ -26,6 +26,8 @@ import { ConversationsModule } from './modules/chat/conversations/conversations.
 import { RealtimeModule } from './modules/chat/realtime/realtime.module';
 import { CommunityModule } from './modules/community/community.module';
 import { EnrollmentModule } from './modules/enrollment/enrollment.module';
+import { CourseModule } from './course/course.module';
+import { CoursesModule } from './modules/admin/courses/courses.module';
 
 @Module({
   imports: [
@@ -86,6 +88,8 @@ import { EnrollmentModule } from './modules/enrollment/enrollment.module';
     PaymentModule,
     CommunityModule,
     EnrollmentModule,
+    CourseModule,
+    CoursesModule
   ],
   controllers: [AppController],
   providers: [

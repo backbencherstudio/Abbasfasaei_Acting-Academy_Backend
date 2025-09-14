@@ -26,8 +26,8 @@ export class EnrollmentService {
       const enrollment = await this.prisma.enrollment.create({
         data: {
           user_id: user.id,
-          course_type:
-            dto.course_type as any as import('@prisma/client').CourseType,
+          // course_type:
+            // dto.course_type as any as import('@prisma/client').CourseType,
           full_name: dto.full_name,
           email: dto.email,
           phone: dto.phone,
