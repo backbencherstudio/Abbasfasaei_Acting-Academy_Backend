@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
+import { CreateModuleDto } from './dto/create-module.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { UpdateModuleDto } from './dto/update-module.dto';
 
 @Injectable()
 export class CoursesService {
@@ -250,7 +252,7 @@ export class CoursesService {
     }
   }
 
-  async addModule(userId: string, courseId: string, createModuleDto: any) {
+  async addModule(userId: string, courseId: string, createModuleDto: CreateModuleDto) {
     try {
       if (!userId) {
         return { message: 'Unauthorized', success: false };
@@ -359,8 +361,7 @@ export class CoursesService {
       throw new Error('Could not fetch module');
     }
   }
-
-  async updateModule(userId: string, moduleId: string, updateModuleDto: any) {
+  async updateModule(userId: string, moduleId: string, updateModuleDto: UpdateModuleDto) {
     try {
       if (!userId) {
         return { message: 'Unauthorized', success: false };
@@ -377,9 +378,9 @@ export class CoursesService {
       const updatedModule = await this.prisma.courseModule.update({
         where: { id: moduleId },
         data: {
-          module_title: updateModuleDto.module_title,
-          module_name: updateModuleDto.module_name,
-          module_overview: updateModuleDto.module_overview,
+          module_title: updateModuleDto.module_title !== undefined ? updateModuleDto.module_title : module.module_title,
+          module_name: updateModuleDto.module_name !== undefined ? updateModuleDto.module_name : module.module_name,
+          module_overview: updateModuleDto.module_overview !== undefined ? updateModuleDto.module_overview : module.module_overview,
         },
       });
 
