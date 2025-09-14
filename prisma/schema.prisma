@@ -87,7 +87,6 @@ model User {
   experience_level     ExperienceLevel?
   payment_transactions PaymentTransaction[]
   UserProfile          UserProfile[]
-  instructorProfile    InstructorProfile[]
 
   // Community post relation
   authoredPosts     CommunityPost[]    @relation("authoredPosts")
@@ -121,6 +120,8 @@ model User {
   AssignmentSubmission AssignmentSubmission[]
   ActingGoals          ActingGoals?
   actingGoalsId        String?
+
+  attendances          Attendance[]        @relation("UserAttendances")
 
   @@map("users")
 }
@@ -211,30 +212,6 @@ model RoleUser {
   @@map("role_users")
 }
 
-
-//
-//---------------------TEACHERS & INSTRUCTORS ---------------------
-//  
-model InstructorProfile {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-  deleted_at DateTime?
-
-  user_id String
-  user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  instructor_name  String?
-  email            String?
-  phone_number     String?
-  bio              String?
-  qualifications   String?
-  experience       String?
-  specialties      String?
-  availability     String?
-
-  @@map("teacher_profiles")
-}
 
 //
 // ---------------------- NOTIFICATIONS ----------------------
@@ -365,63 +342,86 @@ model CourseModule {
   id          String         @id @default(cuid())
   course      Course         @relation(fields: [courseId], references: [id])
   courseId    String
-  title       String // Module name
-  description String? // optional module description
-  lessons     CourseLesson[] // Each module can have multiple lessons/classes
+  module_title       String // Module name
+  module_name         String // Module name
+  module_overview     String? // optional module description
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+  classes     ModuleClass[]
 
   @@map("course_modules")
 }
 
-model CourseLesson {
-  id          String       @id @default(cuid())
-  module      CourseModule @relation(fields: [moduleId], references: [id])
-  moduleId    String
-  title       String // Class name
-  description String? // Class overview
-  scheduledAt DateTime? // class timing
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  assets         LessonAsset[]
-  assignments    Assignment[]
-  lessonProgress LessonProgress[]
-
-  @@map("course_lessons")
-}
-
-model LessonAsset {
+model ModuleClass {
   id        String       @id @default(cuid())
-  lesson    CourseLesson @relation(fields: [lessonId], references: [id])
-  lessonId  String
-  type      AssetType // VIDEO / PDF
-  url       String // storage path
+  module    CourseModule @relation(fields: [moduleId], references: [id])
+  moduleId  String
+  class_title     String 
+  class_name   String? 
+  class_overview String? 
+  duration    String? 
+  start_date  DateTime? 
+  class_time  DateTime? 
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
-  @@map("lesson_assets")
-}
+  assignments Assignment[]
+  classAssets ClassAsset[] 
+  attendances Attendance[] 
 
-enum AssetType {
-  VIDEO
-  PDF
-}
+  @@map("module_classes")
+} 
 
-model Assignment {
-  id          String       @id @default(cuid())
-  lesson      CourseLesson @relation(fields: [lessonId], references: [id])
-  lessonId    String
-  title       String
+model Assignment{
+  id        String       @id @default(cuid())
+  moduleClassId String
+  title     String
   description String?
-  dueDate     DateTime
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  dueDate   DateTime
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
+  moduleClass ModuleClass @relation(fields: [moduleClassId], references: [id])
   submissions AssignmentSubmission[]
 
   @@map("assignments")
 }
+
+
+model ClassAsset {
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+  deleted_at DateTime?
+
+  class_id String
+  class    ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
+
+  asset_type AssetType
+  asset_url  String
+
+  @@map("class_assets")
+} 
+
+
+model Attendance {
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+  deleted_at DateTime?
+
+  class_id String
+  student_id String
+  student    User       @relation("UserAttendances", fields: [student_id], references: [id], onDelete: Cascade)
+  class      ModuleClass @relation(fields: [class_id], references: [id])
+
+  status     AttendanceStatus @default(ABSENT)
+  attended_at DateTime?
+
+  @@unique([class_id, student_id])
+  @@map("attendances")
+}
+
 
 model AssignmentSubmission {
   id           String     @id @default(cuid())
@@ -436,16 +436,17 @@ model AssignmentSubmission {
   @@map("assignment_submissions")
 }
 
-model LessonProgress {
-  id           String       @id @default(cuid())
-  enrollment   Enrollment   @relation(fields: [enrollmentId], references: [id])
-  enrollmentId String
-  lesson       CourseLesson @relation(fields: [lessonId], references: [id])
-  lessonId     String
-  completed    Boolean      @default(false)
-  completedAt  DateTime?
 
-  @@map("lesson_progress")
+enum AssetType {
+  VIDEO
+  PDF
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
 }
 
 //
@@ -476,7 +477,6 @@ model Enrollment {
   courseModuleId String?
 
   enrollmentProfile EnrollmentProfile?
-  lessonProgress    LessonProgress[]
 
   contractTerms                EnrollmentContractTerms?
   enrollmentTermsAndConditions EnrollmentTermsAndConditions?
