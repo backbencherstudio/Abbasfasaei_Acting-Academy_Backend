@@ -131,4 +131,55 @@ export class UserController {
       };
     }
   }
+
+
+
+  //-------------------get all instructors-------------------//
+  @ApiResponse({ description: 'Get all instructors' })
+  @Get('instructors/all')
+  async getAllInstructors() {
+    try {
+      const instructors = await this.userService.getAllInstructors();
+      return instructors;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+
+
+  //-------------------get all students-------------------//
+  @ApiResponse({ description: 'Get all students' })
+  @Get('students/all')
+  async getAllStudents() {
+    try {
+      const students = await this.userService.getAllStudents();
+      return students;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+
+  //-------------------get all admins-------------------//
+  @ApiResponse({ description: 'Get all admins' })
+  @Get('admins/all')
+  async getAllAdmins() {
+    try {
+      const admins = await this.userService.getAllAdmins();
+      return admins;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
 }

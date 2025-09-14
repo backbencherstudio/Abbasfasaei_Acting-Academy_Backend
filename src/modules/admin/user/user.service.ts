@@ -224,4 +224,94 @@ export class UserService {
       };
     }
   }
+  
+  
+  //-------------------- get all instructors --------------------//
+  async getAllInstructors() {
+    try {
+      const instructors = await this.prisma.user.findMany({
+        where: {
+          role: 'TEACHER',
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          about: true,
+          phone_number: true,
+          address: true,
+          avatar: true,
+          role: true,
+        },
+      });
+      return {
+        success: true,
+        data: instructors,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  } 
+
+
+  //-------------------- get all students --------------------//
+  async getAllStudents() {
+    try {
+      const students = await this.prisma.user.findMany({
+        where: {
+          role: 'STUDENT',
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          phone_number: true,
+          address: true,
+          avatar: true,
+          ActingGoals: true,
+        },
+      });
+      return {
+        success: true,
+        data: students,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
+
+  //-------------------- get all admins --------------------//
+  async getAllAdmins() {
+    try {
+      const admins = await this.prisma.user.findMany({
+        where: {
+          role: 'ADMIN',
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+
+        },
+      });
+      return {
+        success: true,
+        data: admins,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
 }

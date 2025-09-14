@@ -87,7 +87,7 @@ model User {
   experience_level     ExperienceLevel?
   payment_transactions PaymentTransaction[]
   UserProfile          UserProfile[]
-  teacherProfile       TeacherProfile[]
+  instructorProfile    InstructorProfile[]
 
   // Community post relation
   authoredPosts     CommunityPost[]    @relation("authoredPosts")
@@ -215,7 +215,7 @@ model RoleUser {
 //
 //---------------------TEACHERS & INSTRUCTORS ---------------------
 //  
-model TeacherProfile {
+model InstructorProfile {
   id         String   @id @default(cuid())
   created_at DateTime @default(now())
   updated_at DateTime @default(now())
@@ -224,14 +224,14 @@ model TeacherProfile {
   user_id String
   user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  teacher_name  String?
-  email         String?
-  phone_number  String?
-  bio          String?
-  qualifications String?
-  experience   String?
-  specialties  String?
-  availability String?
+  instructor_name  String?
+  email            String?
+  phone_number     String?
+  bio              String?
+  qualifications   String?
+  experience       String?
+  specialties      String?
+  availability     String?
 
   @@map("teacher_profiles")
 }
@@ -322,27 +322,30 @@ model PaymentTransaction {
   @@map("payment_transactions")
 }
 
+
 //
 // ----------------COURSES ----------------------
-//
+// 
 model Course {
-  id              String     @id @default(cuid())
-  title           String // e.g., "1-Year Adult Program"
-  description     String? // Course overview
-  duration        Int // Duration in weeks or months
-  type            CourseType
-  fee             Decimal // e.g., 1200.00
-  installmentPlan Json? // Details about monthly installments
-  created_at      DateTime   @default(now())
-  updated_at      DateTime   @updatedAt
+  id             String   @id @default(cuid())
+  title          String
+  createdBy      String
+  instructorId   String?
+  instructor     User?    @relation(fields: [instructorId], references: [id])
+  fee            Decimal
+  duration       String
+  class_time     String?
+  seat_capacity  String   @default("50")
+  start_date     DateTime
+  created_at     DateTime @default(now())
+  updated_at     DateTime @default(now()) @updatedAt
+  status         CourseStatus @default(ACTIVE)
+  course_overview Json?
+  course_module_details Json?
+  installment_process Json?
 
-  instructorId String?
-  instructor   User?   @relation(fields: [instructorId], references: [id])
-
-  modules     CourseModule[] // Course modules
-  enrollments Enrollment[] // Students enrolled
-
-  @@map("courses")
+  enrollments Enrollment[]
+  modules     CourseModule[] 
 }
 
 enum CourseType {
@@ -352,6 +355,11 @@ enum CourseType {
   FULL_PACKAGE_ADULTS
   FULL_PACKAGE_KIDS
 }
+
+enum CourseStatus {
+  ACTIVE
+  INACTIVE
+} 
 
 model CourseModule {
   id          String         @id @default(cuid())
@@ -451,7 +459,7 @@ model Enrollment {
   user_id String
   user    User   @relation(fields: [user_id], references: [id])
 
-  course_type CourseType
+  // course_type CourseType
 
   full_name        String
   email            String
@@ -836,6 +844,7 @@ model CallParticipant {
 //
 // ---------------------- ENUMS ----------------------
 //
+
 enum ReportStatus {
   OPEN
   REVIEWED
