@@ -454,7 +454,8 @@ model Enrollment {
   user_id String
   user    User   @relation(fields: [user_id], references: [id])
 
-  // course_type CourseType
+  status EnrollmentStatus @default(PENDING)
+  role   UserRole         @default(STUDENT)
 
   full_name        String
   email            String
@@ -477,6 +478,8 @@ model Enrollment {
 
   actingGoals   ActingGoals?
   actingGoalsId String?
+
+  contract_docs Json?
 
   @@map("enrollments")
 }
@@ -516,6 +519,10 @@ model EnrollmentPayment {
   enrollmentId   String        @unique
   payment_type   PaymentType
   payment_status PaymentStatus @default(PENDING)
+  payment_date   DateTime      @default(now())
+  amount         Decimal
+  currency       String        @default("USD")
+  transaction_id String
   payment_method String
   account_holder String?
   card_number    String?
@@ -538,8 +545,8 @@ model ActingGoals {
 }
 
 enum PaymentType {
-  ONE_TIME
-  MONTHLY_INSTALLMENTS
+  MONTHLY
+  YEARLY
 }
 
 enum PaymentStatus {
@@ -556,9 +563,18 @@ enum ExperienceLevel {
 }
 
 model EnrollmentProfile {
-  id                String     @id @default(cuid())
-  enrollment        Enrollment @relation(fields: [enrollmentId], references: [id])
-  enrollmentId      String     @unique
+  id                String           @id @default(cuid())
+  enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id])
+  enrollmentId      String           @unique
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @default(now()) @updatedAt
+  enrollment_status EnrollmentStatus @default(PENDING)
+  full_name         String
+  email             String
+  phone             String
+  address           String
+  date_of_birth     DateTime?        @db.Date
+  experience_level  ExperienceLevel
   avatar            String?
   personal_info     Json?
   account_settings  Json?
@@ -569,6 +585,12 @@ model EnrollmentProfile {
   support           Json?
 
   @@map("enrollment_profiles")
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  PENDING
+  ALUMNI
 }
 
 //

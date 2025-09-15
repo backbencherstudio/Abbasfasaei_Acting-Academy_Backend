@@ -28,7 +28,11 @@ import { CommunityModule } from './modules/community/community.module';
 import { EnrollmentModule } from './modules/enrollment/enrollment.module';
 import { CourseModule } from './course/course.module';
 import { CoursesModule } from './modules/admin/courses/courses.module';
+
+import { StudentManagementModule } from './modules/admin/student-management/student-management.module';
+
 import { InstructorsModule } from './modules/admin/instructors/instructors.module';
+
 
 @Module({
   imports: [
@@ -91,7 +95,11 @@ import { InstructorsModule } from './modules/admin/instructors/instructors.modul
     EnrollmentModule,
     CourseModule,
     CoursesModule,
+
+    StudentManagementModule
+
     InstructorsModule
+
   ],
   controllers: [AppController],
   providers: [
