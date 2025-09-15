@@ -252,6 +252,9 @@ export class CoursesService {
     }
   }
 
+
+  //------------------------------- Module Management -------------------------------
+
   async addModule(userId: string, courseId: string, createModuleDto: CreateModuleDto) {
     try {
       if (!userId) {
@@ -302,7 +305,7 @@ export class CoursesService {
     try {
       if (!userId) {
         return { message: 'Unauthorized', success: false };
-      }
+      } 
 
       const course = await this.prisma.course.findUnique({
         where: { id: courseId },
@@ -361,6 +364,7 @@ export class CoursesService {
       throw new Error('Could not fetch module');
     }
   }
+
   async updateModule(userId: string, moduleId: string, updateModuleDto: UpdateModuleDto) {
     try {
       if (!userId) {
@@ -422,4 +426,207 @@ export class CoursesService {
       throw new Error('Could not delete module');
     }
   }
+
+
+
+  //------------------------------- Class Management -------------------------------
+  async addClass(userId: string, moduleId: string, createClassDto: any) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const module = await this.prisma.courseModule.findUnique({
+        where: { id: moduleId },
+      });
+
+      console.log("course module:", module);
+
+      if (!module) {
+        return { message: 'Module not found', success: false };
+      }
+
+      const newClass = await this.prisma.moduleClass.create({
+        data: {
+          class_title: createClassDto.class_title,
+          class_name: createClassDto.class_name,
+          class_overview: createClassDto.class_overview,
+          duration: createClassDto.duration,
+          start_date: createClassDto.start_date,
+          class_time: createClassDto.class_time,
+          moduleId: moduleId,
+
+        },
+        select: {
+          id: true,
+          class_title: true,
+          class_name: true,
+          class_overview: true,
+          duration: true,
+          start_date: true,
+          class_time: true,
+          moduleId: true,
+          createdAt: true,
+          updatedAt: true,
+          attendances: true,
+          assignments: true,
+          classAssets: true,
+        },
+      });
+
+      return {
+        message: 'Class added successfully',
+        success: true,
+        data: newClass,
+      };
+    } catch (error) {
+      console.error('Error adding class:', error);
+      throw new Error('Could not add class');
+    }
+  }
+
+  async getAllClasses(userId: string, moduleId: string) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const module = await this.prisma.courseModule.findUnique({
+        where: { id: moduleId },
+      });
+
+      if (!module) {
+        return { message: 'Module not found', success: false };
+      }
+
+      const classes = await this.prisma.moduleClass.findMany({
+        where: { moduleId: moduleId },
+        select: {
+          id: true,
+          class_title: true,
+          class_name: true,
+          class_overview: true,
+          duration: true,
+          start_date: true,
+          class_time: true,
+          moduleId: true,
+          createdAt: true,
+          updatedAt: true,
+          attendances: true,
+          assignments: true,
+          classAssets: true,
+        },
+      });
+
+      if (!classes || classes.length === 0) {
+        return { message: 'No classes found', success: false };
+      }
+
+      return {
+        message: 'Classes fetched successfully',
+        success: true,
+        data: classes,
+      };
+    } catch (error) {
+      console.error('Error fetching classes:', error);
+      throw new Error('Could not fetch classes');
+    }
+  }
+
+
+  async getClassById(userId: string, classId: string) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const existingClass = await this.prisma.moduleClass.findUnique({
+        where: { id: classId },
+      });
+
+      if (!existingClass) {
+        return { message: 'Class not found', success: false };
+      }
+
+      return {
+        message: 'Class fetched successfully',
+        success: true,
+        data: existingClass,
+      };
+    } catch (error) {
+      console.error('Error fetching class:', error);
+      throw new Error('Could not fetch class');
+    }
+  }
+
+
+  async deleteClass(userId: string, classId: string) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const existingClass = await this.prisma.moduleClass.findUnique({
+        where: { id: classId },
+      });
+
+      if (!existingClass) {
+        return { message: 'Class not found', success: false };
+      }
+
+      await this.prisma.moduleClass.delete({
+        where: { id: classId },
+      });
+
+      return {
+        message: 'Class deleted successfully',
+        success: true,
+      };
+    } catch (error) {
+      console.error('Error deleting class:', error);
+      throw new Error('Could not delete class');
+    }
+  }
+
+  async updateClass(userId: string, classId: string, updateClassDto: any) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const existingClass = await this.prisma.moduleClass.findUnique({
+        where: { id: classId },
+      });
+
+      if (!existingClass) {
+        return { message: 'Class not found', success: false };
+      }
+
+      const updatedClass = await this.prisma.moduleClass.update({
+        where: { id: classId },
+        data: {
+          class_title: updateClassDto.class_title || existingClass.class_title,
+          class_name: updateClassDto.class_name || existingClass.class_name,
+          class_overview: updateClassDto.class_overview || existingClass.class_overview,
+          duration: updateClassDto.duration || existingClass.duration,
+          start_date: updateClassDto.start_date || existingClass.start_date,
+          class_time: updateClassDto.class_time || existingClass.class_time,
+        },
+      });
+
+      if (!updatedClass) {
+        return { message: 'Class not found', success: false };
+      }
+
+      return {
+        message: 'Class updated successfully',
+        success: true,
+        data: updatedClass,
+      };
+    } catch (error) {
+      console.error('Error updating class:', error);
+      throw new Error('Could not update class');
+    }
+  }
+
 }
