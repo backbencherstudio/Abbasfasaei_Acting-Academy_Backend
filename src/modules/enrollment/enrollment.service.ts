@@ -177,7 +177,7 @@ export class EnrollmentService {
       await this.prisma.enrollmentPayment.create({
         data: {
           enrollmentId: enrollment.id,
-          payment_type: 'ONE_TIME', // Adjust as needed
+          payment_type: 'MONTHLY', // Adjust as needed
           payment_status: 'COMPLETED', // Adjust as needed
           payment_method: paymentMethod,
         },
