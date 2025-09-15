@@ -100,6 +100,35 @@ export class CoursesController {
 
   //---------------------classes---------------------//
 
+  @ApiOperation({ summary: 'Add a class to a module' })
+  @Post('modules/:moduleId/classes')
+  addClass(@GetUser() user: any, @Param('moduleId') moduleId: string, @Body() createClassDto: any) {
+    return this.coursesService.addClass(user.userId, moduleId, createClassDto);
+  } 
+
+  @ApiOperation({ summary: 'Get all classes for a module' })
+  @Get('modules/:moduleId/classes')
+  getAllClasses(@GetUser() user: any, @Param('moduleId') moduleId: string) {
+    return this.coursesService.getAllClasses(user.userId, moduleId);
+  }
+
+  @ApiOperation({ summary: 'Get a class by ID' })
+  @Get('classes/:classId')
+  getClassById(@GetUser() user: any, @Param('classId') classId: string) {
+    return this.coursesService.getClassById(user.userId, classId);
+  }
+
+  @ApiOperation({ summary: 'Update a class by ID' })
+  @Patch('classes/:classId')
+  updateClass(@GetUser() user: any, @Param('classId') classId: string, @Body() updateClassDto: any) {
+    return this.coursesService.updateClass(user.userId, classId, updateClassDto);
+  }
+
+  @ApiOperation({ summary: 'Delete a class by ID' })
+  @Delete('classes/:classId')
+  deleteClass(@GetUser() user: any, @Param('classId') classId: string) {
+    return this.coursesService.deleteClass(user.userId, classId);
+  }
 
 
 }
