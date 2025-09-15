@@ -160,4 +160,55 @@ export class InstructorsService {
       };
     }
   }
+
+  async getTeacherDetails(userId: string) {
+    const teacherDetails = await this.prisma.user.findUnique({
+      where: { id: userId, role: 'TEACHER' },
+    });
+
+    const students = await this.prisma.user.findMany({
+      where: {
+        Enrollment: {
+          some: {
+            course: {
+              instructorId: userId,
+            },
+          },
+        },
+      },
+    });
+
+    const modules = await this.prisma.courseModule.findMany({
+      where: {
+        course: {
+          instructorId: userId,
+        },
+      },
+      include: {
+        classes: true,
+      },
+    });
+
+    const classes = await this.prisma.moduleClass.findMany({
+      where: {
+        module: {
+          course: {
+            instructorId: userId,
+          },
+        },
+      },
+      include: {
+        assignments: true,
+        classAssets: true,
+      },
+    });
+
+    return { teacherDetails, classes, students, modules };
+  }
 }
+
+/*
+
+
+
+*/
