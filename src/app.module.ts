@@ -28,6 +28,7 @@ import { CommunityModule } from './modules/community/community.module';
 import { EnrollmentModule } from './modules/enrollment/enrollment.module';
 import { CourseModule } from './course/course.module';
 import { CoursesModule } from './modules/admin/courses/courses.module';
+import { InstructorsModule } from './modules/admin/instructors/instructors.module';
 
 @Module({
   imports: [
@@ -89,7 +90,8 @@ import { CoursesModule } from './modules/admin/courses/courses.module';
     CommunityModule,
     EnrollmentModule,
     CourseModule,
-    CoursesModule
+    CoursesModule,
+    InstructorsModule
   ],
   controllers: [AppController],
   providers: [
