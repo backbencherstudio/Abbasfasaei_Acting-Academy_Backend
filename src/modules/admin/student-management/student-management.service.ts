@@ -3,6 +3,9 @@ import { CreateStudentManagementDto } from './dto/create-student-management.dto'
 import { UpdateStudentManagementDto } from './dto/update-student-management.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { id } from 'date-fns/locale';
+import { StringHelper } from 'src/common/helper/string.helper';
+import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import appConfig from 'src/config/app.config';
 
 @Injectable()
 export class StudentManagementService {
@@ -135,24 +138,26 @@ export class StudentManagementService {
       };
     }
 
+    console.log('enrollment in payment:', enrollment);
+
     // Create a new payment
     const payment = await this.prisma.enrollmentPayment.create({
       data: {
-        enrollmentId: enrollment.id,
+        enrollment: { connect: { id: enrollment.id } },
+        user: { connect: { id: enrollment.user.id } },
         transaction_id: dto.transaction_id,
-        payment_type: dto.payment_type,
-        payment_status: dto.payment_status,
         payment_date: new Date(dto.payment_date),
-        user: {
-          connect: { id: enrollment.user.id },
-        },
-        course: {
-          connect: { id: enrollment.course.id },
-        },
-        amount: enrollment.course.fee,
-        currency: 'USD',
-        payment_type: dto.payment_type,
-        status: 'PENDING',
+        amount: dto.amount,
+      },
+      select: {
+        id: true,
+        transaction_id: true,
+        payment_date: true,
+        user: { select: { id: true, email: true } },
+        amount: true,
+        currency: true,
+        payment_status: true,
+        enrollment: { select: { id: true, courseId: true } },
       },
     });
 
@@ -160,6 +165,60 @@ export class StudentManagementService {
       success: true,
       data: payment,
     };
+  }
+
+  async manualEnrollmentContractDoc(
+    enrollmentId: string,
+    file: Express.Multer.File,
+    // mediaType: 'FILE' | 'IMAGE' | 'VIDEO',
+  ) {
+    let mediaUrl: string | undefined = undefined;
+
+    if (!enrollmentId) {
+      return { success: false, message: 'enrollment not found' };
+    }
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollmentId },
+      select: {
+        id: true,
+        user: { select: { id: true, email: true } },
+        course: { select: { id: true, title: true, fee: true } },
+      },
+    });
+
+    if (!enrollment) {
+      return {
+        success: false,
+        message: 'Enrollment not found',
+      };
+    }
+
+    if (file) {
+      const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+
+      await SazedStorage.put(
+        appConfig().storageUrl.attachment + `/${filename}`,
+        file.buffer,
+      );
+
+      mediaUrl =
+        process.env.AWS_S3_ENDPOINT +
+        '/' +
+        process.env.AWS_S3_BUCKET +
+        appConfig().storageUrl.attachment +
+        `/${filename}`;
+    }
+
+
+    const updatedEnrollment = await this.prisma.enrollment.update({
+      where: { id: enrollment.id },
+      data: {
+        contract_docs: mediaUrl,
+      },
+    });
+
+    return { success: true, data: updatedEnrollment };
   }
 
   async getAllStudents(userId: string) {
