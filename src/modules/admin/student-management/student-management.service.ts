@@ -167,12 +167,12 @@ export class StudentManagementService {
     };
   }
 
-  async manualEnrollmentContractDoc(
+  async manualEnrollmentContractDocs(
     enrollmentId: string,
-    file: Express.Multer.File,
+    files: Express.Multer.File[],
     // mediaType: 'FILE' | 'IMAGE' | 'VIDEO',
   ) {
-    let mediaUrl: string | undefined = undefined;
+    let mediaUrls: string[] = [];
 
     if (!enrollmentId) {
       return { success: false, message: 'enrollment not found' };
@@ -194,31 +194,88 @@ export class StudentManagementService {
       };
     }
 
-    if (file) {
-      const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
 
-      await SazedStorage.put(
-        appConfig().storageUrl.attachment + `/${filename}`,
-        file.buffer,
-      );
+        await SazedStorage.put(
+          appConfig().storageUrl.attachment + `/${filename}`,
+          file.buffer,
+        );
 
-      mediaUrl =
-        process.env.AWS_S3_ENDPOINT +
-        '/' +
-        process.env.AWS_S3_BUCKET +
-        appConfig().storageUrl.attachment +
-        `/${filename}`;
+        mediaUrls.push(
+          process.env.AWS_S3_ENDPOINT +
+            '/' +
+            process.env.AWS_S3_BUCKET +
+            appConfig().storageUrl.attachment +
+            `/${filename}`,
+        );
+      }
+
+      const updatedEnrollment = await this.prisma.enrollment.update({
+        where: { id: enrollment.id },
+        data: {
+          contract_docs: mediaUrls,
+        },
+      });
+
+      return { success: true, data: updatedEnrollment };
+    }
+  }
+
+  async getEnrollmentPreviewContractDoc(enrollmentId: string) {
+    if (!enrollmentId) {
+      return { success: false, message: 'enrollment not found' };
     }
 
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollmentId },
+      select: {
+        id: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            phone_number: true,
+            date_of_birth: true,
+            experience_level: true,
+          },
+        },
+        course: {
+          select: {
+            id: true,
+            title: true,
+            fee: true,
+            duration: true,
+          },
+        },
+        actingGoals: { select: { acting_goals: true } },
+        payment: {
+          select: {
+            id: true,
+            transaction_id: true,
+            amount: true,
+            payment_date: true,
+            payment_status: true,
+          },
+        },
 
-    const updatedEnrollment = await this.prisma.enrollment.update({
-      where: { id: enrollment.id },
-      data: {
-        contract_docs: mediaUrl,
+        contract_docs: true,
       },
     });
 
-    return { success: true, data: updatedEnrollment };
+    if (!enrollment) {
+      return {
+        success: false,
+        message: 'Enrollment not found',
+      };
+    }
+
+    return {
+      success: true,
+      data: enrollment,
+    };
   }
 
   async getAllStudents(userId: string) {

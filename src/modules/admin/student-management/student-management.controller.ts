@@ -75,6 +75,16 @@ export class StudentManagementController {
     );
   }
 
+  @ApiTags('Preview Enrollment Contract Document')
+  @Get(':enrollmentId/preview-contract')
+  async getEnrollmentPreviewContractDoc(
+    @Param('enrollmentId') enrollmentId: string,
+  ) {
+    return this.studentManagementService.getEnrollmentPreviewContractDoc(
+      enrollmentId,
+    );
+  }
+
   @ApiTags('Get All Students')
   @Get()
   async getAllStudents(@GetUser() user: any) {
