@@ -38,4 +38,11 @@ export class SettingsController {
   ) {
     return this.settingsService.profileUpdate(user.userId, updateUserDto)
   }
+
+  @Get('rolesandpermissions')
+  async getRolesAndPermission(
+    @GetUser() user: any
+  ) {
+    return this.settingsService.getRolesAndPermission(user.userId)
+  }
 }
