@@ -95,9 +95,7 @@ import { InstructorsModule } from './modules/admin/instructors/instructors.modul
     EnrollmentModule,
     CourseModule,
     CoursesModule,
-
-    StudentManagementModule
-
+    StudentManagementModule,
     InstructorsModule
 
   ],

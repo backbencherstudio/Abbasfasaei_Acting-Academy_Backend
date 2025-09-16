@@ -7,9 +7,11 @@ import {
   Param,
   Delete,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  UploadedFiles,
 } from '@nestjs/common';
 import { StudentManagementService } from './student-management.service';
-import { CreateStudentManagementDto } from './dto/create-student-management.dto';
 import { UpdateStudentManagementDto } from './dto/update-student-management.dto';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from 'src/common/guard/role/roles.decorator';
@@ -18,6 +20,8 @@ import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { EnrollDto } from 'src/modules/enrollment/dto/enroll.dto';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 @ApiBearerAuth()
 @ApiTags('Student Management')
@@ -50,6 +54,24 @@ export class StudentManagementController {
     return this.studentManagementService.manualEnrollmentPayment(
       enrollmentId,
       paymentDto,
+    );
+  }
+
+  @ApiTags('Manual Enrollment Contract Document')
+  @Post(':enrollmentId/contract')
+  @UseInterceptors(
+    FilesInterceptor('media', 5, {
+      // allow up to 5 files
+      storage: memoryStorage(),
+    }),
+  )
+  async manualEnrollmentContractDoc(
+    @Param('enrollmentId') enrollmentId: string,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    return this.studentManagementService.manualEnrollmentContractDocs(
+      enrollmentId,
+      files,
     );
   }
 
