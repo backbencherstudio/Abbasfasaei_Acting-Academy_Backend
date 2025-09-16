@@ -137,4 +137,14 @@ export class SettingsService {
       };
     }
   }
+
+
+  async getRolesAndPermission(userId: string) {
+
+    const users = await this.prisma.user.findMany({
+      where: { role: 'ADMIN' },
+    })
+
+    return users;
+  }
 }
