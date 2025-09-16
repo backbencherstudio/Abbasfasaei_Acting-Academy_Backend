@@ -23,7 +23,6 @@ export class InstructorsService {
 
   async addTeacher(createTeacherDto: CreateTeacherDto) {
     try {
-      // 1. Check if course exists
       const existingCourse = await this.prisma.course.findUnique({
         where: {
           id: createTeacherDto.courseId,
@@ -37,7 +36,6 @@ export class InstructorsService {
         };
       }
 
-      // 2. Check if user already exists
       const existingUser = await this.prisma.user.findFirst({
         where: {
           OR: [
@@ -51,7 +49,6 @@ export class InstructorsService {
       let teacher;
 
       if (!existingUser) {
-        // 3. Create new user with TEACHER role
         const hashedPassword = await bcrypt.hash('defaultPassword123', 10);
         const username = createTeacherDto.email.split('@')[0];
 
@@ -70,7 +67,6 @@ export class InstructorsService {
           },
         });
       } else {
-        // 4. Update existing user to ensure TEACHER role and update info
         teacher = await this.prisma.user.update({
           where: { id: existingUser.id },
           data: {
@@ -93,7 +89,6 @@ export class InstructorsService {
         };
       }
 
-      // 6. Update course to assign the teacher
       const courseUpdate = await this.prisma.course.update({
         where: { id: createTeacherDto.courseId },
         data: {
