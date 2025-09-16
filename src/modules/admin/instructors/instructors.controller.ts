@@ -28,7 +28,6 @@ export class InstructorsController {
       // const approved = query.approved;
 
       const teachers = await this.instructorsService.getAllTeachers();
-      console.log(`teachers are ${teachers}`);
       return teachers;
     } catch (error) {
       return {
@@ -53,6 +52,19 @@ export class InstructorsController {
       };
     }
   }
+
+  @ApiResponse({ description: 'Get Teacher Details' })
+  @Get('details/:id')
+  async teacherDetails(
+    @Param('id') teacherId: string
+  ) {
+    try {
+      return this.instructorsService.getTeacherDetails(teacherId);
+    }
+    catch (error) {}
+  }
+
+
 
   @ApiResponse({ description: 'Update a teacher' })
   @Patch('update/:id')
