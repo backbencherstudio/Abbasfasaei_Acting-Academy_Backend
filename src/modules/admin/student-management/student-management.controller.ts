@@ -22,6 +22,7 @@ import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { EnrollDto } from 'src/modules/enrollment/dto/enroll.dto';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import { PaymentDto } from './dto/paymentDto.dto';
 
 @ApiBearerAuth()
 @ApiTags('Student Management')
@@ -49,7 +50,7 @@ export class StudentManagementController {
   @Post(':enrollmentId/payment')
   async manualEnrollmentPayment(
     @Param('enrollmentId') enrollmentId: string,
-    @Body() paymentDto: any,
+    @Body() paymentDto: PaymentDto,
   ) {
     return this.studentManagementService.manualEnrollmentPayment(
       enrollmentId,
@@ -85,7 +86,6 @@ export class StudentManagementController {
     );
   }
 
-
   @ApiTags('Get Student By ID')
   @Get('student/:studentId')
   async getStudentById(@Param('studentId') studentId: string) {
@@ -99,24 +99,15 @@ export class StudentManagementController {
     return this.studentManagementService.getAllStudents(user.userId);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.studentManagementService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() updateStudentManagementDto: UpdateStudentManagementDto,
+  @ApiTags('Update Enrollment Info')
+  @Patch('enrollment/:enrollmentId')
+  async updateEnrollmentInfo(
+    @Param('enrollmentId') enrollmentId: string,
+    @Body() updateData: any,
   ) {
-    return this.studentManagementService.update(
-      +id,
-      updateStudentManagementDto,
+    return this.studentManagementService.updateEnrollmentInfo(
+      enrollmentId,
+      updateData,
     );
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.studentManagementService.remove(+id);
   }
 }

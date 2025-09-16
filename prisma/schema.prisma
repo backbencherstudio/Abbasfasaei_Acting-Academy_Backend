@@ -79,16 +79,14 @@ model User {
   receiver_notifications    Notification[] @relation("receiver")
   sender_notifications      Notification[] @relation("sender")
 
-  user_payment_methods UserPaymentMethod[]
-  user_settings        UserSetting[]
-  ucodes               Ucode[]
-  roles                Role[]
-  role_users           RoleUser[]
-  experience_level     ExperienceLevel?
-  payment_transactions PaymentTransaction[]
-  UserProfile          UserProfile[]
+  user_settings    UserSetting[]
+  ucodes           Ucode[]
+  roles            Role[]
+  role_users       RoleUser[]
+  experience_level ExperienceLevel?
 
-  enrollmentPayments   EnrollmentPayment[]
+  payment_histories PaymentHistory[]
+  userPayments      UserPayment[]
 
   // Community post relation
   authoredPosts     CommunityPost[]    @relation("authoredPosts")
@@ -123,8 +121,12 @@ model User {
   ActingGoals          ActingGoals?
   actingGoalsId        String?
 
-  attendances       Attendance[]        @relation("UserAttendances")
-  
+  attendances Attendance[] @relation("UserAttendances")
+
+  // Events
+  createdEvents    Event[]        @relation("EventCreator")
+  eventMemberships EventMember[]
+  eventPayments    EventPayment[]
 
   @@map("users")
 }
@@ -260,45 +262,56 @@ model Notification {
 //
 // ---------------------- PAYMENTS ----------------------
 //
-model UserPaymentMethod {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
 
-  user_id String?
-  user    User?   @relation(fields: [user_id], references: [id])
+model UserPayment {
+  id String @id @default(cuid())
 
-  payment_method_id String?
-  checkout_id       String?
+  enrollmentId String     @unique
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
 
-  @@map("user_payment_methods")
+  user_id String
+  user    User   @relation(fields: [user_id], references: [id])
+
+  payment_type   PaymentType?
+  payment_status PaymentStatus @default(PENDING)
+  payment_date   DateTime?     @default(now())
+  amount         Decimal?
+  currency       String?       @default("USD")
+  transaction_id String?
+  payment_method String?
+  account_holder String?
+  card_number    String?
+  card_expiry    String?
+  card_cvc       String?
+  invoice_sent   Boolean?      @default(false)
+
+  payment_histories PaymentHistory[]
+
+  @@map("enrollment_payments")
 }
 
-model PaymentTransaction {
+model PaymentHistory {
   id         String    @id @default(cuid())
   created_at DateTime  @default(now())
   updated_at DateTime  @default(now())
   deleted_at DateTime?
 
-  store_id String?
+  user_id String
+  user    User   @relation(fields: [user_id], references: [id])
 
-  user_id String?
-  user    User?   @relation(fields: [user_id], references: [id])
+  userPayment   UserPayment? @relation(fields: [userPaymentId], references: [id])
+  userPaymentId String?
 
-  order_id         String?
-  type             String?  @default("order")
-  withdraw_via     String?  @default("wallet")
-  provider         String?
-  reference_number String?
-  status           String?  @default("pending")
-  raw_status       String?
-  amount           Decimal?
-  currency         String?
-  paid_amount      Decimal?
-  paid_currency    String?
+  transaction_id String?
+  amount         Decimal?
+  currency       String?       @default("USD")
+  payment_date   DateTime?     @default(now())
+  payment_status PaymentStatus @default(PENDING)
+  payment_type   PaymentType?
 
-  @@map("payment_transactions")
+  description String?
+
+  @@map("payment_histories")
 }
 
 //
@@ -343,9 +356,9 @@ model CourseModule {
   id              String        @id @default(cuid())
   course          Course        @relation(fields: [courseId], references: [id])
   courseId        String
-  module_title    String // Module name
-  module_name     String // Module name
-  module_overview String? // optional module description
+  module_title    String
+  module_name     String
+  module_overview String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   classes         ModuleClass[]
@@ -460,24 +473,27 @@ model Enrollment {
   status EnrollmentStatus @default(PENDING)
   role   UserRole         @default(STUDENT)
 
-  full_name        String
-  email            String
-  phone            String
-  address          String
-  date_of_birth    DateTime?       @db.Date
+  full_name     String
+  email         String
+  phone         String
+  address       String
+  date_of_birth DateTime? @db.Date
+
   experience_level ExperienceLevel
 
   digital_signature DigitalSignature?
 
-  payment        EnrollmentPayment?
-  course         Course?            @relation(fields: [courseId], references: [id])
-  courseId       String?
+  courseId String?
+  course   Course? @relation(fields: [courseId], references: [id])
+
   courseModuleId String?
 
   enrollmentProfile EnrollmentProfile?
 
   contractTerms                EnrollmentContractTerms?
   enrollmentTermsAndConditions EnrollmentTermsAndConditions?
+
+  payment UserPayment[]
 
   actingGoals   ActingGoals?
   actingGoalsId String?
@@ -514,31 +530,6 @@ model DigitalSignature {
   signed_at    DateTime?  @db.Date
 
   @@map("digital_signatures")
-}
-
-model EnrollmentPayment {
-  id String @id @default(cuid())
-
-  enrollmentId String     @unique
-  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
-
-  user_id String
-  user    User   @relation(fields: [user_id], references: [id])
-
-  payment_type   PaymentType?
-  payment_status PaymentStatus @default(PENDING)
-  payment_date   DateTime?     @default(now())
-  amount         Decimal?
-  currency       String?       @default("USD")
-  transaction_id String?
-  payment_method String?
-  account_holder String?
-  card_number    String?
-  card_expiry    String?
-  card_cvc       String?
-  invoice_sent   Boolean?      @default(false)
-
-  @@map("enrollment_payments")
 }
 
 model ActingGoals {
@@ -910,37 +901,100 @@ enum CallKind {
 }
 
 //
-// ---------------------- WEBSITE SETTINGS ----------------------
+// ---------------------- EVENTS ----------------------
 //
-model UserProfile {
+
+model Event {
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+  deleted_at DateTime?
+
+  name        String
+  description String?
+  overview    String?
+  date        DateTime
+  time        String?
+  location    String
+  amount      Decimal?
+  status      EventStatus @default(UPCOMING)
+
+  // File attachments (receipts, invoices, etc.)
+  files Json? // Array of file URLs or metadata
+
+  // Relations
+  created_by String
+  creator    User           @relation("EventCreator", fields: [created_by], references: [id])
+  members    EventMember[]
+  payments   EventPayment[]
+
+  @@map("events")
+}
+
+model EventMember {
   id         String   @id @default(cuid())
   created_at DateTime @default(now())
   updated_at DateTime @default(now())
 
-  user_id String?
-  user    User?   @relation(fields: [user_id], references: [id])
+  event_id String
+  user_id  String
+  event    Event  @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  membership_status MembershipStatus @default(PENDING)
+  // Payment reference if applicable
+  payment_id String?
+  payment    EventPayment? @relation(fields: [payment_id], references: [id], onDelete: Cascade)
 
-  avatar            String?
-  name              String
-  personal_info     Json?
-  account_settings  Json?
-  subscription      Json?
-  contract_docs     Json?
-  feedback          Json?
-  push_notification Json?
-  support           Json?
-
-  @@map("user_profiles")
+  @@unique([event_id, user_id])
+  @@map("event_members")
 }
 
-enum MembershipStatus {
-  ACTIVE
-  INACTIVE
+model EventPayment {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+
+  event_id String
+  user_id  String
+  event    Event  @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  amount         Decimal
+  currency       String?            @default("USD")
+  status         EventPaymentStatus @default(PENDING)
+  transaction_id String?
+  payment_method String?
+  payment_date   DateTime?
+
+  // File attachments (receipts, invoices)
+  receipt_file String?
+  invoice_file String?
+
+  // Reference to the transaction if linked to main payment system
+  transaction_ref String?
+  EventMember     EventMember[]
+
+  @@unique([event_id, user_id])
+  @@map("event_payments")
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum EventPaymentStatus {
   PENDING
-  SUSPENDED
+  PAID
+  FAILED
+  REFUNDED
 }
+
+//
+// ---------------------- WEBSITE SETTINGS ----------------------
+//
 
 model Faq {
   id         String    @id @default(cuid())
