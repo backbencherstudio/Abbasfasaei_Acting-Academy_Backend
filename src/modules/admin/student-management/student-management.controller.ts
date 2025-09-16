@@ -85,6 +85,13 @@ export class StudentManagementController {
     );
   }
 
+
+  @ApiTags('Get Student By ID')
+  @Get('student/:studentId')
+  async getStudentById(@Param('studentId') studentId: string) {
+    return this.studentManagementService.getStudentById(studentId);
+  }
+
   @ApiTags('Get All Students')
   @Get()
   async getAllStudents(@GetUser() user: any) {

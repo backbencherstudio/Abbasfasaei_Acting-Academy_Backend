@@ -232,14 +232,15 @@ export class StudentManagementService {
       where: { id: enrollmentId },
       select: {
         id: true,
+        full_name: true,
+        email: true,
+        phone: true,
+        address: true,
+        date_of_birth: true,
+        experience_level: true,
         user: {
           select: {
             id: true,
-            email: true,
-            name: true,
-            phone_number: true,
-            date_of_birth: true,
-            experience_level: true,
           },
         },
         course: {
@@ -331,6 +332,61 @@ export class StudentManagementService {
     return {
       success: true,
       data: students,
+    };
+  }
+
+  async getStudentById(studentId: string) {
+    if (!studentId) {
+      return { success: false, message: 'Student ID is required' };
+    }
+
+    const student = await this.prisma.user.findUnique({
+      where: { id: studentId },
+      // select: {
+      //   id: true,
+      //   full_name: true,
+      //   email: true,
+      //   phone: true,
+      //   address: true,
+      //   date_of_birth: true,
+      //   experience_level: true,
+      //   user: {
+      //     select: {
+      //       id: true,
+      //     },
+      //   },
+      //   course: {
+      //     select: {
+      //       id: true,
+      //       title: true,
+      //       fee: true,
+      //       duration: true,
+      //     },
+      //   },
+      //   actingGoals: { select: { acting_goals: true } },
+      //   payment: {
+      //     select: {
+      //       id: true,
+      //       transaction_id: true,
+      //       amount: true,
+      //       payment_date: true,
+      //       payment_status: true,
+      //     },
+      //   },
+      //   contract_docs: true,
+      // },
+    });
+
+    if (!student) {
+      return {
+        success: false,
+        message: 'Student not found',
+      };
+    }
+
+    return {
+      success: true,
+      data: student,
     };
   }
 
