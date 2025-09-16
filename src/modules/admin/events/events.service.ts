@@ -5,40 +5,17 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class EventsService {
     constructor (private prisma: PrismaService) {}
 
-    async getEvents() {
-        const events = await this.prisma.event.findMany({
-            select: {
-                id: true,
-                name: true,
-                description: true,
-                overview: true,
-                date: true,
-                time: true,
-                location: true,
-                amount: true,
-                status: true,  
-            }
+    async getAllEvents() {
+        const events = await this.prisma.event.findMany({})
+
+        return events;
+    }
+
+    async getEventById(eventId: string) {
+        const event = await this.prisma.event.findUnique({
+            where: { id: eventId }
         })
+        return event;
     }
 }
 
-// try not to use "select" and call all
-
-/*
-
-date        DateTime
-  time        String?
-  location    String
-  amount      Decimal?
-  status      EventStatus @default(UPCOMING)
-
-  // File attachments (receipts, invoices, etc.)
-  files Json? // Array of file URLs or metadata
-
-  // Relations
-  created_by String
-  creator    User           @relation("EventCreator", fields: [created_by], references: [id])
-  members    EventMember[]
-  payments   EventPayment[]
-
-*/

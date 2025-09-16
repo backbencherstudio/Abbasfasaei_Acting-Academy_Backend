@@ -12,7 +12,7 @@ import { create } from 'domain';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
 
 @ApiBearerAuth()
-@ApiTags('Instructor')
+@ApiTags('Instructors')
 //@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('instructors')
 export class InstructorsController {
