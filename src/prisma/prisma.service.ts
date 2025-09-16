@@ -23,12 +23,12 @@ export class PrismaService
     // this.$on('query', (e) => this.logger.debug(`${e.query} ${e.params}`));
 
     // comment out this when seeding data using command line
-    if (process.env.PRISMA_ENV == '1') {
-      console.log('Prisma Middleware not called', process.env.PRISMA_ENV);
-    } else {
-      // use middleware here
-      this.$use(SoftdeleteMiddleware);
-    }
+    // if (process.env.PRISMA_ENV == '1') {
+    //   console.log('Prisma Middleware not called', process.env.PRISMA_ENV);
+    // } else {
+    //   // use middleware here
+    //   this.$use(SoftdeleteMiddleware);
+    // }
   }
 
   async onModuleInit() {
