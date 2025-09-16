@@ -58,7 +58,6 @@ export class StudentManagementService {
         address: dto.address,
         date_of_birth: dto.date_of_birth,
         experience_level: dto.experience_level,
-        status: dto.status || 'PENDING',
         actingGoals: {
           create: {
             acting_goals: dto.acting_goals,
@@ -83,6 +82,7 @@ export class StudentManagementService {
           select: {
             id: true,
             email: true,
+            role: true,
           },
         },
         payment: {
@@ -441,7 +441,6 @@ export class StudentManagementService {
   }
 
   async updateEnrollmentInfo(enrollmentId: string, dto: any) {
-   
     if (!enrollmentId) {
       return { success: false, message: 'enrollment not found' };
     }
@@ -458,20 +457,8 @@ export class StudentManagementService {
       where: { id: enrollmentId },
       data: {
         role: dto.role,
-        payment: {
-          upsert: {
-            where: { enrollmentId: enrollmentId },
-            update: {
-              payment_status: dto.payment_status,
-              payment_type: dto.payment_type,
-            },
-            create: {
-              user: { connect: { id: enrollment.user_id } },
-              payment_status: dto.payment_status,
-              payment_type: dto.payment_type,
-            },
-          },
-        },
+        payment_status: dto.payment_status,
+        payment_type: dto.payment_type,
       },
     });
 
