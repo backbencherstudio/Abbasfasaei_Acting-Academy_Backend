@@ -1,7 +1,5 @@
 export class PaymentDto {
-  transactionId: string;
-  paymentType: string; // PaymentType enum
-  paymentStatus: string; // PaymentStatus enum
-  paymentDate: string; // ISO string
+  transaction_id: string;
+  payment_date: string; // ISO string
   amount: number;
 }

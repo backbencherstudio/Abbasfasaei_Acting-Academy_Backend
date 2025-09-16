@@ -88,6 +88,8 @@ model User {
   payment_transactions PaymentTransaction[]
   UserProfile          UserProfile[]
 
+  enrollmentPayments   EnrollmentPayment[]
+
   // Community post relation
   authoredPosts     CommunityPost[]    @relation("authoredPosts")
   communityShares   CommunityShare[]
@@ -121,7 +123,8 @@ model User {
   ActingGoals          ActingGoals?
   actingGoalsId        String?
 
-  attendances Attendance[] @relation("UserAttendances")
+  attendances       Attendance[]        @relation("UserAttendances")
+  
 
   @@map("users")
 }
@@ -514,21 +517,26 @@ model DigitalSignature {
 }
 
 model EnrollmentPayment {
-  id             String        @id @default(cuid())
-  enrollment     Enrollment    @relation(fields: [enrollmentId], references: [id])
-  enrollmentId   String        @unique
-  payment_type   PaymentType
+  id String @id @default(cuid())
+
+  enrollmentId String     @unique
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+
+  user_id String
+  user    User   @relation(fields: [user_id], references: [id])
+
+  payment_type   PaymentType?
   payment_status PaymentStatus @default(PENDING)
-  payment_date   DateTime      @default(now())
-  amount         Decimal
-  currency       String        @default("USD")
-  transaction_id String
-  payment_method String
+  payment_date   DateTime?     @default(now())
+  amount         Decimal?
+  currency       String?       @default("USD")
+  transaction_id String?
+  payment_method String?
   account_holder String?
   card_number    String?
   card_expiry    String?
   card_cvc       String?
-  invoice_sent   Boolean       @default(false)
+  invoice_sent   Boolean?      @default(false)
 
   @@map("enrollment_payments")
 }

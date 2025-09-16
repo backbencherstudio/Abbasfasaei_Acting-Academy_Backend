@@ -27,7 +27,7 @@ export class EnrollmentService {
         data: {
           user_id: user.id,
           // course_type:
-            // dto.course_type as any as import('@prisma/client').CourseType,
+          // dto.course_type as any as import('@prisma/client').CourseType,
           full_name: dto.full_name,
           email: dto.email,
           phone: dto.phone,
@@ -68,29 +68,23 @@ export class EnrollmentService {
         return { success: false, message: 'Enrollment not found' };
       }
 
-
       const existingTerms =
         await this.prisma.enrollmentTermsAndConditions.findUnique({
           where: { enrollmentId: enrollment.id },
         });
-
 
       if (existingTerms) {
         await this.prisma.enrollmentTermsAndConditions.update({
           where: { enrollmentId: enrollment.id },
           data: { accepted: agreed },
         });
-
-
       } else {
-        
         await this.prisma.enrollmentTermsAndConditions.create({
           data: {
             enrollmentId: enrollment.id,
             accepted: agreed,
           },
         });
-
       }
 
       // add digital signature if agreed
@@ -118,7 +112,6 @@ export class EnrollmentService {
     }
   }
 
-  
   async acceptContractTerms(userId: string, accepted: boolean) {
     try {
       // Find the existing enrollment for the user
@@ -163,30 +156,31 @@ export class EnrollmentService {
     }
   }
 
-  async processPayment(userId: string, amount: number, paymentMethod: string) {
-    try {
-      const enrollment = await this.prisma.enrollment.findFirst({
-        where: { user_id: userId },
-      });
+  //   async processPayment(userId: string, amount: number, paymentMethod: string) {
+  //     try {
+  //       const enrollment = await this.prisma.enrollment.findFirst({
+  //         where: { user_id: userId },
+  //       });
 
-      if (!enrollment) {
-        return { success: false, message: 'Enrollment not found' };
-      }
+  //       if (!enrollment) {
+  //         return { success: false, message: 'Enrollment not found' };
+  //       }
 
-      // Process Payment
-      await this.prisma.enrollmentPayment.create({
-        data: {
-          enrollmentId: enrollment.id,
-          payment_type: 'MONTHLY', // Adjust as needed
-          payment_status: 'COMPLETED', // Adjust as needed
-          payment_method: paymentMethod,
-        },
-      });
+  //       // Process Payment
+  //       await this.prisma.enrollmentPayment.create({
+  //         data: {
+  //           enrollmentId: enrollment.id,
+  //           payment_type: 'MONTHLY', // Adjust as needed
+  //           payment_status: 'COMPLETED', // Adjust as needed
+  //           payment_method: paymentMethod,
+  //         },
+  //       });
 
-      return { success: true };
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error processing payment');
-    }
-  }
+  //       return { success: true };
+  //     } catch (error) {
+  //       console.error(error);
+  //       throw new InternalServerErrorException('Error processing payment');
+  //     }
+  //   }
+  // }
 }

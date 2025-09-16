@@ -79,21 +79,23 @@ export class EnrollmentController {
   }
 
   // Process payment
-  @Post('payment')
-  async processPayment(
-    @GetUser() user,
-    @Body() dto: { amount: number; paymentMethod: string },
-  ) {
-    try {
-      const result = await this.enrollmentService.processPayment(
-        user.userId,
-        dto.amount,
-        dto.paymentMethod,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error processing payment');
-    }
-  }
+  // @Post('payment')
+  // async processPayment(
+  //   @GetUser() user,
+  //   @Body() dto: { amount: number; paymentMethod: string },
+  // ) {
+  //   try {
+  //     const result = await this.enrollmentService.processPayment(
+  //       user.userId,
+  //       dto.amount,
+  //       dto.paymentMethod,
+  //     );
+  //     return result;
+  //   } catch (error) {
+  //     console.error(error);
+  //     throw new InternalServerErrorException('Error processing payment');
+  //   }
+  // }
+
+
 }
