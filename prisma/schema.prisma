@@ -273,7 +273,7 @@ model UserPayment {
   user    User   @relation(fields: [user_id], references: [id])
 
   payment_type   PaymentType?
-  payment_status PaymentStatus @default(PENDING)
+  payment_status PaymentStatus @default(DUE)
   payment_date   DateTime?     @default(now())
   amount         Decimal?
   currency       String?       @default("USD")
@@ -306,7 +306,7 @@ model PaymentHistory {
   amount         Decimal?
   currency       String?       @default("USD")
   payment_date   DateTime?     @default(now())
-  payment_status PaymentStatus @default(PENDING)
+  payment_status PaymentStatus @default(DUE)
   payment_type   PaymentType?
 
   description String?
@@ -493,7 +493,9 @@ model Enrollment {
   contractTerms                EnrollmentContractTerms?
   enrollmentTermsAndConditions EnrollmentTermsAndConditions?
 
-  payment UserPayment[]
+  payment        UserPayment[]
+  payment_status PaymentStatus @default(DUE)
+  payment_type   PaymentType?
 
   actingGoals   ActingGoals?
   actingGoalsId String?
@@ -549,10 +551,9 @@ enum PaymentType {
 }
 
 enum PaymentStatus {
-  PENDING
-  COMPLETED
-  FAILED
-  REFUNDED
+  PAID
+  DUE
+  OVER_DUE
 }
 
 enum ExperienceLevel {
