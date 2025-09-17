@@ -38,6 +38,11 @@ export class AuthService {
           address: true,
           phone_number: true,
           type: true,
+          role_users: {
+            select: {
+              role: { select: { name: true, title: true } },
+            },
+          },
           gender: true,
           date_of_birth: true,
           experience_level: true,
@@ -54,16 +59,27 @@ export class AuthService {
       }
 
       if (user.avatar) {
-        // Generate the avatar URL using SazedStorage
-        user['avatar_url'] = SazedStorage.url(
-          appConfig().storageUrl.avatar + user.avatar,
-        );
+        // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
+        const isAbsolute = /^https?:\/\//i.test(user.avatar);
+        user['avatar_url'] = isAbsolute
+          ? user.avatar
+          : SazedStorage.url(appConfig().storageUrl.avatar + user.avatar);
       }
 
-      return {
-        success: true,
-        data: user,
-      };
+      // Derive roles and single user_role
+      const roles = ((user as any).role_users || [])
+        .map((ru) => String(ru?.role?.name || '').toLowerCase())
+        .filter(Boolean);
+      (user as any).roles = roles;
+      // Priority mapping: su_admin > admin > teacher > student
+      let user_role: string | null = null;
+      if (roles.includes('su_admin')) user_role = 'su_admin';
+      else if (roles.includes('admin')) user_role = 'admin';
+      else if (roles.includes('teacher')) user_role = 'teacher';
+      else if (roles.includes('student')) user_role = 'student';
+      (user as any).user_role = user_role || null;
+
+      return { success: true, data: user };
     } catch (error) {
       return {
         success: false,
@@ -82,6 +98,8 @@ export class AuthService {
     try {
       const data: any = {};
 
+      console.log('hit in the update user service');
+
       // Update user data fields if provided
       if (updateUserDto.name) {
         data.name = updateUserDto.name;
@@ -95,8 +113,16 @@ export class AuthService {
         data.experience_level = updateUserDto.experience_level;
       }
 
-      if (updateUserDto.acting_goals) {
-        data.ActingGoals = updateUserDto.acting_goals;
+      const goalsInput =
+        (updateUserDto as any).acting_goals ??
+        (updateUserDto as any).ActingGoals;
+      if (typeof goalsInput === 'string' && goalsInput.trim().length > 0) {
+        data.ActingGoals = {
+          upsert: {
+            update: { acting_goals: goalsInput },
+            create: { acting_goals: goalsInput },
+          },
+        };
       }
 
       if (updateUserDto.date_of_birth) {
@@ -104,25 +130,41 @@ export class AuthService {
       }
 
       if (image) {
-        // delete old image from storage
-        const oldImage = await this.prisma.user.findFirst({
-          where: { id: userId },
-          select: { avatar: true },
-        });
-        if (oldImage.avatar) {
-          await SazedStorage.delete(
-            appConfig().storageUrl.avatar + oldImage.avatar,
-          );
-        }
-
-        // upload file
         const fileName = `${StringHelper.randomString()}${image.originalname}`;
-        await SazedStorage.put(
-          appConfig().storageUrl.avatar + fileName,
-          image.buffer,
-        );
+        try {
+          // Attempt upload first to avoid deleting old before success
+          await SazedStorage.put(
+            appConfig().storageUrl.avatar + fileName,
+            image.buffer,
+          );
 
-        data.avatar = fileName;
+          const mediaUrl =
+            process.env.AWS_S3_ENDPOINT +
+            '/' +
+            process.env.AWS_S3_BUCKET +
+            appConfig().storageUrl.avatar +
+            `/${fileName}`;
+
+          // delete old image from storage only after successful upload
+          const oldImage = await this.prisma.user.findFirst({
+            where: { id: userId },
+            select: { avatar: true },
+          });
+
+          if (oldImage?.avatar) {
+            try {
+              await SazedStorage.delete(
+                appConfig().storageUrl.avatar + oldImage.avatar,
+              );
+            } catch (e) {
+              console.warn('Failed to delete old avatar:', e?.message || e);
+            }
+          }
+
+          data.avatar = mediaUrl;
+        } catch (e) {
+          console.warn('Avatar upload failed:', e?.message || e);
+        }
       }
       const user = await UserRepository.getUserDetails(userId);
       if (user) {

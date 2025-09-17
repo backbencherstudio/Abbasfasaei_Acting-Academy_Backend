@@ -12,6 +12,7 @@ import {
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { SetUserRoleDto } from './dto/set-user-role.dto';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Role } from '../../../common/guard/role/role.enum';
 import { Roles } from '../../../common/guard/role/roles.decorator';
@@ -106,6 +107,7 @@ export class UserController {
     }
   }
 
+  @ApiResponse({ description: 'Update a user by id' })
   @Patch(':id')
   async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     try {
@@ -119,6 +121,7 @@ export class UserController {
     }
   }
 
+  @ApiResponse({ description: 'Delete a user by id' })
   @Delete(':id')
   async remove(@Param('id') id: string) {
     try {
@@ -132,7 +135,21 @@ export class UserController {
     }
   }
 
-
+  // assign a role to a user
+  @Roles(Role.ADMIN)
+  @ApiResponse({ description: 'Assign a role to a user' })
+  @Post(':id/assign-role')
+  async assignRole(@Param('id') id: string, @Body() body: SetUserRoleDto) {
+    try {
+      const user = await this.userService.assignRole(id, body);
+      return user;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
 
   //-------------------get all instructors-------------------//
   @ApiResponse({ description: 'Get all instructors' })
@@ -149,8 +166,6 @@ export class UserController {
     }
   }
 
-
-
   //-------------------get all students-------------------//
   @ApiResponse({ description: 'Get all students' })
   @Get('students/all')
@@ -166,7 +181,6 @@ export class UserController {
     }
   }
 
-
   //-------------------get all admins-------------------//
   @ApiResponse({ description: 'Get all admins' })
   @Get('admins/all')
@@ -181,5 +195,4 @@ export class UserController {
       };
     }
   }
-
 }

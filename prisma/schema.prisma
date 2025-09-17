@@ -78,6 +78,7 @@ model User {
   reportedUsers             UserReport[]           @relation("ReportedUser")
   reportsMade               UserReport[]           @relation("Reporter")
   accounts                  Account[]
+
   ActingGoals               ActingGoals?
   AssignmentSubmission      AssignmentSubmission[]
   attendances               Attendance[]           @relation("UserAttendances")
@@ -99,6 +100,62 @@ model User {
   roles                     Role[]
   ucodes                    Ucode[]
   user_settings             UserSetting[]
+
+  creator_conversations     Conversation[] @relation("creator")
+  participant_conversations Conversation[] @relation("participant")
+  receiver_messages         Message[]      @relation("receiver")
+  sender_messages           Message[]      @relation("sender")
+  receiver_notifications    Notification[] @relation("receiver")
+  sender_notifications      Notification[] @relation("sender")
+
+  user_settings    UserSetting[]
+  ucodes           Ucode[]
+  roles            Role[]
+  role_users       RoleUser[]
+  experience_level ExperienceLevel?
+
+  payment_histories PaymentHistory[]
+  userPayments      UserPayment[]
+
+  // Community post relation
+  authoredPosts     CommunityPost[]    @relation("authoredPosts")
+  communityShares   CommunityShare[]
+  communityLikes    CommunityLike[]
+  communityComments CommunityComment[]
+
+  // CommunityPoolVote relation
+  communityPoolVotes CommunityPoolVote[]
+
+  // Chat schema relations
+  memberships      Membership[]
+  messages         Message[]         @relation("MessageSender")
+  deletedMessages  Message[]         @relation("MessageDeletedBy")
+  blocksInitiated  Block[]           @relation("UserBlocks")
+  blockedBy        Block[]           @relation("UserBlockedBy")
+  receipts         Receipt[]
+  reports          Report[]
+  callParticipants CallParticipant[]
+
+  // UserReport relations
+  reportedUsers UserReport[] @relation("ReportedUser")
+  reportsMade   UserReport[] @relation("Reporter")
+
+
+  lastSeenAt           DateTime?
+  CommunityCommentLike CommunityCommentLike[]
+  Course               Course[]
+  Enrollment           Enrollment[]
+  AssignmentSubmission AssignmentSubmission[]
+  ActingGoals          ActingGoals?
+  actingGoalsId        String?
+
+  attendances Attendance[] @relation("UserAttendances")
+
+  // Events
+  createdEvents    Event[]        @relation("EventCreator")
+  eventMemberships EventMember[]
+  eventPayments    EventPayment[]
+
 
   @@map("users")
 }

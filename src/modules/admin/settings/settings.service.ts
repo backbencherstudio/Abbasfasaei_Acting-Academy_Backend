@@ -140,10 +140,14 @@ export class SettingsService {
 
 
   async getRolesAndPermission(userId: string) {
-
+    // Return users who have ADMIN role attached via role_users
     const users = await this.prisma.user.findMany({
-      where: { role: 'ADMIN' },
-    })
+      where: {
+        role_users: {
+          some: { role: { name: { equals: 'ADMIN', mode: 'insensitive' } } },
+        },
+      },
+    });
 
     return users;
   }

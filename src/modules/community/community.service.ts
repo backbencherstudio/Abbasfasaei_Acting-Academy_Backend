@@ -506,16 +506,25 @@ export class CommunityService {
 
   async editUserProfile(userId: string, dto: any) {
     try {
-      await this.prisma.user.update({
+      // Ensure the user exists
+      const existing = await this.prisma.user.findUnique({
         where: { id: userId },
-        data: {
-          name: dto.name,
-          username: dto.username,
-          email: dto.email,
-          avatar: dto.avatar,
-          about: dto.about,
-        },
+        select: { id: true },
       });
+
+      if (!existing) {
+        return { success: false, message: 'User not found' };
+      }
+
+      // Build partial update payload to avoid overwriting with undefined
+      const data: any = {};
+      if (dto.name !== undefined) data.name = dto.name;
+      if (dto.username !== undefined) data.username = dto.username;
+      if (dto.email !== undefined) data.email = dto.email;
+      if (dto.avatar !== undefined) data.avatar = dto.avatar;
+      if (dto.about !== undefined) data.about = dto.about;
+
+      await this.prisma.user.update({ where: { id: userId }, data });
 
       return {
         success: true,

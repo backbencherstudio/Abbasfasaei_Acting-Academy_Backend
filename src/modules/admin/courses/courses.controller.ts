@@ -33,10 +33,13 @@ export class CoursesController {
 
   @ApiOperation({ summary: 'Create a course' })
   @Post()
- async create_course(@GetUser() user: any, @Body() createCourseDto: CreateCourseDto) {
+  async create_course(
+    @GetUser() user: any,
+    @Body() createCourseDto: CreateCourseDto,
+  ) {
+    console.log('course create in controller:', user);
     return this.coursesService.create_course(user.userId, createCourseDto);
   }
-
 
   @ApiOperation({ summary: 'Get all courses' })
   @Get()
@@ -52,8 +55,12 @@ export class CoursesController {
 
   @ApiOperation({ summary: 'Update a course by ID' })
   @Patch(':id')
-  updateCourse(@GetUser() user: any, @Param('id') id: string, @Body() updateCourseDto: UpdateCourseDto) {
-    console.log("course id in controller:", id);
+  updateCourse(
+    @GetUser() user: any,
+    @Param('id') id: string,
+    @Body() updateCourseDto: UpdateCourseDto,
+  ) {
+    console.log('course id in controller:', id);
     return this.coursesService.updateCourse(user.userId, id, updateCourseDto);
   }
 
@@ -63,15 +70,20 @@ export class CoursesController {
     return this.coursesService.deleteCourse(user.userId, id);
   }
 
-
-
   //---------------------module---------------------//
   @ApiOperation({ summary: 'Add a module to a course' })
   @Post(':courseId/modules')
-  addModule(@GetUser() user: any, @Param('courseId') courseId: string, @Body() createModuleDto: CreateModuleDto) {
-    return this.coursesService.addModule(user.userId, courseId, createModuleDto);
+  addModule(
+    @GetUser() user: any,
+    @Param('courseId') courseId: string,
+    @Body() createModuleDto: CreateModuleDto,
+  ) {
+    return this.coursesService.addModule(
+      user.userId,
+      courseId,
+      createModuleDto,
+    );
   }
-
 
   @ApiOperation({ summary: 'Get all modules for a course' })
   @Get(':courseId/modules')
@@ -87,8 +99,16 @@ export class CoursesController {
 
   @ApiOperation({ summary: 'Update a module by ID' })
   @Patch('modules/:moduleId')
-  updateModule(@GetUser() user: any, @Param('moduleId') moduleId: string, @Body() updateModuleDto: UpdateModuleDto) {
-    return this.coursesService.updateModule(user.userId, moduleId, updateModuleDto);
+  updateModule(
+    @GetUser() user: any,
+    @Param('moduleId') moduleId: string,
+    @Body() updateModuleDto: UpdateModuleDto,
+  ) {
+    return this.coursesService.updateModule(
+      user.userId,
+      moduleId,
+      updateModuleDto,
+    );
   }
 
   @ApiOperation({ summary: 'Delete a module by ID' })
@@ -97,14 +117,17 @@ export class CoursesController {
     return this.coursesService.deleteModule(user.userId, moduleId);
   }
 
-
   //---------------------classes---------------------//
 
   @ApiOperation({ summary: 'Add a class to a module' })
   @Post('modules/:moduleId/classes')
-  addClass(@GetUser() user: any, @Param('moduleId') moduleId: string, @Body() createClassDto: any) {
+  addClass(
+    @GetUser() user: any,
+    @Param('moduleId') moduleId: string,
+    @Body() createClassDto: any,
+  ) {
     return this.coursesService.addClass(user.userId, moduleId, createClassDto);
-  } 
+  }
 
   @ApiOperation({ summary: 'Get all classes for a module' })
   @Get('modules/:moduleId/classes')
@@ -120,8 +143,16 @@ export class CoursesController {
 
   @ApiOperation({ summary: 'Update a class by ID' })
   @Patch('classes/:classId')
-  updateClass(@GetUser() user: any, @Param('classId') classId: string, @Body() updateClassDto: any) {
-    return this.coursesService.updateClass(user.userId, classId, updateClassDto);
+  updateClass(
+    @GetUser() user: any,
+    @Param('classId') classId: string,
+    @Body() updateClassDto: any,
+  ) {
+    return this.coursesService.updateClass(
+      user.userId,
+      classId,
+      updateClassDto,
+    );
   }
 
   @ApiOperation({ summary: 'Delete a class by ID' })
@@ -129,6 +160,4 @@ export class CoursesController {
   deleteClass(@GetUser() user: any, @Param('classId') classId: string) {
     return this.coursesService.deleteClass(user.userId, classId);
   }
-
-
 }

@@ -61,36 +61,39 @@ async function bootstrap() {
   app.useGlobalFilters(new CustomExceptionFilter());
   
 
-  // Local storage setup
-  // SazedStorage.config({
-  //   driver: 'local',
-  //   connection: {
-  //     rootUrl: appConfig().storageUrl.rootUrl, // ./public/storage
-  //     publicUrl: appConfig().storageUrl.rootUrlPublic, // /public/storage
-  //   },
-  // });
-
-  // minio storage setup
-  // storage setup
-  SazedStorage.config({
-    driver: 's3',
-    connection: {
-      rootUrl: appConfig().storageUrl.rootUrl,
-      publicUrl: appConfig().storageUrl.rootUrlPublic,
-      // aws s3
-      awsBucket: appConfig().fileSystems.s3.bucket,
-      awsAccessKeyId: appConfig().fileSystems.s3.key,
-      awsSecretAccessKey: appConfig().fileSystems.s3.secret,
-      awsDefaultRegion: appConfig().fileSystems.s3.region,
-      awsEndpoint: appConfig().fileSystems.s3.endpoint,
-      minio: true,
-      // google cloud storage
-      gcpProjectId: appConfig().fileSystems.gcs.projectId,
-      gcpKeyFile: appConfig().fileSystems.gcs.keyFile,
-      gcpApiEndpoint: appConfig().fileSystems.gcs.apiEndpoint,
-      gcpBucket: appConfig().fileSystems.gcs.bucket,
-    },
-  });
+  // Storage setup: choose driver based on env (STORAGE_DRIVER=local|s3)
+  const storageDriver = process.env.STORAGE_DRIVER?.toLowerCase() || 'local';
+  if (storageDriver === 's3') {
+    // MinIO/S3
+    SazedStorage.config({
+      driver: 's3',
+      connection: {
+        rootUrl: appConfig().storageUrl.rootUrl,
+        publicUrl: appConfig().storageUrl.rootUrlPublic,
+        // aws s3 / minio
+        awsBucket: appConfig().fileSystems.s3.bucket,
+        awsAccessKeyId: appConfig().fileSystems.s3.key,
+        awsSecretAccessKey: appConfig().fileSystems.s3.secret,
+        awsDefaultRegion: appConfig().fileSystems.s3.region,
+        awsEndpoint: appConfig().fileSystems.s3.endpoint,
+        minio: true,
+        // gcs (unused)
+        gcpProjectId: appConfig().fileSystems.gcs.projectId,
+        gcpKeyFile: appConfig().fileSystems.gcs.keyFile,
+        gcpApiEndpoint: appConfig().fileSystems.gcs.apiEndpoint,
+        gcpBucket: appConfig().fileSystems.gcs.bucket,
+      },
+    });
+  } else {
+    // Local
+    SazedStorage.config({
+      driver: 'local',
+      connection: {
+        rootUrl: appConfig().storageUrl.rootUrl, // ./public/storage
+        publicUrl: appConfig().storageUrl.rootUrlPublic, // /public/storage
+      },
+    });
+  }
 
   // swagger
   const options = new DocumentBuilder()

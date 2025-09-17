@@ -246,6 +246,17 @@ export class SeedCommand extends CommandRunner {
           title: 'Viewer',
           name: 'viewer',
         },
+        // app roles (for academy)
+        {
+          id: '6',
+          title: 'Teacher',
+          name: 'TEACHER',
+        },
+        {
+          id: '7',
+          title: 'Student',
+          name: 'STUDENT',
+        },
       ],
     });
   }

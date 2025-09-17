@@ -16,13 +16,19 @@ export class CoursesService {
       return { message: 'Unauthorized', success: false };
     }
 
-    const instructor = await this.prisma.user.findUnique({
-      where: { id: createCourseDto.instructorId, role: 'TEACHER' },
+    // Ensure the instructor exists and has the TEACHER role via role_users
+    const instructor = await this.prisma.user.findFirst({
+      where: {
+        id: createCourseDto.instructorId,
+        role_users: {
+          some: { role: { name: { equals: 'TEACHER', mode: 'insensitive' } } },
+        },
+      },
     });
 
     // console.log("instructor:", instructor);
 
-    if (!instructor.id) {
+    if (!instructor) {
       return { message: 'Instructor not found', success: false };
     }
 
@@ -65,7 +71,7 @@ export class CoursesService {
             email: true,
             phone_number: true,
             status: true,
-            role: true,
+            // role removed; if needed, include role_users
             avatar: true,
             about: true,
             billing_id: true,
@@ -202,14 +208,26 @@ export class CoursesService {
       const updatedCourse = await this.prisma.course.update({
         where: { id: id },
         data: {
-          title: updateCourseDto.title || course.title,
+          title: updateCourseDto.title ?? course.title,
           updated_at: new Date(),
-          seat_capacity: updateCourseDto.seat_capacity || course.seat_capacity,
-          fee: parseFloat(updateCourseDto.fee.toString()) || course.fee,
-          duration: updateCourseDto.duration || course.duration,
-          class_time: updateCourseDto.class_time || course.class_time,
-          start_date: new Date(updateCourseDto.start_date) || course.start_date,
-          instructorId: updateCourseDto.instructorId || course.instructorId,
+          seat_capacity:
+            updateCourseDto.seat_capacity !== undefined
+              ? updateCourseDto.seat_capacity
+              : course.seat_capacity,
+          fee:
+            updateCourseDto.fee !== undefined
+              ? parseFloat(updateCourseDto.fee.toString())
+              : course.fee,
+          duration: updateCourseDto.duration ?? course.duration,
+          class_time: updateCourseDto.class_time ?? course.class_time,
+          start_date:
+            updateCourseDto.start_date
+              ? new Date(updateCourseDto.start_date)
+              : course.start_date,
+          instructorId:
+            updateCourseDto.instructorId !== undefined
+              ? updateCourseDto.instructorId
+              : course.instructorId,
         },
       });
 
