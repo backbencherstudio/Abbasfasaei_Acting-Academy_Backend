@@ -30,101 +30,54 @@ model Account {
 }
 
 model User {
-  id                        String                 @id @default(cuid())
-  created_at                DateTime               @default(now())
-  updated_at                DateTime               @default(now())
-  deleted_at                DateTime?
-  status                    Int?                   @default(1) @db.SmallInt
-  approved_at               DateTime?
-  availability              String?
-  email                     String?                @unique
-  username                  String?                @unique
-  name                      String?                @db.VarChar(255)
-  first_name                String?                @db.VarChar(255)
-  last_name                 String?                @db.VarChar(255)
-  password                  String?                @db.VarChar(255)
-  domain                    String?                @unique
-  avatar                    String?
-  phone_number              String?
-  country                   String?
-  state                     String?
-  city                      String?
-  address                   String?
-  zip_code                  String?
-  gender                    String?
-  date_of_birth             DateTime?              @db.Date
-  billing_id                String?
-  type                      String?                @default("user")
-  email_verified_at         DateTime?
-  is_two_factor_enabled     Int?                   @default(0)
-  two_factor_secret         String?
-  lastSeenAt                DateTime?
-  about                     String?
-  actingGoalsId             String?
-  experience_level          ExperienceLevel?
-  blockedBy                 Block[]                @relation("UserBlockedBy")
-  blocksInitiated           Block[]                @relation("UserBlocks")
-  callParticipants          CallParticipant[]
-  communityComments         CommunityComment[]
-  CommunityCommentLike      CommunityCommentLike[]
-  communityLikes            CommunityLike[]
-  communityPoolVotes        CommunityPoolVote[]
-  authoredPosts             CommunityPost[]        @relation("authoredPosts")
-  communityShares           CommunityShare[]
-  Course                    Course[]
-  memberships               Membership[]
-  receipts                  Receipt[]
-  reports                   Report[]
-  reportedUsers             UserReport[]           @relation("ReportedUser")
-  reportsMade               UserReport[]           @relation("Reporter")
-  accounts                  Account[]
+  id           String    @id @default(cuid())
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @default(now())
+  deleted_at   DateTime?
+  status       Int?      @default(1) @db.SmallInt
+  approved_at  DateTime?
+  availability String?
 
-  ActingGoals               ActingGoals?
-  AssignmentSubmission      AssignmentSubmission[]
-  attendances               Attendance[]           @relation("UserAttendances")
-  creator_conversations     Conversation[]         @relation("creator")
-  participant_conversations Conversation[]         @relation("participant")
-  userPayments              UserPayment[]
-  Enrollment                Enrollment[]
-  eventMemberships          EventMember[]
-  eventPayments             EventPayment[]
-  createdEvents             Event[]                @relation("EventCreator")
-  deletedMessages           Message[]              @relation("MessageDeletedBy")
-  receiver_messages         Message[]              @relation("receiver")
-  messages                  Message[]              @relation("MessageSender")
-  sender_messages           Message[]              @relation("sender")
-  receiver_notifications    Notification[]         @relation("receiver")
-  sender_notifications      Notification[]         @relation("sender")
-  payment_histories         PaymentHistory[]
-  role_users                RoleUser[]
-  roles                     Role[]
-  ucodes                    Ucode[]
-  user_settings             UserSetting[]
+  email      String? @unique
+  username   String? @unique
+  name       String? @db.VarChar(255)
+  first_name String? @db.VarChar(255)
+  last_name  String? @db.VarChar(255)
+  password   String? @db.VarChar(255)
+  domain     String? @unique
+  avatar     String?
+  about      String?
 
-  creator_conversations     Conversation[] @relation("creator")
-  participant_conversations Conversation[] @relation("participant")
-  receiver_messages         Message[]      @relation("receiver")
-  sender_messages           Message[]      @relation("sender")
-  receiver_notifications    Notification[] @relation("receiver")
-  sender_notifications      Notification[] @relation("sender")
+  phone_number  String?
+  country       String?
+  state         String?
+  city          String?
+  address       String?
+  zip_code      String?
+  gender        String?
+  date_of_birth DateTime? @db.Date
 
-  user_settings    UserSetting[]
-  ucodes           Ucode[]
-  roles            Role[]
-  role_users       RoleUser[]
+  billing_id        String?
+  type              String?   @default("user")
+  email_verified_at DateTime?
+
+  is_two_factor_enabled Int?    @default(0)
+  two_factor_secret     String?
+
+  lastSeenAt       DateTime?
+  actingGoalsId    String?
   experience_level ExperienceLevel?
 
-  payment_histories PaymentHistory[]
-  userPayments      UserPayment[]
+  // Accounts & auth
+  accounts Account[]
 
-  // Community post relation
-  authoredPosts     CommunityPost[]    @relation("authoredPosts")
-  communityShares   CommunityShare[]
-  communityLikes    CommunityLike[]
-  communityComments CommunityComment[]
-
-  // CommunityPoolVote relation
-  communityPoolVotes CommunityPoolVote[]
+  // Community: authored and interactions
+  authoredPosts        CommunityPost[]        @relation("authoredPosts")
+  communityShares      CommunityShare[]
+  communityLikes       CommunityLike[]
+  communityComments    CommunityComment[]
+  CommunityCommentLike CommunityCommentLike[]
+  communityPoolVotes   CommunityPoolVote[]
 
   // Chat schema relations
   memberships      Membership[]
@@ -136,26 +89,43 @@ model User {
   reports          Report[]
   callParticipants CallParticipant[]
 
-  // UserReport relations
-  reportedUsers UserReport[] @relation("ReportedUser")
-  reportsMade   UserReport[] @relation("Reporter")
+  // Direct message/notification relations
+  receiver_messages      Message[]      @relation("receiver")
+  sender_messages        Message[]      @relation("sender")
+  receiver_notifications Notification[] @relation("receiver")
+  sender_notifications   Notification[] @relation("sender")
 
+  // Courses & enrollments
+  Course     Course[]
+  Enrollment Enrollment[]
 
-  lastSeenAt           DateTime?
-  CommunityCommentLike CommunityCommentLike[]
-  Course               Course[]
-  Enrollment           Enrollment[]
+  // Assignments & attendance
   AssignmentSubmission AssignmentSubmission[]
-  ActingGoals          ActingGoals?
-  actingGoalsId        String?
+  attendances          Attendance[]           @relation("UserAttendances")
 
-  attendances Attendance[] @relation("UserAttendances")
+  // ActingGoals
+  ActingGoals ActingGoals?
 
   // Events
   createdEvents    Event[]        @relation("EventCreator")
   eventMemberships EventMember[]
   eventPayments    EventPayment[]
 
+  // Payments
+  payment_histories PaymentHistory[]
+  userPayments      UserPayment[]
+
+  // Roles & settings
+  role_users    RoleUser[]
+  roles         Role[]
+  user_settings UserSetting[]
+  ucodes        Ucode[]
+
+  // Conversations (creator/participant)
+  creator_conversations     Conversation[] @relation("creator")
+  participant_conversations Conversation[] @relation("participant")
+  userReportsAsReporter     UserReport[]   @relation("Reporter")
+  userReportsAsReported     UserReport[]   @relation("ReportedUser")
 
   @@map("users")
 }
@@ -175,17 +145,20 @@ model Ucode {
 }
 
 model Role {
-  id               String           @id @default(cuid())
-  created_at       DateTime         @default(now())
-  updated_at       DateTime         @default(now())
-  deleted_at       DateTime?
-  status           Int?             @default(1) @db.SmallInt
-  title            String?
-  name             String?
-  user_id          String?
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+  deleted_at DateTime?
+
+  status Int?    @default(1) @db.SmallInt
+  title  String?
+  name   String? @unique // add this line
+
+  user_id String?
+  user    User?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
   permission_roles PermissionRole[]
   role_users       RoleUser[]
-  user             User?            @relation(fields: [user_id], references: [id], onDelete: Cascade)
   permissions      Permission[]     @relation("PermissionToRole")
 
   @@map("roles")
