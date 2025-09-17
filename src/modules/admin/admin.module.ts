@@ -7,7 +7,7 @@ import { NotificationModule } from './notification/notification.module';
 import { SettingsModule } from './settings/settings.module';
 import { StudentManagementModule } from './student-management/student-management.module';
 import { EventsModule } from './events/events.module';
-import { AttendanceModule } from './attendance/attendance.module';
+
 
 
 @Module({
@@ -20,7 +20,6 @@ import { AttendanceModule } from './attendance/attendance.module';
     SettingsModule,
     StudentManagementModule,
     EventsModule,
-    AttendanceModule,
   ],
 })
 export class AdminModule {}
