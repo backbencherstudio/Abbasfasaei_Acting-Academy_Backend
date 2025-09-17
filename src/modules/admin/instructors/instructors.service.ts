@@ -96,9 +96,6 @@ export class InstructorsService {
         },
       });
 
-      console.log(`\nteacher info ${teacher}`);
-      console.log(`\ncourse info ${courseUpdate}`);
-
       return {
         success: true,
         message: existingUser

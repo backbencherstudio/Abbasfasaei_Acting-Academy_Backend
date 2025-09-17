@@ -8,17 +8,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-//
-// ---------------------- AUTH + CORE ----------------------
-//
 model Account {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-
-  user_id String
-  user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
+  id                  String    @id @default(cuid())
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @default(now())
+  user_id             String
   type                String?
   provider            String?
   provider_account_id String?
@@ -29,160 +23,128 @@ model Account {
   scope               String?
   id_token            String?
   session_state       String?
+  user                User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([provider, provider_account_id])
   @@map("accounts")
 }
 
 model User {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-  status     Int?      @default(1) @db.SmallInt
-
-  approved_at  DateTime?
-  availability String?
-
-  email      String? @unique
-  username   String? @unique
-  name       String? @db.VarChar(255)
-  first_name String? @db.VarChar(255)
-  last_name  String? @db.VarChar(255)
-  password   String? @db.VarChar(255)
-  domain     String? @unique
-  avatar     String?
-  about      String?
-
-  phone_number  String?
-  country       String?
-  state         String?
-  city          String?
-  address       String?
-  zip_code      String?
-  gender        String?
-  date_of_birth DateTime? @db.Date
-
-  billing_id        String?
-  type              String?   @default("user")
-  email_verified_at DateTime?
-
-  is_two_factor_enabled Int?    @default(0)
-  two_factor_secret     String?
-
-  // Existing relations
+  id                        String                 @id @default(cuid())
+  created_at                DateTime               @default(now())
+  updated_at                DateTime               @default(now())
+  deleted_at                DateTime?
+  status                    Int?                   @default(1) @db.SmallInt
+  approved_at               DateTime?
+  availability              String?
+  email                     String?                @unique
+  username                  String?                @unique
+  name                      String?                @db.VarChar(255)
+  first_name                String?                @db.VarChar(255)
+  last_name                 String?                @db.VarChar(255)
+  password                  String?                @db.VarChar(255)
+  domain                    String?                @unique
+  avatar                    String?
+  phone_number              String?
+  country                   String?
+  state                     String?
+  city                      String?
+  address                   String?
+  zip_code                  String?
+  gender                    String?
+  date_of_birth             DateTime?              @db.Date
+  billing_id                String?
+  type                      String?                @default("user")
+  email_verified_at         DateTime?
+  is_two_factor_enabled     Int?                   @default(0)
+  two_factor_secret         String?
+  lastSeenAt                DateTime?
+  about                     String?
+  actingGoalsId             String?
+  experience_level          ExperienceLevel?
+  blockedBy                 Block[]                @relation("UserBlockedBy")
+  blocksInitiated           Block[]                @relation("UserBlocks")
+  callParticipants          CallParticipant[]
+  communityComments         CommunityComment[]
+  CommunityCommentLike      CommunityCommentLike[]
+  communityLikes            CommunityLike[]
+  communityPoolVotes        CommunityPoolVote[]
+  authoredPosts             CommunityPost[]        @relation("authoredPosts")
+  communityShares           CommunityShare[]
+  Course                    Course[]
+  memberships               Membership[]
+  receipts                  Receipt[]
+  reports                   Report[]
+  reportedUsers             UserReport[]           @relation("ReportedUser")
+  reportsMade               UserReport[]           @relation("Reporter")
   accounts                  Account[]
-  creator_conversations     Conversation[] @relation("creator")
-  participant_conversations Conversation[] @relation("participant")
-  receiver_messages         Message[]      @relation("receiver")
-  sender_messages           Message[]      @relation("sender")
-  receiver_notifications    Notification[] @relation("receiver")
-  sender_notifications      Notification[] @relation("sender")
-
-  user_settings    UserSetting[]
-  ucodes           Ucode[]
-  roles            Role[]
-  role_users       RoleUser[]
-  experience_level ExperienceLevel?
-
-  payment_histories PaymentHistory[]
-  userPayments      UserPayment[]
-
-  // Community post relation
-  authoredPosts     CommunityPost[]    @relation("authoredPosts")
-  communityShares   CommunityShare[]
-  communityLikes    CommunityLike[]
-  communityComments CommunityComment[]
-
-  // CommunityPoolVote relation
-  communityPoolVotes CommunityPoolVote[]
-
-  // Chat schema relations
-  memberships      Membership[]
-  messages         Message[]         @relation("MessageSender")
-  deletedMessages  Message[]         @relation("MessageDeletedBy")
-  blocksInitiated  Block[]           @relation("UserBlocks")
-  blockedBy        Block[]           @relation("UserBlockedBy")
-  receipts         Receipt[]
-  reports          Report[]
-  callParticipants CallParticipant[]
-
-  // UserReport relations
-  reportedUsers UserReport[] @relation("ReportedUser")
-  reportsMade   UserReport[] @relation("Reporter")
-
-  role UserRole @default(STUDENT)
-
-  lastSeenAt           DateTime?
-  CommunityCommentLike CommunityCommentLike[]
-  Course               Course[]
-  Enrollment           Enrollment[]
-  AssignmentSubmission AssignmentSubmission[]
-  ActingGoals          ActingGoals?
-  actingGoalsId        String?
-
-  attendances Attendance[] @relation("UserAttendances")
-
-  // Events
-  createdEvents    Event[]        @relation("EventCreator")
-  eventMemberships EventMember[]
-  eventPayments    EventPayment[]
+  ActingGoals               ActingGoals?
+  AssignmentSubmission      AssignmentSubmission[]
+  attendances               Attendance[]           @relation("UserAttendances")
+  creator_conversations     Conversation[]         @relation("creator")
+  participant_conversations Conversation[]         @relation("participant")
+  userPayments              UserPayment[]
+  Enrollment                Enrollment[]
+  eventMemberships          EventMember[]
+  eventPayments             EventPayment[]
+  createdEvents             Event[]                @relation("EventCreator")
+  deletedMessages           Message[]              @relation("MessageDeletedBy")
+  receiver_messages         Message[]              @relation("receiver")
+  messages                  Message[]              @relation("MessageSender")
+  sender_messages           Message[]              @relation("sender")
+  receiver_notifications    Notification[]         @relation("receiver")
+  sender_notifications      Notification[]         @relation("sender")
+  payment_histories         PaymentHistory[]
+  role_users                RoleUser[]
+  roles                     Role[]
+  ucodes                    Ucode[]
+  user_settings             UserSetting[]
 
   @@map("users")
 }
 
-//
-// ---------------------- ROLES & PERMISSIONS ----------------------
-//
 model Ucode {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-  status     Int?     @default(1) @db.SmallInt
-
-  user_id String?
-  user    User?   @relation(fields: [user_id], references: [id])
-
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+  status     Int?      @default(1) @db.SmallInt
+  user_id    String?
   token      String?
   email      String?
   expired_at DateTime?
+  user       User?     @relation(fields: [user_id], references: [id])
 
   @@map("ucodes")
 }
 
 model Role {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  status Int?    @default(1) @db.SmallInt
-  title  String?
-  name   String?
-
-  user_id String?
-  user    User?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
+  id               String           @id @default(cuid())
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @default(now())
+  deleted_at       DateTime?
+  status           Int?             @default(1) @db.SmallInt
+  title            String?
+  name             String?
+  user_id          String?
   permission_roles PermissionRole[]
   role_users       RoleUser[]
+  user             User?            @relation(fields: [user_id], references: [id], onDelete: Cascade)
   permissions      Permission[]     @relation("PermissionToRole")
 
   @@map("roles")
 }
 
 model Permission {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  status     Int?    @default(1) @db.SmallInt
-  title      String?
-  action     String?
-  subject    String?
-  conditions String?
-  fields     String?
-
+  id               String           @id @default(cuid())
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @default(now())
+  deleted_at       DateTime?
+  status           Int?             @default(1) @db.SmallInt
+  title            String?
+  action           String?
+  subject          String?
+  conditions       String?
+  fields           String?
   permission_roles PermissionRole[]
   roles            Role[]           @relation("PermissionToRole")
 
@@ -190,14 +152,12 @@ model Permission {
 }
 
 model PermissionRole {
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @default(now())
   permission_id String
+  role_id       String
   permission    Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
-
-  role_id String
-  role    Role   @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  role          Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
 
   @@id([permission_id, role_id])
   @@map("permission_roles")
@@ -206,161 +166,119 @@ model PermissionRole {
 model RoleUser {
   created_at DateTime @default(now())
   updated_at DateTime @default(now())
-
-  role_id String
-  role    Role   @relation(fields: [role_id], references: [id], onDelete: Cascade)
-
-  user_id String
-  user    User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role_id    String
+  user_id    String
+  role       Role     @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@id([role_id, user_id])
   @@map("role_users")
 }
 
-//
-// ---------------------- NOTIFICATIONS ----------------------
-//
 model NotificationEvent {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  status Int?    @default(1) @db.SmallInt
-  type   String?
-  text   String?
-
+  id            String         @id @default(cuid())
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @default(now())
+  deleted_at    DateTime?
+  status        Int?           @default(1) @db.SmallInt
+  type          String?
+  text          String?
   notifications Notification[]
 
   @@map("notification_events")
 }
 
 model Notification {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  read_at DateTime?
-
-  status Int? @default(1) @db.SmallInt
-
-  sender_id String?
-  sender    User?   @relation("sender", fields: [sender_id], references: [id])
-
-  receiver_id String?
-  receiver    User?   @relation("receiver", fields: [receiver_id], references: [id])
-
+  id                    String             @id @default(cuid())
+  created_at            DateTime           @default(now())
+  updated_at            DateTime           @default(now())
+  deleted_at            DateTime?
+  read_at               DateTime?
+  status                Int?               @default(1) @db.SmallInt
+  sender_id             String?
+  receiver_id           String?
   notification_event_id String?
+  entity_id             String?
   notification_event    NotificationEvent? @relation(fields: [notification_event_id], references: [id])
-
-  entity_id String?
+  receiver              User?              @relation("receiver", fields: [receiver_id], references: [id])
+  sender                User?              @relation("sender", fields: [sender_id], references: [id])
 
   @@map("notifications")
 }
 
-//
-// ---------------------- PAYMENTS ----------------------
-//
-
 model UserPayment {
-  id String @id @default(cuid())
-
-  enrollmentId String     @unique
-  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
-
-  user_id String
-  user    User   @relation(fields: [user_id], references: [id])
-
-  payment_type   PaymentType?
-  payment_status PaymentStatus @default(DUE)
-  payment_date   DateTime?     @default(now())
-  amount         Decimal?
-  currency       String?       @default("USD")
-  transaction_id String?
-  payment_method String?
-  account_holder String?
-  card_number    String?
-  card_expiry    String?
-  card_cvc       String?
-  invoice_sent   Boolean?      @default(false)
-
+  id                String           @id @default(cuid())
+  enrollmentId      String           @unique
+  payment_type      PaymentType?
+  payment_status    PaymentStatus    @default(DUE)
+  payment_method    String?
+  account_holder    String?
+  card_number       String?
+  card_expiry       String?
+  card_cvc          String?
+  invoice_sent      Boolean?         @default(false)
+  amount            Decimal?
+  currency          String?          @default("USD")
+  payment_date      DateTime?        @default(now())
+  transaction_id    String?
+  user_id           String
+  enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id])
+  user              User             @relation(fields: [user_id], references: [id])
   payment_histories PaymentHistory[]
 
   @@map("enrollment_payments")
 }
 
 model PaymentHistory {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  user_id String
-  user    User   @relation(fields: [user_id], references: [id])
-
-  userPayment   UserPayment? @relation(fields: [userPaymentId], references: [id])
-  userPaymentId String?
-
-  transaction_id String?
+  id             String        @id @default(cuid())
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @default(now())
+  deleted_at     DateTime?
+  user_id        String
+  description    String?
+  userPaymentId  String?
   amount         Decimal?
   currency       String?       @default("USD")
   payment_date   DateTime?     @default(now())
   payment_status PaymentStatus @default(DUE)
   payment_type   PaymentType?
-
-  description String?
+  transaction_id String?
+  userPayment    UserPayment?  @relation(fields: [userPaymentId], references: [id])
+  user           User          @relation(fields: [user_id], references: [id])
 
   @@map("payment_histories")
 }
 
-//
-// ----------------COURSES ----------------------
-// 
 model Course {
-  id                    String       @id @default(cuid())
+  id                    String         @id @default(cuid())
   title                 String
   createdBy             String
   instructorId          String?
-  instructor            User?        @relation(fields: [instructorId], references: [id])
   fee                   Decimal
   duration              String
-  class_time            String?
-  seat_capacity         String       @default("50")
   start_date            DateTime
-  created_at            DateTime     @default(now())
-  updated_at            DateTime     @default(now()) @updatedAt
-  status                CourseStatus @default(ACTIVE)
+  created_at            DateTime       @default(now())
   course_overview       Json?
   course_module_details Json?
   installment_process   Json?
-
-  enrollments Enrollment[]
-  modules     CourseModule[]
-}
-
-enum CourseType {
-  ONE_YEAR_ADULT
-  TWO_YEAR_ADULT
-  TWO_YEAR_KIDS
-  FULL_PACKAGE_ADULTS
-  FULL_PACKAGE_KIDS
-}
-
-enum CourseStatus {
-  ACTIVE
-  INACTIVE
+  status                CourseStatus   @default(ACTIVE)
+  updated_at            DateTime       @default(now()) @updatedAt
+  seat_capacity         String         @default("50")
+  class_time            String?
+  instructor            User?          @relation(fields: [instructorId], references: [id])
+  modules               CourseModule[]
+  enrollments           Enrollment[]
 }
 
 model CourseModule {
   id              String        @id @default(cuid())
-  course          Course        @relation(fields: [courseId], references: [id])
   courseId        String
-  module_title    String
-  module_name     String
-  module_overview String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+  module_name     String
+  module_overview String?
+  module_title    String
+  course          Course        @relation(fields: [courseId], references: [id])
   classes         ModuleClass[]
 
   @@map("course_modules")
@@ -368,7 +286,6 @@ model CourseModule {
 
 model ModuleClass {
   id             String       @id @default(cuid())
-  module         CourseModule @relation(fields: [moduleId], references: [id])
   moduleId       String
   class_title    String
   class_name     String?
@@ -378,57 +295,52 @@ model ModuleClass {
   class_time     String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-
-  assignments Assignment[]
-  classAssets ClassAsset[]
-  attendances Attendance[]
+  assignments    Assignment[]
+  attendances    Attendance[]
+  classAssets    ClassAsset[]
+  module         CourseModule @relation(fields: [moduleId], references: [id])
 
   @@map("module_classes")
 }
 
 model Assignment {
-  id            String   @id @default(cuid())
-  moduleClassId String
+  id            String                 @id @default(cuid())
   title         String
   description   String?
   dueDate       DateTime
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  moduleClass ModuleClass            @relation(fields: [moduleClassId], references: [id])
-  submissions AssignmentSubmission[]
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  moduleClassId String
+  submissions   AssignmentSubmission[]
+  moduleClass   ModuleClass            @relation(fields: [moduleClassId], references: [id])
 
   @@map("assignments")
 }
 
 model ClassAsset {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
+  id         String      @id @default(cuid())
+  created_at DateTime    @default(now())
+  updated_at DateTime    @default(now())
   deleted_at DateTime?
-
-  class_id String
-  class    ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
-
+  class_id   String
   asset_type AssetType
   asset_url  String
+  class      ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
 
   @@map("class_assets")
 }
 
 model Attendance {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  class_id   String
-  student_id String
-  student    User        @relation("UserAttendances", fields: [student_id], references: [id], onDelete: Cascade)
-  class      ModuleClass @relation(fields: [class_id], references: [id])
-
+  id          String           @id @default(cuid())
+  created_at  DateTime         @default(now())
+  updated_at  DateTime         @default(now())
+  deleted_at  DateTime?
+  class_id    String
+  student_id  String
   status      AttendanceStatus @default(ABSENT)
   attended_at DateTime?
+  class       ModuleClass      @relation(fields: [class_id], references: [id])
+  student     User             @relation("UserAttendances", fields: [student_id], references: [id], onDelete: Cascade)
 
   @@unique([class_id, student_id])
   @@map("attendances")
@@ -436,100 +348,73 @@ model Attendance {
 
 model AssignmentSubmission {
   id           String     @id @default(cuid())
-  assignment   Assignment @relation(fields: [assignmentId], references: [id])
   assignmentId String
-  student      User       @relation(fields: [studentId], references: [id])
   studentId    String
   fileUrl      String
   submittedAt  DateTime   @default(now())
-  grade        String? // optional grade/score
+  grade        String?
+  assignment   Assignment @relation(fields: [assignmentId], references: [id])
+  student      User       @relation(fields: [studentId], references: [id])
 
   @@map("assignment_submissions")
 }
 
-enum AssetType {
-  VIDEO
-  PDF
-}
-
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-  LATE
-  EXCUSED
-}
-
-//
-// ---------------------- ENROLLMENT ----------------------
-//
 model Enrollment {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-
-  user_id String
-  user    User   @relation(fields: [user_id], references: [id])
-
-  status EnrollmentStatus @default(PENDING)
-  role   UserRole         @default(STUDENT)
-
-  full_name     String
-  email         String
-  phone         String
-  address       String
-  date_of_birth DateTime? @db.Date
-
-  experience_level ExperienceLevel
-
-  digital_signature DigitalSignature?
-
-  courseId String?
-  course   Course? @relation(fields: [courseId], references: [id])
-
-  courseModuleId String?
-
-  enrollmentProfile EnrollmentProfile?
-
+  id                           String                        @id @default(cuid())
+  created_at                   DateTime                      @default(now())
+  updated_at                   DateTime                      @default(now())
+  user_id                      String
+  full_name                    String
+  email                        String
+  phone                        String
+  address                      String
+  date_of_birth                DateTime?                     @db.Date
+  experience_level             ExperienceLevel
+  courseId                     String?
+  courseModuleId               String?
+  actingGoalsId                String?
+  contract_docs                Json?
+  status                       EnrollmentStatus              @default(PENDING)
+  role                         UserRole                      @default(STUDENT)
+  payment_status               PaymentStatus                 @default(DUE)
+  payment_type                 PaymentType?
+  actingGoals                  ActingGoals?
+  digital_signature            DigitalSignature?
   contractTerms                EnrollmentContractTerms?
+  payment                      UserPayment?
+  enrollmentProfile            EnrollmentProfile?
   enrollmentTermsAndConditions EnrollmentTermsAndConditions?
-
-  payment        UserPayment[]
-  payment_status PaymentStatus @default(DUE)
-  payment_type   PaymentType?
-
-  actingGoals   ActingGoals?
-  actingGoalsId String?
-
-  contract_docs Json?
+  course                       Course?                       @relation(fields: [courseId], references: [id])
+  user                         User                          @relation(fields: [user_id], references: [id])
 
   @@map("enrollments")
 }
 
 model EnrollmentContractTerms {
   id           String     @id @default(cuid())
-  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
   enrollmentId String     @unique
   agreed       Boolean    @default(false)
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
 
   @@map("enrollment_contract_terms")
 }
 
 model EnrollmentTermsAndConditions {
   id           String     @id @default(cuid())
-  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
   enrollmentId String     @unique
   accepted     Boolean    @default(false)
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
 
   @@map("enrollment_terms_and_conditions")
 }
 
 model DigitalSignature {
   id           String     @id @default(cuid())
-  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
   enrollmentId String     @unique
   full_name    String
   signature    String
   signed_at    DateTime?  @db.Date
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
 
   @@map("digital_signatures")
 }
@@ -538,43 +423,16 @@ model ActingGoals {
   id           String      @id @default(cuid())
   acting_goals String
   userId       String      @unique
-  user         User        @relation(fields: [userId], references: [id])
   enrollmentId String?     @unique
   enrollment   Enrollment? @relation(fields: [enrollmentId], references: [id])
+  user         User        @relation(fields: [userId], references: [id])
 
   @@map("acting_goals")
 }
 
-enum PaymentType {
-  MONTHLY
-  YEARLY
-}
-
-enum PaymentStatus {
-  PAID
-  DUE
-  OVER_DUE
-}
-
-enum ExperienceLevel {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
-}
-
 model EnrollmentProfile {
   id                String           @id @default(cuid())
-  enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id])
   enrollmentId      String           @unique
-  created_at        DateTime         @default(now())
-  updated_at        DateTime         @default(now()) @updatedAt
-  enrollment_status EnrollmentStatus @default(PENDING)
-  full_name         String
-  email             String
-  phone             String
-  address           String
-  date_of_birth     DateTime?        @db.Date
-  experience_level  ExperienceLevel
   avatar            String?
   personal_info     Json?
   account_settings  Json?
@@ -583,44 +441,44 @@ model EnrollmentProfile {
   feedback          Json?
   push_notification Json?
   support           Json?
+  address           String
+  created_at        DateTime         @default(now())
+  date_of_birth     DateTime?        @db.Date
+  email             String
+  enrollment_status EnrollmentStatus @default(PENDING)
+  experience_level  ExperienceLevel
+  full_name         String
+  phone             String
+  updated_at        DateTime         @default(now()) @updatedAt
+  enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id])
 
   @@map("enrollment_profiles")
 }
 
-enum EnrollmentStatus {
-  ACTIVE
-  PENDING
-  ALUMNI
-}
-
-//
-//--------------------- Community ---------------------
-//
-
 model CommunityPost {
   id         String             @id @default(cuid())
   author_Id  String
-  author     User               @relation("authoredPosts", fields: [author_Id], references: [id])
   content    String
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
-  media_Url  String? // photo or video
+  media_Url  String?
   mediaType  MediaType?
   visibility PostVisibility     @default(PUBLIC)
-  likes      CommunityLike[]
   comments   CommunityComment[]
-  shares     CommunityShare[]
+  likes      CommunityLike[]
   pool       CommunityPool?
+  author     User               @relation("authoredPosts", fields: [author_Id], references: [id])
+  shares     CommunityShare[]
 }
 
 model CommunityLike {
   id        String        @id @default(cuid())
   postId    String
   userId    String
+  createdAt DateTime      @default(now())
+  avatar    String?
   name      String?
   username  String?
-  avatar    String?
-  createdAt DateTime      @default(now())
   post      CommunityPost @relation(fields: [postId], references: [id])
   user      User          @relation(fields: [userId], references: [id])
 }
@@ -629,16 +487,16 @@ model CommunityComment {
   id        String                 @id @default(cuid())
   postId    String
   userId    String
-  name      String?
-  username  String?
-  avatar    String?
   content   String
   createdAt DateTime               @default(now())
+  avatar    String?
+  name      String?
+  username  String?
   parentId  String?
+  parent    CommunityComment?      @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   CommunityComment[]     @relation("CommentReplies")
   post      CommunityPost          @relation(fields: [postId], references: [id])
   user      User                   @relation(fields: [userId], references: [id])
-  replies   CommunityComment[]     @relation("CommentReplies")
-  parent    CommunityComment?      @relation("CommentReplies", fields: [parentId], references: [id])
   likes     CommunityCommentLike[]
 }
 
@@ -658,38 +516,37 @@ model CommunityShare {
   id        String        @id @default(cuid())
   postId    String
   userId    String
+  createdAt DateTime      @default(now())
+  avatar    String?
   name      String?
   username  String?
-  avatar    String?
   post      CommunityPost @relation(fields: [postId], references: [id])
   user      User          @relation(fields: [userId], references: [id])
-  createdAt DateTime      @default(now())
 }
 
 model CommunityPool {
   id       String              @id @default(cuid())
   postId   String              @unique
   question String
+  options  Json
+  avatar   String?
   name     String?
   username String?
-  avatar   String?
-  options  Json // array of options
+  post     CommunityPost       @relation(fields: [postId], references: [id])
   votes    CommunityPoolVote[]
-
-  post CommunityPost @relation(fields: [postId], references: [id])
 }
 
 model CommunityPoolVote {
   id        String        @id @default(cuid())
   poolId    String
   userId    String
+  option    String
+  createdAt DateTime      @default(now())
+  avatar    String?
   name      String?
   username  String?
-  avatar    String?
-  option    String
   pool      CommunityPool @relation(fields: [poolId], references: [id])
   user      User          @relation(fields: [userId], references: [id])
-  createdAt DateTime      @default(now())
 }
 
 model UserReport {
@@ -700,8 +557,327 @@ model UserReport {
   description    String?
   createdAt      DateTime     @default(now())
   status         ReportStatus @default(OPEN)
-  reporter       User         @relation("Reporter", fields: [reporterId], references: [id])
   reportedUser   User         @relation("ReportedUser", fields: [reportedUserId], references: [id])
+  reporter       User         @relation("Reporter", fields: [reporterId], references: [id])
+}
+
+model Conversation {
+  id             String           @id @default(cuid())
+  creator_id     String?
+  participant_id String?
+  avatarUrl      String?
+  createdAt      DateTime         @default(now())
+  createdBy      String?
+  dmKey          String?          @unique
+  title          String?
+  type           ConversationType
+  updatedAt      DateTime         @updatedAt
+  receiverTitle  String?
+  senderTitle    String?
+  callSessions   CallSession[]
+  memberships    Membership[]
+  creator        User?            @relation("creator", fields: [creator_id], references: [id])
+  participant    User?            @relation("participant", fields: [participant_id], references: [id])
+  messages       Message[]
+
+  @@map("conversations")
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  role           MemberRole   @default(MEMBER)
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+  clearedAt      DateTime?
+  mutedUntil     DateTime?
+  archivedAt     DateTime?
+  leftAt         DateTime?
+  userId         String
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, conversationId])
+  @@index([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  receiver_id    String?
+  content        Json
+  conversationId String
+  createdAt      DateTime     @default(now())
+  deletedAt      DateTime?
+  deletedById    String?
+  kind           MessageKind  @default(TEXT)
+  senderId       String
+  sender_user_id String?
+  readAt         DateTime?
+  media_Url      String?
+  receipts       Receipt[]
+  reports        Report[]
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  deletedBy      User?        @relation("MessageDeletedBy", fields: [deletedById], references: [id])
+  receiver       User?        @relation("receiver", fields: [receiver_id], references: [id])
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  sender_user    User?        @relation("sender", fields: [sender_user_id], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Receipt {
+  id        String        @id @default(cuid())
+  status    ReceiptStatus
+  at        DateTime      @default(now())
+  messageId String
+  userId    String
+  message   Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+}
+
+model Block {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  blockerId String
+  blockedId String
+  blocked   User     @relation("UserBlockedBy", fields: [blockedId], references: [id], onDelete: Cascade)
+  blocker   User     @relation("UserBlocks", fields: [blockerId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+}
+
+model Report {
+  id         String       @id @default(cuid())
+  messageId  String
+  reporterId String
+  reason     String
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime     @default(now())
+  message    Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model CallSession {
+  id             String            @id @default(cuid())
+  conversationId String
+  kind           CallKind
+  startedBy      String
+  startedAt      DateTime          @default(now())
+  endedAt        DateTime?
+  participants   CallParticipant[]
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model CallParticipant {
+  id       String      @id @default(cuid())
+  callId   String
+  userId   String
+  joinedAt DateTime    @default(now())
+  leftAt   DateTime?
+  call     CallSession @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([callId])
+}
+
+model Event {
+  id          String         @id @default(cuid())
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @default(now())
+  deleted_at  DateTime?
+  name        String
+  description String?
+  overview    String?
+  date        DateTime
+  time        String?
+  location    String
+  amount      Decimal?
+  status      EventStatus    @default(UPCOMING)
+  files       Json?
+  created_by  String
+  members     EventMember[]
+  payments    EventPayment[]
+  creator     User           @relation("EventCreator", fields: [created_by], references: [id])
+
+  @@map("events")
+}
+
+model EventMember {
+  id         String        @id @default(cuid())
+  created_at DateTime      @default(now())
+  updated_at DateTime      @default(now())
+  event_id   String
+  user_id    String
+  payment_id String?
+  event      Event         @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  payment    EventPayment? @relation(fields: [payment_id], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([event_id, user_id])
+  @@map("event_members")
+}
+
+model EventPayment {
+  id              String             @id @default(cuid())
+  created_at      DateTime           @default(now())
+  updated_at      DateTime           @default(now())
+  event_id        String
+  user_id         String
+  amount          Decimal
+  currency        String?            @default("USD")
+  status          EventPaymentStatus @default(PENDING)
+  transaction_id  String?
+  payment_method  String?
+  payment_date    DateTime?
+  receipt_file    String?
+  invoice_file    String?
+  transaction_ref String?
+  EventMember     EventMember[]
+  event           Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user            User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([event_id, user_id])
+  @@map("event_payments")
+}
+
+model Faq {
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+  deleted_at DateTime?
+  status     Int?      @default(1) @db.SmallInt
+  sort_order Int?      @default(0)
+  question   String?
+  answer     String?
+
+  @@map("faqs")
+}
+
+model Contact {
+  id           String    @id @default(cuid())
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @default(now())
+  deleted_at   DateTime?
+  first_name   String?
+  last_name    String?
+  email        String?
+  phone_number String?
+  message      String?
+
+  @@map("contacts")
+}
+
+model SocialMedia {
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+  deleted_at DateTime?
+  status     Int?      @default(1) @db.SmallInt
+  sort_order Int?      @default(0)
+  name       String?
+  url        String?
+  icon       String?
+
+  @@map("social_medias")
+}
+
+model WebsiteInfo {
+  id                  String    @id @default(cuid())
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @default(now())
+  deleted_at          DateTime?
+  name                String?
+  phone_number        String?
+  email               String?
+  address             String?
+  logo                String?
+  favicon             String?
+  copyright           String?
+  cancellation_policy String?
+
+  @@map("website_infos")
+}
+
+model Setting {
+  id            String        @id @default(cuid())
+  created_at    DateTime      @default(now())
+  updated_at    DateTime      @default(now())
+  deleted_at    DateTime?
+  category      String?
+  label         String?
+  description   String?
+  key           String?       @unique
+  default_value String?
+  user_settings UserSetting[]
+
+  @@map("settings")
+}
+
+model UserSetting {
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+  deleted_at DateTime?
+  user_id    String?
+  setting_id String?
+  value      String?
+  setting    Setting?  @relation(fields: [setting_id], references: [id])
+  user       User?     @relation(fields: [user_id], references: [id])
+
+  @@map("user_settings")
+}
+
+enum CourseType {
+  ONE_YEAR_ADULT
+  TWO_YEAR_ADULT
+  TWO_YEAR_KIDS
+  FULL_PACKAGE_KIDS
+  FULL_PACKAGE_ADULTS
+}
+
+enum CourseStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AssetType {
+  VIDEO
+  PDF
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum PaymentType {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentStatus {
+  PAID
+  DUE
+  OVER_DUE
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  PENDING
+  ALUMNI
 }
 
 enum MediaType {
@@ -714,152 +890,6 @@ enum PostVisibility {
   PRIVATE
   FRIENDS
 }
-
-//
-// ---------------------- CHAT (MERGED) ----------------------
-//
-model Conversation {
-  id            String           @id @default(cuid())
-  type          ConversationType
-  title         String?
-  senderTitle   String?
-  receiverTitle String?
-  avatarUrl     String?
-  dmKey         String?          @unique
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  createdBy     String?
-
-  memberships  Membership[]
-  messages     Message[]
-  callSessions CallSession[]
-
-  creator_id     String?
-  creator        User?   @relation("creator", fields: [creator_id], references: [id])
-  participant_id String?
-  participant    User?   @relation("participant", fields: [participant_id], references: [id])
-
-  @@map("conversations")
-}
-
-model Membership {
-  id         String     @id @default(cuid())
-  role       MemberRole @default(MEMBER)
-  joinedAt   DateTime   @default(now())
-  lastReadAt DateTime?
-  clearedAt  DateTime?
-  mutedUntil DateTime?
-  archivedAt DateTime?
-  leftAt     DateTime?
-
-  userId         String
-  conversationId String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, conversationId])
-  @@index([conversationId, userId])
-}
-
-model Message {
-  id        String      @id @default(cuid())
-  kind      MessageKind @default(TEXT)
-  content   Json
-  createdAt DateTime    @default(now())
-
-  senderId       String
-  conversationId String
-
-  media_Url String?
-
-  sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  // Add receiver and sender relations for User model
-  receiver_id    String?
-  receiver       User?     @relation("receiver", fields: [receiver_id], references: [id])
-  sender_user_id String?
-  sender_user    User?     @relation("sender", fields: [sender_user_id], references: [id])
-  readAt         DateTime?
-
-  receipts Receipt[]
-
-  deletedAt   DateTime?
-  deletedById String?
-  deletedBy   User?     @relation("MessageDeletedBy", fields: [deletedById], references: [id])
-  reports     Report[]
-
-  @@index([conversationId, createdAt])
-  @@map("messages")
-}
-
-model Receipt {
-  id     String        @id @default(cuid())
-  status ReceiptStatus
-  at     DateTime      @default(now())
-
-  messageId String
-  userId    String
-  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([messageId, userId])
-}
-
-model Block {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-
-  blockerId String
-  blockedId String
-  blocker   User   @relation("UserBlocks", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked   User   @relation("UserBlockedBy", fields: [blockedId], references: [id], onDelete: Cascade)
-
-  @@unique([blockerId, blockedId])
-}
-
-model Report {
-  id         String       @id @default(cuid())
-  messageId  String
-  reporterId String
-  reason     String
-  status     ReportStatus @default(OPEN)
-  createdAt  DateTime     @default(now())
-
-  message  Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  reporter User    @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-
-  @@index([messageId])
-}
-
-model CallSession {
-  id             String    @id @default(cuid())
-  conversationId String
-  kind           CallKind
-  startedBy      String
-  startedAt      DateTime  @default(now())
-  endedAt        DateTime?
-
-  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  participants CallParticipant[]
-}
-
-model CallParticipant {
-  id       String    @id @default(cuid())
-  callId   String
-  userId   String
-  joinedAt DateTime  @default(now())
-  leftAt   DateTime?
-
-  call CallSession @relation(fields: [callId], references: [id], onDelete: Cascade)
-  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([callId])
-}
-
-//
-// ---------------------- ENUMS ----------------------
-//
 
 enum ReportStatus {
   OPEN
@@ -901,84 +931,6 @@ enum CallKind {
   VIDEO
 }
 
-//
-// ---------------------- EVENTS ----------------------
-//
-
-model Event {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  name        String
-  description String?
-  overview    String?
-  date        DateTime
-  time        String?
-  location    String
-  amount      Decimal?
-  status      EventStatus @default(UPCOMING)
-
-  // File attachments (receipts, invoices, etc.)
-  files Json? // Array of file URLs or metadata
-
-  // Relations
-  created_by String
-  creator    User           @relation("EventCreator", fields: [created_by], references: [id])
-  members    EventMember[]
-  payments   EventPayment[]
-
-  @@map("events")
-}
-
-model EventMember {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-
-  event_id String
-  user_id  String
-  event    Event  @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user     User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  // Payment reference if applicable
-  payment_id String?
-  payment    EventPayment? @relation(fields: [payment_id], references: [id], onDelete: Cascade)
-
-  @@unique([event_id, user_id])
-  @@map("event_members")
-}
-
-model EventPayment {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-
-  event_id String
-  user_id  String
-  event    Event  @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user     User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  amount         Decimal
-  currency       String?            @default("USD")
-  status         EventPaymentStatus @default(PENDING)
-  transaction_id String?
-  payment_method String?
-  payment_date   DateTime?
-
-  // File attachments (receipts, invoices)
-  receipt_file String?
-  invoice_file String?
-
-  // Reference to the transaction if linked to main payment system
-  transaction_ref String?
-  EventMember     EventMember[]
-
-  @@unique([event_id, user_id])
-  @@map("event_payments")
-}
-
 enum EventStatus {
   UPCOMING
   ONGOING
@@ -991,104 +943,4 @@ enum EventPaymentStatus {
   PAID
   FAILED
   REFUNDED
-}
-
-//
-// ---------------------- WEBSITE SETTINGS ----------------------
-//
-
-model Faq {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  status     Int?    @default(1) @db.SmallInt
-  sort_order Int?    @default(0)
-  question   String?
-  answer     String?
-
-  @@map("faqs")
-}
-
-model Contact {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  first_name   String?
-  last_name    String?
-  email        String?
-  phone_number String?
-  message      String?
-
-  @@map("contacts")
-}
-
-model SocialMedia {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  status     Int?    @default(1) @db.SmallInt
-  sort_order Int?    @default(0)
-  name       String?
-  url        String?
-  icon       String?
-
-  @@map("social_medias")
-}
-
-model WebsiteInfo {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  name                String?
-  phone_number        String?
-  email               String?
-  address             String?
-  logo                String?
-  favicon             String?
-  copyright           String?
-  cancellation_policy String?
-
-  @@map("website_infos")
-}
-
-model Setting {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  category      String?
-  label         String?
-  description   String?
-  key           String? @unique
-  default_value String?
-
-  user_settings UserSetting[]
-
-  @@map("settings")
-}
-
-model UserSetting {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  user_id String?
-  user    User?   @relation(fields: [user_id], references: [id])
-
-  setting_id String?
-  setting    Setting? @relation(fields: [setting_id], references: [id])
-
-  value String?
-
-  @@map("user_settings")
 }
