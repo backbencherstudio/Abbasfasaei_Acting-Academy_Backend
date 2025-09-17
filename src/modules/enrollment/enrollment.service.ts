@@ -22,7 +22,7 @@ export class EnrollmentService {
         return { success: false, message: 'User not found' };
       }
 
-      // Start a transaction to ensure all steps succeed together
+      // Create enrollment
       const enrollment = await this.prisma.enrollment.create({
         data: {
           user_id: user.id,
@@ -44,6 +44,36 @@ export class EnrollmentService {
           },
         },
       });
+
+      // Ensure platform role: STUDENT (only if user has no role yet)
+      try {
+        // Check if the user already has any platform role assigned
+        const existingRoleLink = await this.prisma.roleUser.findFirst({
+          where: { user_id: user.id },
+        });
+
+        if (!existingRoleLink) {
+          // Find or create the STUDENT role
+          let studentRole = await this.prisma.role.findFirst({
+            where: { name: 'STUDENT' },
+            select: { id: true },
+          });
+
+          if (!studentRole) {
+            studentRole = await this.prisma.role.create({
+              data: { name: 'STUDENT', title: 'Student' },
+              select: { id: true },
+            });
+          }
+
+          await this.prisma.roleUser.create({
+            data: { role_id: studentRole.id, user_id: user.id },
+          });
+        }
+      } catch (e) {
+        // Don't fail the enrollment if role wiring has a transient issue; log for investigation
+        console.error('Auto-assign STUDENT role failed:', e);
+      }
 
       return { success: true, enrollmentId: enrollment.id };
     } catch (error) {

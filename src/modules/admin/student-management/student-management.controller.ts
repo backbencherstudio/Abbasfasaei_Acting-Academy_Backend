@@ -110,4 +110,16 @@ export class StudentManagementController {
       updateData,
     );
   }
+
+  @ApiTags('Restrict enrollment Access')
+  @Patch('enrollment/:enrollmentId/restrict')
+  async restrictStudentAccess(
+    @Param('enrollmentId') enrollmentId: string,
+    @Body() updateData: any,
+  ) {
+    return this.studentManagementService.restrictStudentAccess(
+      enrollmentId,
+      updateData,
+    );
+  }
 }

@@ -103,6 +103,32 @@ export class StudentManagementService {
       },
     });
 
+    // Ensure platform role: STUDENT (only if user has no role yet)
+    try {
+      const existingRoleLink = await this.prisma.roleUser.findFirst({
+        where: { user_id: user.id },
+      });
+
+      if (!existingRoleLink) {
+        let studentRole = await this.prisma.role.findFirst({
+          where: { name: 'STUDENT' },
+          select: { id: true },
+        });
+        if (!studentRole) {
+          studentRole = await this.prisma.role.create({
+            data: { name: 'STUDENT', title: 'Student' },
+            select: { id: true },
+          });
+        }
+        await this.prisma.roleUser.create({
+          data: { role_id: studentRole.id, user_id: user.id },
+        });
+      }
+    } catch (e) {
+      console.error('Auto-assign STUDENT role failed:', e);
+      // Non-fatal for enrollment creation
+    }
+
     return {
       success: true,
       data: enrollment,
@@ -444,12 +470,62 @@ export class StudentManagementService {
     const updatedEnrollment = await this.prisma.enrollment.update({
       where: { id: enrollmentId },
       data: {
-        role: dto.role,
-        payment_status: dto.payment_status,
-        payment_type: dto.payment_type,
+        status: dto.status,
+        payment: {
+          update: {
+            payment_status: dto.payment_status,
+            payment_type: dto.payment_type,
+          },
+        },
       },
     });
 
     return { success: true, data: updatedEnrollment };
+  }
+
+  async restrictStudentAccess(
+    enrollmentId: string,
+    updateData?: { restrict?: boolean },
+  ) {
+    if (!enrollmentId) {
+      return { success: false, message: 'Enrollment ID is required' };
+    }
+
+    // Ensure the enrollment exists
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollmentId },
+      select: { id: true, status: true, user: { select: { email: true } } },
+    });
+
+    if (!enrollment) {
+      return { success: false, message: 'Enrollment not found' };
+    }
+   
+    const hasExplicitFlag = typeof updateData?.restrict === 'boolean';
+    const nextStatus = hasExplicitFlag
+      ? updateData!.restrict
+        ? 'RESTRICTED'
+        : 'ACTIVE'
+      : enrollment.status === 'RESTRICTED'
+        ? 'ACTIVE'
+        : 'RESTRICTED';
+
+    const updatedEnrollment = await this.prisma.enrollment.update({
+      where: { id: enrollmentId },
+      data: {
+        status: nextStatus,
+        updated_at: new Date(),
+      },
+      select: { id: true, status: true, user: { select: { email: true } } },
+    });
+
+    return {
+      success: true,
+      message:
+        nextStatus === 'RESTRICTED'
+          ? 'Enrollment access restricted'
+          : 'Enrollment access restored',
+      data: updatedEnrollment,
+    };
   }
 }
