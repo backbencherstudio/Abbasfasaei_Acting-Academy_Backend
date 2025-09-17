@@ -72,6 +72,7 @@ export class UserService {
           phone_number: true,
           address: true,
           type: true,
+          role_users: { select: { role: { select: { name: true } } } },
           approved_at: true,
           created_at: true,
           updated_at: true,
@@ -101,6 +102,7 @@ export class UserService {
           name: true,
           email: true,
           type: true,
+          role_users: { select: { role: { select: { name: true } } } },
           phone_number: true,
           approved_at: true,
           created_at: true,
@@ -224,14 +226,73 @@ export class UserService {
       };
     }
   }
-  
-  
+
+  async assignRole(id: string, body: any) {
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: id },
+      });
+      if (!user) {
+        return {
+          success: false,
+          message: 'User not found',
+        };
+      }
+
+      // Validate requested role from body
+      const requested = String(body?.role || '').toUpperCase();
+      const allowed = ['ADMIN', 'TEACHER', 'STUDENT'];
+      if (!allowed.includes(requested)) {
+        return {
+          success: false,
+          message: `Invalid role. Allowed roles: ${allowed.join(', ')}`,
+        };
+      }
+
+      // Find (or create) the requested role (case-insensitive)
+      let targetRole = await this.prisma.role.findFirst({
+        where: { name: { equals: requested, mode: 'insensitive' } },
+        select: { id: true, name: true },
+      });
+      if (!targetRole) {
+        targetRole = await this.prisma.role.create({
+          data: {
+            name: requested,
+            title: requested.charAt(0) + requested.slice(1).toLowerCase(),
+          },
+          select: { id: true, name: true },
+        });
+      }
+
+      // Enforce a single role per user: remove previous roles, then attach the chosen one
+      await this.prisma.$transaction([
+        this.prisma.roleUser.deleteMany({ where: { user_id: id } }),
+        this.prisma.roleUser.create({
+          data: { user_id: id, role_id: targetRole.id },
+        }),
+      ]);
+      return {
+        success: true,
+        message: `User role set to ${requested} successfully`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
+
   //-------------------- get all instructors --------------------//
   async getAllInstructors() {
     try {
       const instructors = await this.prisma.user.findMany({
         where: {
-          role: 'TEACHER',
+          role_users: {
+            some: {
+              role: { name: { equals: 'TEACHER', mode: 'insensitive' } },
+            },
+          },
         },
         select: {
           id: true,
@@ -241,7 +302,7 @@ export class UserService {
           phone_number: true,
           address: true,
           avatar: true,
-          role: true,
+          role_users: { select: { role: { select: { name: true } } } },
         },
       });
       return {
@@ -254,21 +315,24 @@ export class UserService {
         message: error.message,
       };
     }
-  } 
-
+  }
 
   //-------------------- get all students --------------------//
   async getAllStudents() {
     try {
       const students = await this.prisma.user.findMany({
         where: {
-          role: 'STUDENT',
+          role_users: {
+            some: {
+              role: { name: { equals: 'STUDENT', mode: 'insensitive' } },
+            },
+          },
         },
         select: {
           id: true,
           name: true,
           email: true,
-          role: true,
+          role_users: { select: { role: { select: { name: true } } } },
           phone_number: true,
           address: true,
           avatar: true,
@@ -287,20 +351,20 @@ export class UserService {
     }
   }
 
-
   //-------------------- get all admins --------------------//
   async getAllAdmins() {
     try {
       const admins = await this.prisma.user.findMany({
         where: {
-          role: 'ADMIN',
+          role_users: {
+            some: { role: { name: { equals: 'ADMIN', mode: 'insensitive' } } },
+          },
         },
         select: {
           id: true,
           name: true,
           email: true,
-          role: true,
-
+          role_users: { select: { role: { select: { name: true } } } },
         },
       });
       return {
