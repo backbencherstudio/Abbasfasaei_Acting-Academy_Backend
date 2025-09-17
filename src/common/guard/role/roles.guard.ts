@@ -25,20 +25,37 @@ export class RolesGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
-    
-    const userDetails = await UserRepository.getUserDetails(user.userId);
-    
+
+  const userDetails = await UserRepository.getUserDetails(user.userId);
+
     if (!userDetails) {
       return false;
     }
 
-    if (requiredRoles.some((role) => userDetails.type?.includes(role))) {
+    // Normalize role checks from attached roles only
+    const attachedRoleNames = (userDetails.role_users || [])
+      .map((ru) => ru?.role?.name)
+      .filter(Boolean)
+      .map((name) => String(name).toLowerCase());
+
+    // If user is super admin by type or attached role, allow all
+    const isSuperAdmin = attachedRoleNames.includes('su_admin');
+    if (isSuperAdmin) {
       return true;
-    } else {
-      throw new HttpException(
-        'You do not have permission to access this resource',
-        HttpStatus.FORBIDDEN,
-      );
     }
+
+    // Check if any required Role matches user's type or attached roles
+    const hasRequiredRole = requiredRoles.some((required) =>
+      attachedRoleNames.includes(String(required).toLowerCase()),
+    );
+
+    if (hasRequiredRole) {
+      return true;
+    }
+
+    throw new HttpException(
+      'You do not have permission to access this resource',
+      HttpStatus.FORBIDDEN,
+    );
   }
 }

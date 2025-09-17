@@ -13,8 +13,12 @@ export class NotificationService {
     try {
       const where_condition = {};
       const userDetails = await UserRepository.getUserDetails(user_id);
+      const attachedRoles = (userDetails?.role_users || []).map((r) =>
+        String(r?.role?.name || '').toLowerCase(),
+      );
+      const isAdmin = attachedRoles.includes('admin') || attachedRoles.includes('su_admin');
 
-      if (userDetails.type == Role.ADMIN) {
+      if (isAdmin) {
         where_condition['OR'] = [
           { receiver_id: { equals: user_id } },
           { receiver_id: { equals: null } },
