@@ -100,8 +100,10 @@ model User {
   Enrollment Enrollment[]
 
   // Assignments & attendance
-  AssignmentSubmission AssignmentSubmission[]
-  attendances          Attendance[]           @relation("UserAttendances")
+  AssignmentSubmission      AssignmentSubmission[]
+  attendances               Attendance[]           @relation("UserAttendances")
+  assignmentGradesAsStudent AssignmentGrade[]      @relation("AssignmentGradeStudent")
+  assignmentGradesAsTeacher AssignmentGrade[]      @relation("AssignmentGradeTeacher")
 
   // ActingGoals
   ActingGoals ActingGoals?
@@ -334,15 +336,19 @@ model ModuleClass {
 }
 
 model Assignment {
-  id            String                 @id @default(cuid())
-  title         String
-  description   String?
-  dueDate       DateTime
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  moduleClassId String
-  submissions   AssignmentSubmission[]
-  moduleClass   ModuleClass            @relation(fields: [moduleClassId], references: [id])
+  id              String                 @id @default(cuid())
+  title           String
+  description     String?
+  submission_Date DateTime
+  total_marks     Int
+  attachment_url  Json?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  moduleClassId   String
+  moduleClass     ModuleClass            @relation(fields: [moduleClassId], references: [id])
+  submissions     AssignmentSubmission[]
+  // Back relation to grades
+  grades          AssignmentGrade[]
 
   @@map("assignments")
 }
@@ -361,32 +367,67 @@ model ClassAsset {
 }
 
 model Attendance {
-  id          String           @id @default(cuid())
-  created_at  DateTime         @default(now())
-  updated_at  DateTime         @default(now())
-  deleted_at  DateTime?
-  class_id    String
-  student_id  String
-  status      AttendanceStatus @default(ABSENT)
-  attended_at DateTime?
-  class       ModuleClass      @relation(fields: [class_id], references: [id])
-  student     User             @relation("UserAttendances", fields: [student_id], references: [id], onDelete: Cascade)
+  id            String           @id @default(cuid())
+  created_at    DateTime         @default(now())
+  updated_at    DateTime         @default(now())
+  deleted_at    DateTime?
+  class_id      String
+  student_id    String
+  attendance_by String?
+  status        AttendanceStatus @default(ABSENT)
+  attended_at   DateTime?
+  class         ModuleClass      @relation(fields: [class_id], references: [id])
+  student       User             @relation("UserAttendances", fields: [student_id], references: [id], onDelete: Cascade)
 
   @@unique([class_id, student_id])
   @@map("attendances")
 }
 
 model AssignmentSubmission {
-  id           String     @id @default(cuid())
+  id          String   @id @default(cuid())
+  title       String?
+  description String?
+  fileUrl     String?
+  submittedAt DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  total_Submissions Int? @default(0)
+
   assignmentId String
-  studentId    String
-  fileUrl      String
-  submittedAt  DateTime   @default(now())
-  grade        String?
   assignment   Assignment @relation(fields: [assignmentId], references: [id])
-  student      User       @relation(fields: [studentId], references: [id])
+
+  studentId String
+  student   User   @relation(fields: [studentId], references: [id])
+
+  // One optional grade linked to this submission
+  grade AssignmentGrade? @relation("SubmissionToGrade")
 
   @@map("assignment_submissions")
+}
+
+model AssignmentGrade {
+  id           String   @id @default(cuid())
+  assignmentId String
+  studentId    String
+  teacherId    String
+  grade        String
+  grade_number Int
+  feedback     String?
+  gradedBy     String?
+  gradedAt     DateTime @default(now())
+
+  total_graded Int? @default(0)
+
+  assignment   Assignment            @relation(fields: [assignmentId], references: [id])
+  // Relations to User: disambiguate with relation names
+  student      User                  @relation("AssignmentGradeStudent", fields: [studentId], references: [id])
+  teacher      User                  @relation("AssignmentGradeTeacher", fields: [teacherId], references: [id])
+  // Link grade to the concrete submission via FK
+  submissionId String?               @unique
+  submission   AssignmentSubmission? @relation("SubmissionToGrade", fields: [submissionId], references: [id])
+
+  @@unique([assignmentId, studentId])
+  @@map("assignment_grades")
 }
 
 model Enrollment {
@@ -405,7 +446,6 @@ model Enrollment {
   actingGoalsId                String?
   contract_docs                Json?
   status                       EnrollmentStatus              @default(PENDING)
-  role                         UserRole                      @default(STUDENT)
   payment_status               PaymentStatus                 @default(DUE)
   payment_type                 PaymentType?
   actingGoals                  ActingGoals?
@@ -484,6 +524,10 @@ model EnrollmentProfile {
 
   @@map("enrollment_profiles")
 }
+
+//
+//---------------------------------- Community & Social Models -----------------//
+//
 
 model CommunityPost {
   id         String             @id @default(cuid())
@@ -590,6 +634,10 @@ model UserReport {
   reportedUser   User         @relation("ReportedUser", fields: [reportedUserId], references: [id])
   reporter       User         @relation("Reporter", fields: [reporterId], references: [id])
 }
+
+//
+//---------------------------------- Chat Models -----------------//
+//
 
 model Conversation {
   id             String           @id @default(cuid())
@@ -715,6 +763,10 @@ model CallParticipant {
   @@index([callId])
 }
 
+//
+//---------------------------------- Event Models -----------------//
+//
+
 model Event {
   id          String         @id @default(cuid())
   created_at  DateTime       @default(now())
@@ -738,15 +790,14 @@ model Event {
 }
 
 model EventMember {
-  id         String        @id @default(cuid())
-  created_at DateTime      @default(now())
-  updated_at DateTime      @default(now())
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
   event_id   String
   user_id    String
-  payment_id String?
-  event      Event         @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  payment    EventPayment? @relation(fields: [payment_id], references: [id], onDelete: Cascade)
-  user       User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+ 
+  event      Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([event_id, user_id])
   @@map("event_members")
@@ -767,7 +818,6 @@ model EventPayment {
   receipt_file    String?
   invoice_file    String?
   transaction_ref String?
-  EventMember     EventMember[]
   event           Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
   user            User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -883,8 +933,6 @@ enum AssetType {
 enum AttendanceStatus {
   PRESENT
   ABSENT
-  LATE
-  EXCUSED
 }
 
 enum PaymentType {
@@ -908,6 +956,7 @@ enum EnrollmentStatus {
   ACTIVE
   PENDING
   ALUMNI
+  RESTRICTED
 }
 
 enum MediaType {
