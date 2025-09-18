@@ -106,6 +106,7 @@ model User {
   attendances               Attendance[]           @relation("UserAttendances")
   assignmentGradesAsStudent AssignmentGrade[]      @relation("AssignmentGradeStudent")
   assignmentGradesAsTeacher AssignmentGrade[]      @relation("AssignmentGradeTeacher")
+  assignmentsAsTeacher      Assignment[]           @relation("AssignmentTeacher")
 
   // ActingGoals
   ActingGoals ActingGoals?
@@ -130,6 +131,8 @@ model User {
   participant_conversations Conversation[] @relation("participant")
   userReportsAsReporter     UserReport[]   @relation("Reporter")
   userReportsAsReported     UserReport[]   @relation("ReportedUser")
+
+  createdQRSessions QRAttendanceSession[]
 
 
   @@map("users")
@@ -332,6 +335,8 @@ model ModuleClass {
   classAssets    ClassAsset[]
   module         CourseModule @relation(fields: [moduleId], references: [id])
 
+  qrSessions QRAttendanceSession[]
+
   @@map("module_classes")
 }
 
@@ -340,14 +345,16 @@ model Assignment {
   title           String
   description     String?
   submission_Date DateTime
+  due_date        DateTime
   total_marks     Int
   attachment_url  Json?
+  average_score   Int?                   @default(0)
   createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  teacherId       String
+  teacher         User                   @relation("AssignmentTeacher", fields: [teacherId], references: [id])
   moduleClassId   String
   moduleClass     ModuleClass            @relation(fields: [moduleClassId], references: [id])
   submissions     AssignmentSubmission[]
-  // Back relation to grades
   grades          AssignmentGrade[]
 
   @@map("assignments")
@@ -381,6 +388,25 @@ model Attendance {
 
   @@unique([class_id, student_id])
   @@map("attendances")
+}
+
+model QRAttendanceSession {
+  id         String      @id @default(cuid())
+  created_at DateTime    @default(now())
+  updated_at DateTime    @default(now())
+  token      String      @unique
+  class_id   String
+  expires_at DateTime
+  is_active  Boolean     @default(true)
+  created_by String
+  class      ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  creator    User        @relation(fields: [created_by], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([class_id])
+  @@index([expires_at])
+  @@index([is_active])
+  @@map("qr_attendance_sessions")
 }
 
 model AssignmentSubmission {
@@ -795,9 +821,9 @@ model EventMember {
   updated_at DateTime @default(now())
   event_id   String
   user_id    String
- 
-  event      Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  event Event @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([event_id, user_id])
   @@map("event_members")

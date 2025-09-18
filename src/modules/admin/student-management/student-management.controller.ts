@@ -62,7 +62,6 @@ export class StudentManagementController {
   @Post(':enrollmentId/contract')
   @UseInterceptors(
     FilesInterceptor('media', 5, {
-      // allow up to 5 files
       storage: memoryStorage(),
     }),
   )
