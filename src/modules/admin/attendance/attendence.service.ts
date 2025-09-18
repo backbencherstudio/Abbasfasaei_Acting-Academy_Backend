@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { CreateAttendanceDto } from './dto/create-attendance.dto';
-import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { CreateAttendenceDto } from './dto/create-attendence.dto';
+import { UpdateAttendenceDto } from './dto/update-attendence.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
@@ -33,4 +33,10 @@ export class AttendanceService {
 
     return filteredAttendance;
   }
+
+  async updateAttendance(studentId: string, updateAttendanceDto: UpdateAttendenceDto) {
+
+    
+  }
+
 }
