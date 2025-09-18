@@ -19,6 +19,10 @@ export class CommunityService {
     visibility: 'PUBLIC' | 'PRIVATE' | 'FRIENDS' = 'PUBLIC',
     file?: Express.Multer.File,
   ) {
+    if (authorId === null || authorId === undefined || authorId === '') {
+      return { success: false, message: 'Author ID is required' };
+    }
+
     let mediaUrl: string | undefined = undefined;
 
     // if (file) {
@@ -65,7 +69,7 @@ export class CommunityService {
           `/${filename}`;
       }
     }
-    
+
     return this.prisma.communityPost.create({
       data: {
         author_Id: authorId,
@@ -324,7 +328,7 @@ export class CommunityService {
       await this.prisma.communityCommentLike.delete({
         where: { id: existingLike.id },
       });
-      return { liked: false }; 
+      return { liked: false };
     } else {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },

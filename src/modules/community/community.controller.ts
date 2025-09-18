@@ -39,6 +39,10 @@ export class CommunityController {
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: CreatePostDto,
   ) {
+    if (!user || !user.userId) {
+      return { success: false, message: 'User not authenticated' };
+    }
+
     return this.service.createPost(
       user.userId,
       dto.content,

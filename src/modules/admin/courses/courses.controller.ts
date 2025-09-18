@@ -7,6 +7,8 @@ import {
   Param,
   Delete,
   UseGuards,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import { CoursesService } from './courses.service';
 import { CreateCourseDto } from './dto/create-course.dto';
@@ -22,12 +24,15 @@ import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { AuthGuard } from '@nestjs/passport';
 import { CreateModuleDto } from './dto/create-module.dto';
 import { UpdateModuleDto } from './dto/update-module.dto';
+import { CreateAssignmentDto } from './dto/createAssignmentDto.dto';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 @ApiBearerAuth()
 @ApiTags('Courses')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
-@Controller('admin/courses')
+@Roles(Role.TEACHER, Role.ADMIN)
+@Controller('courses')
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
 
@@ -40,6 +45,7 @@ export class CoursesController {
     console.log('course create in controller:', user);
     return this.coursesService.create_course(user.userId, createCourseDto);
   }
+
 
   @ApiOperation({ summary: 'Get all courses' })
   @Get()
@@ -159,5 +165,113 @@ export class CoursesController {
   @Delete('classes/:classId')
   deleteClass(@GetUser() user: any, @Param('classId') classId: string) {
     return this.coursesService.deleteClass(user.userId, classId);
+  }
+
+  //---------------------------- assignments Management -------------------------------//
+
+  @ApiOperation({ summary: 'Create an assignment for a class' })
+  @Post('classes/:classId/assignments')
+  @UseInterceptors(
+    FilesInterceptor('media', 5, {
+      storage: memoryStorage(),
+    }),
+  )
+  createAssignment(
+    @GetUser() user: any,
+    @Param('classId') classId: string,
+    @Body() createAssignmentDto: CreateAssignmentDto,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    return this.coursesService.createAssignment(
+      user.userId,
+      classId,
+      createAssignmentDto,
+      files,
+    );
+  }
+
+  @ApiOperation({ summary: 'Get all assignments for a class' })
+  @Get('classes/:classId/assignments')
+  async getAllAssignments(
+    @GetUser() user: any,
+    @Param('classId') classId: string,
+  ) {
+    return this.coursesService.getAllAssignments(user.userId, classId);
+  }
+
+  @ApiOperation({ summary: 'Get an assignment by ID' })
+  @Get('assignments/:assignmentId')
+  async getAssignmentById(
+    @GetUser() user: any,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    return this.coursesService.getAssignmentById(user.userId, assignmentId);
+  }
+
+  @ApiOperation({ summary: 'Update an assignment by ID' })
+  @Patch('assignments/:assignmentId')
+  @UseInterceptors(
+    FilesInterceptor('media', 5, {
+      storage: memoryStorage(),
+    }),
+  )
+  async updateAssignment(
+    @GetUser() user: any,
+    @Param('assignmentId') assignmentId: string,
+    @Body() updateAssignmentDto: any,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    return this.coursesService.updateAssignment(
+      user.userId,
+      assignmentId,
+      updateAssignmentDto,
+      files,
+    );
+  }
+
+  @ApiOperation({ summary: 'Delete an assignment by ID' })
+  @Delete('assignments/:assignmentId')
+  async deleteAssignment(
+    @GetUser() user: any,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    return this.coursesService.deleteAssignment(user.userId, assignmentId);
+  }
+
+  //---------------------------- Assignment Submission Management -------------------------------//
+
+  @ApiOperation({ summary: 'Get all submissions for an assignment' })
+  @Get('assignments/:assignmentId/submissions')
+  async getAllAssignmentsSubmissions(
+    @GetUser() user: any,
+    @Param('assignmentId') assignmentId: string,
+  ) {
+    return this.coursesService.getAllAssignmentsSubmissions(
+      user.userId,
+      assignmentId,
+    );
+  }
+
+  @ApiOperation({ summary: 'Get a submission by ID' })
+  @Get('submissions/:submissionId')
+  async getSubmissionById(
+    @GetUser() user: any,
+    @Param('submissionId') submissionId: string,
+  ) {
+    return this.coursesService.getSubmissionById(user.userId, submissionId);
+  }
+
+  @ApiOperation({ summary: 'Grade a submission by ID' })
+  @Patch('submissions/:submissionId/grade')
+  async gradeSubmission(
+    @GetUser() user: any,
+    @Param('submissionId') submissionId: string,
+    @Body() gradeSubmissionDto: any,
+  ) {
+    return this.coursesService.gradeSubmission(
+      user.userId,
+      submissionId,
+      gradeSubmissionDto,
+    );
   }
 }
