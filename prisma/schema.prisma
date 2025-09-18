@@ -30,6 +30,8 @@ model Account {
 }
 
 model User {
+
+  
   id           String    @id @default(cuid())
   created_at   DateTime  @default(now())
   updated_at   DateTime  @default(now())
@@ -132,6 +134,7 @@ model User {
 
   createdQRSessions QRAttendanceSession[]
 
+
   @@map("users")
 }
 
@@ -150,20 +153,17 @@ model Ucode {
 }
 
 model Role {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now())
-  deleted_at DateTime?
-
-  status Int?    @default(1) @db.SmallInt
-  title  String?
-  name   String? @unique // add this line
-
-  user_id String?
-  user    User?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
+  id               String           @id @default(cuid())
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @default(now())
+  deleted_at       DateTime?
+  status           Int?             @default(1) @db.SmallInt
+  title            String?
+  name             String?          @unique
+  user_id          String?
   permission_roles PermissionRole[]
   role_users       RoleUser[]
+  user             User?            @relation(fields: [user_id], references: [id], onDelete: Cascade)
   permissions      Permission[]     @relation("PermissionToRole")
 
   @@map("roles")
