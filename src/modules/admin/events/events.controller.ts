@@ -10,7 +10,7 @@ import { updateEventDto } from './dto/updateEventDto';
 
 
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard )
 
 @Controller('events')
 export class EventsController {
