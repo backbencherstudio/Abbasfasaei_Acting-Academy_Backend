@@ -6,7 +6,7 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 
 @Controller('home')
 export class HomeController {
-  constructor(private readonly homeService: HomeService) { }
+  constructor(private readonly homeService: HomeService) {}
 
   // @ApiBearerAuth()
   // @UseGuards(JwtAuthGuard)
