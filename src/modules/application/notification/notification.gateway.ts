@@ -52,6 +52,10 @@ export class NotificationGateway
     });
 
     this.redisSubClient.subscribe('notification', (err, message: string) => {
+
+      if(!message) {
+        console.error("JSON parsing error: message is empty or undefined");
+      }
       const data = JSON.parse(message);
       this.server.emit('receiveNotification', data);
     });
