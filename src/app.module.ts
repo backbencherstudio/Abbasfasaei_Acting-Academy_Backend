@@ -30,6 +30,7 @@ import { CoursesModule } from './modules/admin/courses/courses.module';
 import { StudentManagementModule } from './modules/admin/student-management/student-management.module';
 import { InstructorsModule } from './modules/admin/instructors/instructors.module';
 import { CourseModule } from './modules/course/course.module';
+import { HomeModule } from './modules/home/home.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -93,6 +94,7 @@ import { CourseModule } from './modules/course/course.module';
     CourseModule,
     StudentManagementModule,
     InstructorsModule,
+    HomeModule,
   ],
   controllers: [AppController],
   providers: [
