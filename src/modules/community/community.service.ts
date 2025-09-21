@@ -232,7 +232,7 @@ export class CommunityService {
         });
 
         return {
-          liked: false,
+          success: false,
           message: 'Post unliked successfully',
         };
       } else {
