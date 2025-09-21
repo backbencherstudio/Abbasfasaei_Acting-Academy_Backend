@@ -732,7 +732,7 @@ export class CoursesService {
           attachment_url: mediaUrls.length > 0 ? mediaUrls : null,
           submission_Date: submissionDate,
           due_date: dueDate,
-          total_marks: createAssignmentDto.total_marks,
+          total_marks: parseInt(createAssignmentDto.total_marks),
           teacher: {
             connect: { id: teacherId },
           },
@@ -918,7 +918,7 @@ export class CoursesService {
           submission_Date:
             updateAssignmentDto.submission_date || assignment.submission_Date,
           total_marks:
-            updateAssignmentDto.total_marks || assignment.total_marks,
+            parseInt(updateAssignmentDto.total_marks) || assignment.total_marks,
           due_date: updateAssignmentDto.submission_date
             ? new Date(
                 new Date(updateAssignmentDto.submission_date).getTime() -
@@ -1174,6 +1174,130 @@ export class CoursesService {
     } catch (error) {
       console.error('Error grading submission:', error);
       throw new Error('Could not grade submission');
+    }
+  }
+
+  //
+  //-=------------------------------ end of assignment Management -------------------------------
+  //
+
+  //
+  //------------------------------- Assets Management -------------------------------
+  async uploadClassAsset(
+    userId: string,
+    classId: string,
+    files: Express.Multer.File[],
+    mediaType?: 'PHOTO' | 'VIDEO' | 'FILE',
+  ) {
+    const createdAssets: Array<{
+      id: string;
+      asset_type: string;
+      asset_url: string;
+    }> = [];
+
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const existingClass = await this.prisma.moduleClass.findUnique({
+        where: { id: classId },
+      });
+
+      if (!existingClass) {
+        return { message: 'Class not found', success: false };
+      }
+
+      if (files && files.length > 0) {
+        for (const file of files) {
+          const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+
+          const derivedType: 'PHOTO' | 'VIDEO' | 'FILE' = mediaType
+            ? mediaType
+            : file.mimetype?.startsWith('image/')
+              ? 'PHOTO'
+              : file.mimetype?.startsWith('video/')
+                ? 'VIDEO'
+                : 'FILE';
+
+          let basePath: string;
+          if (derivedType === 'PHOTO') {
+            basePath = appConfig().storageUrl.communityPhoto;
+          } else if (derivedType === 'VIDEO') {
+            basePath = appConfig().storageUrl.communityVideo;
+          } else {
+            basePath = appConfig().storageUrl.attachment;
+          }
+
+          await SazedStorage.put(`${basePath}/${filename}`, file.buffer);
+
+          const publicUrl =
+            process.env.AWS_S3_ENDPOINT +
+            '/' +
+            process.env.AWS_S3_BUCKET +
+            basePath +
+            `/${filename}`;
+
+          const asset = await this.prisma.classAsset.create({
+            data: {
+              asset_type: derivedType as any,
+              asset_url: publicUrl,
+              class: { connect: { id: classId } },
+            },
+            select: { id: true, asset_type: true, asset_url: true },
+          });
+          createdAssets.push(asset);
+        }
+      }
+
+      if (createdAssets.length === 0) {
+        return { message: 'No files uploaded', success: false };
+      }
+
+      return {
+        message: 'Assets uploaded successfully',
+        success: true,
+        data: createdAssets,
+      };
+    } catch (error) {
+      console.error('Error uploading class assets:', error);
+      throw new Error('Could not upload class assets');
+    }
+  }
+
+  async getClassAssets(userId: string, classId: string) {
+    try {
+      if (!userId) {
+        return { message: 'Unauthorized', success: false };
+      }
+
+      const existingClass = await this.prisma.moduleClass.findUnique({
+        where: { id: classId },
+      });
+
+      if (!existingClass) {
+        return { message: 'Class not found', success: false };
+      }
+
+      const assets = await this.prisma.classAsset.findMany({
+        where: { class_id: classId },
+        select: {
+          id: true,
+          asset_type: true,
+          asset_url: true,
+          created_at: true,
+          updated_at: true,
+        },
+      });
+
+      return {
+        message: 'Class assets fetched successfully',
+        success: true,
+        data: assets,
+      };
+    } catch (error) {
+      console.error('Error fetching class assets:', error);
+      throw new Error('Could not fetch class assets');
     }
   }
 }

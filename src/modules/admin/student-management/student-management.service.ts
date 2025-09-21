@@ -31,14 +31,24 @@ export class StudentManagementService {
       };
     }
 
-    const courseTitle = await this.prisma.course.findMany({
-      select: { title: true, id: true },
-    });
-    console.log('course titles:', courseTitle, courseTitle[0]?.id);
+    let courseId: string | undefined = dto.courseId;
+    let course;
+
+    if (courseId) {
+      course = await this.prisma.course.findUnique({
+        where: { id: courseId },
+        select: { id: true, title: true },
+      });
+      courseId = course.id;
+    }
+
+    if (!course) {
+      return { success: false, message: 'Course not found' };
+    }
 
     // Check if the user is already enrolled
     const existingEnrollment = await this.prisma.enrollment.findFirst({
-      where: { email: dto.email },
+      where: { email: dto.email, courseId: courseId },
     });
 
     if (existingEnrollment) {
@@ -47,26 +57,49 @@ export class StudentManagementService {
         message: 'User is already enrolled',
       };
     }
-    // Create a new enrollment
-    const enrollment = await this.prisma.enrollment.create({
+
+    // Create a new enrollment (without nested ActingGoals to avoid relation violations)
+    const createdEnrollment = await this.prisma.enrollment.create({
       data: {
         user_id: user.id,
-        courseId: courseTitle[0]?.id,
+        courseId: courseId,
         full_name: dto.full_name,
         email: dto.email,
         phone: dto.phone,
         address: dto.address,
-        date_of_birth: dto.date_of_birth,
+        date_of_birth: dto.date_of_birth ? new Date(dto.date_of_birth) : null,
         experience_level: dto.experience_level,
-        actingGoals: {
-          create: {
-            acting_goals: dto.acting_goals,
-            user: {
-              connect: { id: user.id },
-            },
-          },
-        },
       },
+      select: { id: true },
+    });
+
+    // Upsert ActingGoals and link to the newly created enrollment
+    const existingGoals = await this.prisma.actingGoals.findUnique({
+      where: { userId: user.id },
+      select: { id: true, enrollmentId: true },
+    });
+
+    if (existingGoals) {
+      await this.prisma.actingGoals.update({
+        where: { id: existingGoals.id },
+        data: {
+          acting_goals: dto.acting_goals,
+          enrollment: { connect: { id: createdEnrollment.id } },
+        },
+      });
+    } else {
+      await this.prisma.actingGoals.create({
+        data: {
+          acting_goals: dto.acting_goals,
+          user: { connect: { id: user.id } },
+          enrollment: { connect: { id: createdEnrollment.id } },
+        },
+      });
+    }
+
+    // Re-fetch enriched enrollment payload
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: createdEnrollment.id },
       select: {
         id: true,
         full_name: true,
@@ -78,7 +111,7 @@ export class StudentManagementService {
         status: true,
         created_at: true,
         updated_at: true,
-        user: { select: { id: true, email: true } },
+        user: { select: { id: true, email: true, role_users: true } },
         payment: {
           select: {
             id: true,
@@ -88,8 +121,8 @@ export class StudentManagementService {
         },
         actingGoals: {
           select: {
-            acting_goals: true,
             id: true,
+            acting_goals: true,
           },
         },
         course: {
@@ -500,7 +533,7 @@ export class StudentManagementService {
     if (!enrollment) {
       return { success: false, message: 'Enrollment not found' };
     }
-   
+
     const hasExplicitFlag = typeof updateData?.restrict === 'boolean';
     const nextStatus = hasExplicitFlag
       ? updateData!.restrict
