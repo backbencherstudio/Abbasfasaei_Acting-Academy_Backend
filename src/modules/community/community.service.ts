@@ -23,6 +23,23 @@ export class CommunityService {
       return { success: false, message: 'Author ID is required' };
     }
 
+    // Determine author's platform role (ADMIN/TEACHER/STUDENT) via role_users
+    const author = await this.prisma.user.findUnique({
+      where: { id: authorId },
+      select: {
+        id: true,
+        role_users: { select: { role: { select: { name: true } } } },
+      },
+    });
+
+    if (!author) {
+      return { success: false, message: 'Author not found' };
+    }
+
+    const roles = (author.role_users || []).map((ru) => ru.role?.name).filter(Boolean) as string[];
+    const hasAdmin = roles.includes('ADMIN');
+    const status: 'APPROVED' | 'REQUEST' = hasAdmin ? 'APPROVED' : 'REQUEST';
+
     let mediaUrl: string | undefined = undefined;
 
     // if (file) {
@@ -77,6 +94,7 @@ export class CommunityService {
         media_Url: mediaUrl,
         mediaType,
         visibility,
+        status, // Admin posts are approved immediately; others go to request queue
       },
       select: {
         id: true,
@@ -92,6 +110,7 @@ export class CommunityService {
         media_Url: true,
         mediaType: true,
         visibility: true,
+        status: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -108,6 +127,19 @@ export class CommunityService {
   ) {
     try {
       let mediaUrl: string | undefined = undefined;
+      // Determine updater's role to decide publishing status on update
+      const author = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          role_users: { select: { role: { select: { name: true } } } },
+        },
+      });
+
+      const roles = (author?.role_users || [])
+        .map((ru) => ru.role?.name)
+        .filter(Boolean) as string[];
+      const hasAdmin = roles.includes('ADMIN');
 
       if (file) {
         const oldfile = await this.prisma.communityPost.findUnique({
@@ -171,6 +203,8 @@ export class CommunityService {
           media_Url: mediaUrl,
           mediaType,
           visibility,
+          // Non-admin edits must go through moderation again
+          status: hasAdmin ? 'APPROVED' : 'REQUEST',
         },
       });
 
@@ -193,7 +227,12 @@ export class CommunityService {
   async getFeed(userId: string) {
     const posts = await this.prisma.communityPost.findMany({
       where: {
-        OR: [{ visibility: 'PUBLIC' }, { author_Id: userId }],
+        OR: [
+          // Always show the author's own posts (any status)
+          { author_Id: userId },
+          // Show approved public posts from others
+          { status: 'APPROVED', visibility: 'PUBLIC' },
+        ],
       },
       include: {
         author: {
