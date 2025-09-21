@@ -9,6 +9,8 @@ import { StudentManagementModule } from './student-management/student-management
 import { EventsModule } from './events/events.module';
 import { CommunityManagementModule } from './community-management/community-management.module';
 import { AttendenceModule } from './attendance/attendence.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { HomeModule } from './home/home.module';
 
 
 
@@ -23,6 +25,9 @@ import { AttendenceModule } from './attendance/attendence.module';
     SettingsModule,
     StudentManagementModule,
     EventsModule,
+    AttendenceModule,
+    DashboardModule,
+    HomeModule,
     CommunityManagementModule,
     AttendenceModule,
   ],
