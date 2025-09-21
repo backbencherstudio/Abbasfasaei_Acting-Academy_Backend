@@ -457,60 +457,65 @@ model AssignmentGrade {
 }
 
 model Enrollment {
-  id                           String                        @id @default(cuid())
-  created_at                   DateTime                      @default(now())
-  updated_at                   DateTime                      @default(now())
-  user_id                      String
-  full_name                    String
-  email                        String
-  phone                        String
-  address                      String
-  date_of_birth                DateTime?                     @db.Date
-  experience_level             ExperienceLevel
-  courseId                     String?
-  courseModuleId               String?
-  actingGoalsId                String?
-  contract_docs                Json?
-  status                       EnrollmentStatus              @default(PENDING)
-  payment_status               PaymentStatus                 @default(DUE)
-  payment_type                 PaymentType?
-  actingGoals                  ActingGoals?
-  digital_signature            DigitalSignature?
-  contractTerms                EnrollmentContractTerms?
-  payment                      UserPayment?
-  enrollmentProfile            EnrollmentProfile?
-  enrollmentTermsAndConditions EnrollmentTermsAndConditions?
-  course                       Course?                       @relation(fields: [courseId], references: [id])
-  user                         User                          @relation(fields: [user_id], references: [id])
+  id                String             @id @default(cuid())
+  created_at        DateTime           @default(now())
+  updated_at        DateTime           @default(now())
+  user_id           String
+  full_name         String
+  email             String
+  phone             String
+  address           String
+  date_of_birth     DateTime?          @db.Date
+  experience_level  ExperienceLevel
+  courseId          String?
+  courseModuleId    String?
+  actingGoalsId     String?
+  contract_docs     Json?
+  status            EnrollmentStatus   @default(PENDING)
+  payment_status    PaymentStatus      @default(DUE)
+  payment_type      PaymentType?
+  actingGoals       ActingGoals?
+  payment           UserPayment?
+  enrollmentProfile EnrollmentProfile?
+  course            Course?            @relation(fields: [courseId], references: [id])
+  user              User               @relation(fields: [user_id], references: [id])
+
+  digital_contract_signing  DigitalContractSigning?
+  rules_regulations_signing RulesAndRegulationsSigning?
 
   @@map("enrollments")
 }
 
-model EnrollmentContractTerms {
-  id           String     @id @default(cuid())
-  enrollmentId String     @unique
-  agreed       Boolean    @default(false)
-  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+model DigitalContractSigning {
+  id               String             @id @default(cuid())
+  enrollmentId     String             @unique
+  agreed           Boolean            @default(false)
+  enrollment       Enrollment         @relation(fields: [enrollmentId], references: [id])
+  digitalSignature DigitalSignature[]
 
-  @@map("enrollment_contract_terms")
+  @@map("digital_contract_signings")
 }
 
-model EnrollmentTermsAndConditions {
-  id           String     @id @default(cuid())
-  enrollmentId String     @unique
-  accepted     Boolean    @default(false)
-  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+model RulesAndRegulationsSigning {
+  id               String             @id @default(cuid())
+  enrollmentId     String             @unique
+  accepted         Boolean            @default(false)
+  enrollment       Enrollment         @relation(fields: [enrollmentId], references: [id])
+  digitalSignature DigitalSignature[]
 
   @@map("enrollment_terms_and_conditions")
 }
 
 model DigitalSignature {
-  id           String     @id @default(cuid())
-  enrollmentId String     @unique
-  full_name    String
-  signature    String
-  signed_at    DateTime?  @db.Date
-  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+  id                           String                      @id @default(cuid())
+  enrollmentId                 String                      @unique
+  full_name                    String
+  signature                    String
+  signed_at                    DateTime?                   @db.Date
+  digital_contract_signing_id  String?
+  digital_contract_signing     DigitalContractSigning?     @relation(fields: [digital_contract_signing_id], references: [id])
+  rules_regulations_signing_id String?
+  rules_regulations_signing    RulesAndRegulationsSigning? @relation(fields: [rules_regulations_signing_id], references: [id])
 
   @@map("digital_signatures")
 }
@@ -559,6 +564,7 @@ model CommunityPost {
   id         String             @id @default(cuid())
   author_Id  String
   content    String
+  status     PostStatus         @default(REQUEST)
   createdAt  DateTime           @default(now())
   updatedAt  DateTime           @updatedAt
   media_Url  String?
@@ -659,6 +665,14 @@ model UserReport {
   status         ReportStatus @default(OPEN)
   reportedUser   User         @relation("ReportedUser", fields: [reportedUserId], references: [id])
   reporter       User         @relation("Reporter", fields: [reporterId], references: [id])
+}
+
+enum PostStatus {
+  APPROVED
+  REQUEST
+  REJECTED
+  FLAGGED
+  ANNOUNCEMENT
 }
 
 //
@@ -953,7 +967,8 @@ enum CourseStatus {
 
 enum AssetType {
   VIDEO
-  PDF
+  PHOTO
+  FILE
 }
 
 enum AttendanceStatus {
