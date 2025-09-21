@@ -8,6 +8,8 @@ import { SettingsModule } from './settings/settings.module';
 import { StudentManagementModule } from './student-management/student-management.module';
 import { EventsModule } from './events/events.module';
 import { AttendenceModule } from './attendance/attendence.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { HomeModule } from './home/home.module';
 
 
 
@@ -21,7 +23,9 @@ import { AttendenceModule } from './attendance/attendence.module';
     SettingsModule,
     StudentManagementModule,
     EventsModule,
-    AttendenceModule
+    AttendenceModule,
+    DashboardModule,
+    HomeModule
   ],
 })
 export class AdminModule {}
