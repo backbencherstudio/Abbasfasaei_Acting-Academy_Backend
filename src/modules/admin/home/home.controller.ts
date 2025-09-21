@@ -1,21 +1,20 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { HomeService } from './home.service';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 @Controller('home')
 export class HomeController {
   constructor(private readonly homeService: HomeService) { }
 
-  @Get()
-  async getEnrols() {
-    return this.homeService.getEnrols()
-  }
-
-  @Get()
+  // @ApiBearerAuth()
+  // @UseGuards(JwtAuthGuard)
+  @Get(':id')
   async getHome(
-    @GetUser() user: any
+    // @GetUser() user: any
+    @Param('id') id: string
   ) {
-    return this.homeService.getHome(user.userId)
+    return this.homeService.getHome(id)
   }
 }
