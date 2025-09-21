@@ -35,7 +35,7 @@ export class StudentManagementController {
   ) {}
 
   @ApiTags('Create Enrollment')
-  @Post()
+  @Post('enroll')
   async manualEnrollment(
     @GetUser() user: any,
     @Body() createStudentManagementDto: EnrollDto,

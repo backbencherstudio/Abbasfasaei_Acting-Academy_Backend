@@ -9,6 +9,8 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
+  Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { CoursesService } from './courses.service';
 import { CreateCourseDto } from './dto/create-course.dto';
@@ -45,7 +47,6 @@ export class CoursesController {
     console.log('course create in controller:', user);
     return this.coursesService.create_course(user.userId, createCourseDto);
   }
-
 
   @ApiOperation({ summary: 'Get all courses' })
   @Get()
@@ -273,5 +274,46 @@ export class CoursesController {
       submissionId,
       gradeSubmissionDto,
     );
+  }
+
+  @ApiOperation({ summary: 'Upload media files for a class' })
+  @Post('classes/:classId/media')
+  @UseInterceptors(
+    FilesInterceptor('media', 5, {
+      storage: memoryStorage(),
+    }),
+  )
+  async uploadClassAsset(
+    @GetUser() user: any,
+    @Param('classId') classId: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Query('mediaType') mediaType?: 'PHOTO' | 'VIDEO' | 'FILE',
+  ) {
+    const allowed = ['PHOTO', 'VIDEO', 'FILE'] as const;
+    let mt: (typeof allowed)[number] | undefined = undefined;
+    if (mediaType) {
+      const upper = mediaType.toUpperCase() as (typeof allowed)[number];
+      if (!allowed.includes(upper)) {
+        throw new BadRequestException(
+          `Invalid mediaType. Allowed values are ${allowed.join(', ')}`,
+        );
+      }
+      mt = upper;
+    }
+    return this.coursesService.uploadClassAsset(
+      user.userId,
+      classId,
+      files,
+      mt,
+    );
+  }
+
+  @ApiOperation({ summary: 'Get all media assets for a class' })
+  @Get('classes/:classId/media')
+  async getClassAssets(
+    @GetUser() user: any,
+    @Param('classId') classId: string,
+  ) {
+    return this.coursesService.getClassAssets(user.userId, classId);
   }
 }

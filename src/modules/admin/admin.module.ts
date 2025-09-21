@@ -7,9 +7,11 @@ import { NotificationModule } from './notification/notification.module';
 import { SettingsModule } from './settings/settings.module';
 import { StudentManagementModule } from './student-management/student-management.module';
 import { EventsModule } from './events/events.module';
+import { CommunityManagementModule } from './community-management/community-management.module';
 import { AttendenceModule } from './attendance/attendence.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HomeModule } from './home/home.module';
+
 
 
 
@@ -25,7 +27,9 @@ import { HomeModule } from './home/home.module';
     EventsModule,
     AttendenceModule,
     DashboardModule,
-    HomeModule
+    HomeModule,
+    CommunityManagementModule,
+    AttendenceModule,
   ],
 })
 export class AdminModule {}
