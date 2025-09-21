@@ -19,7 +19,7 @@ import {
 import { ApiOperation } from '@nestjs/swagger';
 
 @Controller('enrollment')
-@UseGuards(JwtAuthGuard) // Protect routes with JWT authentication
+@UseGuards(JwtAuthGuard) 
 export class EnrollmentController {
   constructor(private readonly enrollmentService: EnrollmentService) {}
 

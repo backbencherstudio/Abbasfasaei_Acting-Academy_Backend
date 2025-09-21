@@ -26,14 +26,10 @@ import { ConversationsModule } from './modules/chat/conversations/conversations.
 import { RealtimeModule } from './modules/chat/realtime/realtime.module';
 import { CommunityModule } from './modules/community/community.module';
 import { EnrollmentModule } from './modules/enrollment/enrollment.module';
-import { CourseModule } from './course/course.module';
 import { CoursesModule } from './modules/admin/courses/courses.module';
-
 import { StudentManagementModule } from './modules/admin/student-management/student-management.module';
-
 import { InstructorsModule } from './modules/admin/instructors/instructors.module';
-
-
+import { CourseModule } from './modules/course/course.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -93,11 +89,10 @@ import { InstructorsModule } from './modules/admin/instructors/instructors.modul
     // PaymentModule,
     CommunityModule,
     EnrollmentModule,
-    CourseModule,
     CoursesModule,
+    CourseModule,
     StudentManagementModule,
-    InstructorsModule
-
+    InstructorsModule,
   ],
   controllers: [AppController],
   providers: [
