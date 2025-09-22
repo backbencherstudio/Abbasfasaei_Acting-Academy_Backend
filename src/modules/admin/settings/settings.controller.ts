@@ -7,6 +7,7 @@ import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { UpdateUserSettingsDto } from './dto/update-profile.dto';
+import { WebsiteSettingsDto } from './dto/websiteUpdate.dto';
 
 
 
@@ -22,6 +23,13 @@ export class SettingsController {
   @Get('general-settings')
   async getGeneralSettings() {
     return this.settingsService.allSettings()
+  }
+
+  @Post('general-settings')
+  async updateGeneralSettings(
+    @Body() websiteSettingsDto: WebsiteSettingsDto
+  ) {
+    return this.settingsService.allSettingsUpdate(websiteSettingsDto)
   }
 
   @Get('profile-settings')

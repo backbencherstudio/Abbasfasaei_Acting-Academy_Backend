@@ -196,9 +196,42 @@ export class HomeService {
                     orderBy: { start_date: 'asc' },
                     take: 5
                 })
+
+                const upcomingEvents = // Upcoming Events
+                    this.prisma.event.findMany({
+                        where: {
+                            date: { gt: now },
+                            status: 'UPCOMING'
+                        },
+                        select: {
+                            id: true,
+                            name: true,
+                            description: true,
+                            overview: true,
+                            date: true,
+                            time: true,
+                            location: true,
+                            amount: true,
+                            creator: {
+                                select: {
+                                    id: true,
+                                    name: true
+                                }
+                            },
+                            members: {
+                                where: { user_id: userId },
+                                select: {
+                                    user_id: true
+                                }
+                            }
+                        },
+                        orderBy: { date: 'asc' },
+                        take: 10
+                    })
     
                 return {
-                    upcomingCourses
+                    upcomingCourses,
+                    upcomingEvents
                 }
             }
         }

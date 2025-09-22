@@ -3,6 +3,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { WebsiteInfoService } from '../website-info/website-info.service';
 import * as bcrypt from 'bcrypt';
 import { UpdateUserSettingsDto } from './dto/update-profile.dto';
+import { WebsiteSettingsDto } from './dto/websiteUpdate.dto';
 
 @Injectable()
 export class SettingsService {
@@ -17,16 +18,29 @@ export class SettingsService {
   }
 
   async allProfileSettings(userId: string) {
-    const allProfileInfo = await this.prisma.user.findUnique({
-      where: { id: userId },
+    const websiteSettings = await this.prisma.websiteInfo.findMany({
       select: {
-        first_name: true,
-        last_name: true,
+        name: true,
+        phone_number: true,
         email: true,
-        password: true,
+        address: true,
       },
-    });
-    return allProfileInfo;
+    })
+    return websiteSettings
+  }
+
+   async allSettingsUpdate(websiteSettingsDto: WebsiteSettingsDto) {
+    const websiteSettings = await this.prisma.websiteInfo.updateMany({
+      
+      data: {
+        name: websiteSettingsDto.name,
+        phone_number: websiteSettingsDto.phone_number,
+        email: websiteSettingsDto.email,
+        address: websiteSettingsDto.address,
+      }
+    })
+
+    return websiteSettings;
   }
 
   async profileUpdate(userId: string, dto: UpdateUserSettingsDto) {
