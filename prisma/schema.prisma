@@ -454,28 +454,29 @@ model AssignmentGrade {
 }
 
 model Enrollment {
-  id                String             @id @default(cuid())
-  created_at        DateTime           @default(now())
-  updated_at        DateTime           @default(now())
-  user_id           String
-  full_name         String
-  email             String
-  phone             String
-  address           String
-  date_of_birth     DateTime?          @db.Date
-  experience_level  ExperienceLevel
-  courseId          String?
-  courseModuleId    String?
-  actingGoalsId     String?
-  contract_docs     Json?
-  status            EnrollmentStatus   @default(PENDING)
-  payment_status    PaymentStatus      @default(DUE)
-  payment_type      PaymentType?
-  actingGoals       ActingGoals?
-  payment           UserPayment?
-  enrollmentProfile EnrollmentProfile?
-  course            Course?            @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  user              User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id                 String             @id @default(cuid())
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @default(now())
+  user_id            String
+  full_name          String
+  email              String
+  phone              String
+  address            String
+  date_of_birth      DateTime?          @db.Date
+  experience_level   ExperienceLevel
+  courseId           String?
+  courseModuleId     String?
+  actingGoalsId      String?
+  contract_docs      Json?
+  status             EnrollmentStatus   @default(PENDING)
+  payment_status     PaymentStatus      @default(DUE)
+  IsPaymentCompleted Boolean            @default(false)
+  payment_type       PaymentType?
+  actingGoals        ActingGoals?
+  payment            UserPayment?
+  enrollmentProfile  EnrollmentProfile?
+  course             Course?            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user               User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   digital_contract_signing  DigitalContractSigning?
   rules_regulations_signing RulesAndRegulationsSigning?
@@ -805,23 +806,24 @@ model CallParticipant {
 //
 
 model Event {
-  id          String         @id @default(cuid())
-  created_at  DateTime       @default(now())
-  updated_at  DateTime       @default(now())
-  deleted_at  DateTime?
-  name        String
-  description String?
-  overview    String?
-  date        DateTime
-  time        String?
-  location    String
-  amount      Decimal?
-  status      EventStatus    @default(UPCOMING)
-  files       Json?
-  created_by  String
-  members     EventMember[]
-  payments    EventPayment[]
-  creator     User           @relation("EventCreator", fields: [created_by], references: [id], onDelete: Cascade)
+  id                 String         @id @default(cuid())
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @default(now())
+  deleted_at         DateTime?
+  name               String
+  description        String?
+  overview           String?
+  date               DateTime
+  time               String?
+  location           String
+  amount             Decimal?
+  IsPaymentCompleted Boolean        @default(false)
+  status             EventStatus    @default(UPCOMING)
+  files              Json?
+  created_by         String
+  members            EventMember[]
+  payments           EventPayment[]
+  creator            User           @relation("EventCreator", fields: [created_by], references: [id], onDelete: Cascade)
 
   @@map("events")
 }
