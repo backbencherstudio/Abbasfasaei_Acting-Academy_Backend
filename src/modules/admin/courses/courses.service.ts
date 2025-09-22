@@ -985,7 +985,8 @@ export class CoursesService {
         select: {
           id: true,
           studentId: true,
-          total_Submissions: true,
+          title: true,
+          description: true,
           submittedAt: true,
           fileUrl: true,
 
@@ -1026,7 +1027,7 @@ export class CoursesService {
     }
   }
 
-  async getSubmissionById(userId: string, submissionId: string) {
+  async getSubmitedAssignmentById(userId: string, submissionId: string) {
     try {
       if (!userId) {
         return { message: 'Unauthorized', success: false };
@@ -1034,34 +1035,26 @@ export class CoursesService {
 
       const submission = await this.prisma.assignmentSubmission.findUnique({
         where: { id: submissionId },
-        select: {
-          id: true,
-          studentId: true,
-          total_Submissions: true,
-          submittedAt: true,
-          fileUrl: true,
+        include: {
           assignment: {
             select: {
               id: true,
               title: true,
-              description: true,
-              submission_Date: true,
-              attachment_url: true,
-              total_marks: true,
             },
           },
           grade: {
             select: {
               id: true,
-              gradedAt: true,
-              feedback: true,
               gradedBy: true,
-              grade: true,
               grade_number: true,
             },
           },
           student: {
-            select: { id: true, name: true, email: true },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
           },
         },
       });
@@ -1099,7 +1092,6 @@ export class CoursesService {
         return { message: 'Submission not found', success: false };
       }
 
-      // Check existing grade either by submissionId (unique) or by assignment+student unique pair
       const existingGrade = await this.prisma.assignmentGrade.findFirst({
         where: {
           OR: [
@@ -1116,7 +1108,6 @@ export class CoursesService {
         return { message: 'Submission already graded', success: false };
       }
 
-      // make a grade (a+, a-, a, b+, b-, b, etc..) based on the total marks of the assignment
       const assignment = await this.prisma.assignment.findUnique({
         where: { id: submission.assignmentId },
       });
@@ -1135,9 +1126,6 @@ export class CoursesService {
         };
       }
 
-      // Helper function to determine grade letter
-      // Example: A+ for 90-100%, A for 80-89%, B for 70-79%, etc.
-      // You can customize this logic as per your grading system
       const getGradeLetter = (grade: number, total: number): string => {
         const percentage = (grade / total) * 100;
         if (percentage >= 90) return 'A+';
