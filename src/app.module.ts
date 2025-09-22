@@ -18,6 +18,7 @@ import { AbilityModule } from './ability/ability.module';
 import { MailModule } from './mail/mail.module';
 import { ApplicationModule } from './modules/application/application.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { PaymentModule } from './modules/payment/payment.module';
 // import { PaymentModule } from './modules/payment/payment.module';
 // import { PresenceModule } from './modules/chat/presence/presence.module';
 import { UploadsModule } from './modules/chat/uploads/uploads.module';
@@ -85,8 +86,8 @@ import { CourseModule } from './modules/course/course.module';
     ConversationsModule,
     MessagesModule,
     UploadsModule,
-    // PresenceModule,
-    // PaymentModule,
+  // PresenceModule,
+  PaymentModule,
     CommunityModule,
     EnrollmentModule,
     CoursesModule,

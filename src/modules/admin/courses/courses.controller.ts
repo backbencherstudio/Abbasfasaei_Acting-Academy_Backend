@@ -259,7 +259,10 @@ export class CoursesController {
     @GetUser() user: any,
     @Param('submissionId') submissionId: string,
   ) {
-    return this.coursesService.getSubmissionById(user.userId, submissionId);
+    return this.coursesService.getSubmitedAssignmentById(
+      user.userId,
+      submissionId,
+    );
   }
 
   @ApiOperation({ summary: 'Grade a submission by ID' })

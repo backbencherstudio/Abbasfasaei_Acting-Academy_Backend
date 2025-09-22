@@ -8,6 +8,8 @@ import {
   Delete,
   UseGuards,
   InternalServerErrorException,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import { CourseService } from './course.service';
 import { CreateCourseDto } from './dto/create-course.dto';
@@ -15,6 +17,9 @@ import { UpdateCourseDto } from './dto/update-course.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiOperation } from '@nestjs/swagger';
 import { GetUser } from '../auth/decorators/get-user.decorator';
+import { SubmitAssignmentDto } from './dto/submit-assignment.dto';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 @UseGuards(JwtAuthGuard)
 @Controller('course')
@@ -114,9 +119,12 @@ export class CourseController {
     }
   }
 
-  @ApiOperation({ summary: 'Get Assignments for a course' })
+  @ApiOperation({ summary: 'Get my Assignments for a course' })
   @Get('assignments/:courseId')
-  async getAssignmentsForCourse(courseId: string, @GetUser() user) {
+  async getAssignmentsForCourse(
+    @Param('courseId') courseId: string,
+    @GetUser() user,
+  ) {
     try {
       const result = await this.courseService.getAssignmentsForCourse(
         courseId,
@@ -126,6 +134,51 @@ export class CourseController {
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException('Error fetching assignments');
+    }
+  }
+
+  @ApiOperation({ summary: 'Submit assignment' })
+  @Post('assignment/:assignmentId/submit')
+  @UseInterceptors(
+    FilesInterceptor('media', 5, {
+      storage: memoryStorage(),
+    }),
+  )
+  async submitAssignment(
+    @Param('assignmentId') assignmentId: string,
+    @Body() submitDto: SubmitAssignmentDto,
+    @GetUser() user,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    try {
+      const result = await this.courseService.submitAssignment(
+        assignmentId,
+        user.userId,
+        submitDto,
+        files,
+      );
+      return result;
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('Error submitting assignment');
+    }
+  }
+
+  @ApiOperation({ summary: 'Get course assets' })
+  @Get('assets/:courseId')
+  async getAllAssetsFromCourse(
+    @Param('courseId') courseId: string,
+    @GetUser() user,
+  ) {
+    try {
+      const result = await this.courseService.getAllAssetsFromCourse(
+        courseId,
+        user.userId,
+      );
+      return result;
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('Error fetching course assets');
     }
   }
 }
