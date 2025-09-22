@@ -14,6 +14,21 @@ const STRIPE_WEBHOOK_SECRET = appConfig().payment.stripe.webhook_secret;
  * Stripe payment method helper
  */
 export class StripePayment {
+  static async createRecurringPrice(params: {
+    amount: number; // in major units
+    currency: string;
+    productName: string;
+    interval?: 'month' | 'year';
+  }) {
+    const { amount, currency, productName, interval = 'month' } = params;
+    const price = await Stripe.prices.create({
+      unit_amount: Math.round(amount * 100),
+      currency,
+      recurring: { interval },
+      product_data: { name: productName },
+    });
+    return price;
+  }
   static async createPaymentMethod({
     card,
     billing_details,
@@ -188,6 +203,13 @@ export class StripePayment {
   static async createCheckoutSessionSubscription(
     customer: string,
     price: string,
+    options?: {
+      success_url?: string;
+      cancel_url?: string;
+      trial_period_days?: number;
+      metadata?: Record<string, string>;
+      subscription_metadata?: Record<string, string>;
+    },
   ) {
     const success_url = `${
       appConfig().app.url
@@ -198,6 +220,7 @@ export class StripePayment {
       mode: 'subscription',
       payment_method_types: ['card'],
       customer: customer,
+      metadata: options?.metadata,
       line_items: [
         {
           price: price,
@@ -205,10 +228,11 @@ export class StripePayment {
         },
       ],
       subscription_data: {
-        trial_period_days: 14,
+        trial_period_days: options?.trial_period_days ?? 0,
+        metadata: options?.subscription_metadata,
       },
-      success_url: success_url,
-      cancel_url: cancel_url,
+      success_url: options?.success_url ?? success_url,
+      cancel_url: options?.cancel_url ?? cancel_url,
       // automatic_tax: { enabled: true },
     });
     return session;
