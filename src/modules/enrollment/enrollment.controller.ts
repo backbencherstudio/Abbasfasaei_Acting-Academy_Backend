@@ -19,7 +19,7 @@ import {
 import { ApiOperation } from '@nestjs/swagger';
 
 @Controller('enrollment')
-@UseGuards(JwtAuthGuard) 
+@UseGuards(JwtAuthGuard)
 export class EnrollmentController {
   constructor(private readonly enrollmentService: EnrollmentService) {}
 
@@ -149,25 +149,6 @@ export class EnrollmentController {
       throw new BadRequestException('Error accepting contract terms');
     }
   }
-
-  // Process payment
-  // @Post('payment')
-  // async processPayment(
-  //   @GetUser() user,
-  //   @Body() dto: { amount: number; paymentMethod: string },
-  // ) {
-  //   try {
-  //     const result = await this.enrollmentService.processPayment(
-  //       user.userId,
-  //       dto.amount,
-  //       dto.paymentMethod,
-  //     );
-  //     return result;
-  //   } catch (error) {
-  //     console.error(error);
-  //     throw new InternalServerErrorException('Error processing payment');
-  //   }
-  // }
 
   @ApiOperation({ summary: 'Get my courses' })
   @Get('my-courses')

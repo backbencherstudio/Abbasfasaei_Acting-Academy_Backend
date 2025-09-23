@@ -138,7 +138,11 @@ export class StripeService {
       price.id,
       {
         metadata: { userId, enrollmentId, flow: 'ENROLLMENT_MONTHLY' },
-        subscription_metadata: { userId, enrollmentId, flow: 'ENROLLMENT_MONTHLY' },
+        subscription_metadata: {
+          userId,
+          enrollmentId,
+          flow: 'ENROLLMENT_MONTHLY',
+        },
       },
     );
 
