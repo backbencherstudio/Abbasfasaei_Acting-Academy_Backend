@@ -245,9 +245,17 @@ model UserPayment {
   payment_status    PaymentStatus    @default(DUE)
   payment_method    String?
   account_holder    String?
-  card_number       String?
-  card_expiry       String?
-  card_cvc          String?
+  card_number       String?         
+  card_expiry       String?          
+  card_cvc          String?          
+  provider          String?          @default("STRIPE")
+  customer_id       String?
+  payment_method_id String?
+  card_brand        String?
+  card_last4        String?
+  card_exp_month    Int?
+  card_exp_year     Int?
+  invoice_url       String?
   invoice_sent      Boolean?         @default(false)
   amount            Decimal?
   currency          String?          @default("USD")

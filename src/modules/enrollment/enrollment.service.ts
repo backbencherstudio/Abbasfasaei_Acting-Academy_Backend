@@ -9,7 +9,9 @@ import { ExperienceLevel } from '@prisma/client';
 
 @Injectable()
 export class EnrollmentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+  ) {}
 
   async getAllCourses() {
     try {
@@ -335,33 +337,7 @@ export class EnrollmentService {
     }
   }
 
-  //   async processPayment(userId: string, amount: number, paymentMethod: string) {
-  //     try {
-  //       const enrollment = await this.prisma.enrollment.findFirst({
-  //         where: { user_id: userId },
-  //       });
-
-  //       if (!enrollment) {
-  //         return { success: false, message: 'Enrollment not found' };
-  //       }
-
-  //       // Process Payment
-  //       await this.prisma.enrollmentPayment.create({
-  //         data: {
-  //           enrollmentId: enrollment.id,
-  //           payment_type: 'MONTHLY', // Adjust as needed
-  //           payment_status: 'COMPLETED', // Adjust as needed
-  //           payment_method: paymentMethod,
-  //         },
-  //       });
-
-  //       return { success: true };
-  //     } catch (error) {
-  //       console.error(error);
-  //       throw new InternalServerErrorException('Error processing payment');
-  //     }
-  //   }
-  // }
+  // Payment processing is centralized under payment module (StripeController/StripeService)
 
   async myCourses(userId: string) {
     try {

@@ -32,14 +32,15 @@ export class StripeController {
       return { success: false, message: 'Invalid enrollment' };
     }
 
-    const session = await this.stripeService.createEnrollmentSubscriptionCheckout({
-      userId,
-      enrollmentId,
-      currency,
-      name,
-      email,
-      customerId,
-    });
+    const session =
+      await this.stripeService.createEnrollmentSubscriptionCheckout({
+        userId,
+        enrollmentId,
+        currency,
+        name,
+        email,
+        customerId,
+      });
 
     return { success: true, data: session };
   }
@@ -59,6 +60,9 @@ export class StripeController {
     },
   ) {
     const { userId, enrollmentId, currency = 'usd', payment_type } = body;
+
+    console.log('body', body);
+
     // Ensure enrollment belongs to user and get course pricing
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { id: enrollmentId },
@@ -91,7 +95,7 @@ export class StripeController {
         enrollmentId,
         payment_type,
         name: body.name,
-        email: body.email,
+        email: enrollment.email,
         customerId: body.customerId,
       });
 
@@ -106,13 +110,19 @@ export class StripeController {
         amount,
         currency: currency.toUpperCase(),
         transaction_id: payment_intent_id,
-      },
+        provider: 'STRIPE',
+        account_holder: body.name,
+        customer_id: customer_id,
+      } as any,
       update: {
         payment_type: payment_type as any,
         amount,
         currency: currency.toUpperCase(),
         transaction_id: payment_intent_id,
-      },
+        provider: 'STRIPE',
+        account_holder: body.name,
+        customer_id: customer_id,
+      } as any,
     });
 
     // Create initial PaymentHistory entry
@@ -152,7 +162,7 @@ export class StripeController {
       const payload = req.rawBody.toString();
       const event = await this.stripeService.handleWebhook(payload, signature);
 
-  // Handle events (payment intents + subscription lifecycle)
+      // Handle events (payment intents + subscription lifecycle)
       switch (event.type) {
         case 'customer.created':
           break;
@@ -164,6 +174,13 @@ export class StripeController {
           const userId = paymentIntent.metadata?.userId;
           const amount = paymentIntent.amount / 100;
           const currency = paymentIntent.currency.toUpperCase();
+          const latestCharge = paymentIntent.charges?.data?.[0];
+          const pm = latestCharge?.payment_method_details;
+          const card = pm?.card || pm?.card_present || undefined;
+          const card_brand = card?.brand || card?.network;
+          const card_last4 = card?.last4;
+          const card_exp_month = card?.exp_month;
+          const card_exp_year = card?.exp_year;
 
           if (enrollmentId && userId) {
             // Update UserPayment and Enrollment
@@ -172,7 +189,14 @@ export class StripeController {
               data: {
                 payment_status: 'PAID',
                 payment_date: new Date(),
-              },
+                provider: 'STRIPE',
+                customer_id: paymentIntent.customer ?? undefined,
+                payment_method_id: paymentIntent.payment_method ?? undefined,
+                card_brand,
+                card_last4,
+                card_exp_month,
+                card_exp_year,
+              } as any,
             });
 
             await this.prisma.enrollment.update({
@@ -208,7 +232,7 @@ export class StripeController {
         }
         case 'payment_intent.payment_failed':
           const failedPaymentIntent = event.data.object;
-          // No legacy transaction table: optionally log or create PaymentHistory with failure status
+        // No legacy transaction table: optionally log or create PaymentHistory with failure status
         case 'payment_intent.canceled':
           const canceledPaymentIntent = event.data.object;
           // No legacy transaction table
@@ -229,11 +253,15 @@ export class StripeController {
           // Subscription recurring charge success; mark UserPayment entry as PAID for that cycle
           const invoice: any = event.data.object;
           const subscriptionId = invoice.subscription;
-          const metadata = invoice.lines?.data?.[0]?.metadata || invoice.metadata || {};
+          const metadata =
+            invoice.lines?.data?.[0]?.metadata || invoice.metadata || {};
           const enrollmentId = metadata.enrollmentId;
           const userId = metadata.userId;
-          const amount = invoice.amount_paid ? invoice.amount_paid / 100 : undefined;
+          const amount = invoice.amount_paid
+            ? invoice.amount_paid / 100
+            : undefined;
           const currency = invoice.currency?.toUpperCase();
+          const payment_intent = invoice.payment_intent; // id only
 
           if (enrollmentId && userId) {
             await this.prisma.userPayment.update({
@@ -242,7 +270,11 @@ export class StripeController {
                 payment_status: 'PAID',
                 payment_date: new Date(),
                 transaction_id: subscriptionId,
-              },
+                provider: 'STRIPE',
+                customer_id: invoice.customer ?? undefined,
+                payment_method_id: invoice.payment_method ?? undefined,
+                invoice_url: invoice.hosted_invoice_url ?? undefined,
+              } as any,
             });
 
             const up = await this.prisma.userPayment.findUnique({
