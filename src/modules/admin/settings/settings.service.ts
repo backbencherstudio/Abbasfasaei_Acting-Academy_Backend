@@ -7,39 +7,65 @@ import { WebsiteSettingsDto } from './dto/websiteUpdate.dto';
 
 @Injectable()
 export class SettingsService {
-  constructor(
-    private prisma: PrismaService,
-    private websiteSettings: WebsiteInfoService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
-  async allSettings() {
-    const settings = await this.websiteSettings.findAll();
-    return settings;
+  async getUserRole(userId: string) {
+    const roleUser = await this.prisma.roleUser.findFirst({
+      where: { user_id: userId },
+      include: { role: true },
+    });
+
+    return roleUser?.role?.name;
   }
 
-  async allProfileSettings(userId: string) {
-    const websiteSettings = await this.prisma.websiteInfo.findMany({
+  async allSettings(userid: string) {
+    const userRole = await this.getUserRole(userid);
+    if (userRole !== 'admin' || 'ADMIN' || 'Admin') {
+      if (userRole == 'Teacher' || 'teacher' || 'TEACHER') {
+        const teacherInfo = await this.prisma.user.findUnique({
+          where: { id: userid },
+          select: {
+            name: true,
+            phone_number: true,
+            email: true,
+            password: true,
+          }
+        });
+
+        return { teacherInfo}
+      }
+    }
+    const settings = await this.prisma.websiteInfo.findMany({
       select: {
         name: true,
         phone_number: true,
         email: true,
         address: true,
       },
-    })
-    return websiteSettings
+    });
+    return { userRole, settings };
   }
 
-   async allSettingsUpdate(websiteSettingsDto: WebsiteSettingsDto) {
+  async allSettingsUpdate(websiteSettingsDto: WebsiteSettingsDto) {
     const websiteSettings = await this.prisma.websiteInfo.updateMany({
-      
       data: {
-        name: websiteSettingsDto.name,
-        phone_number: websiteSettingsDto.phone_number,
-        email: websiteSettingsDto.email,
-        address: websiteSettingsDto.address,
-      }
-    })
+        ...websiteSettingsDto,
+      },
+    });
 
+    return websiteSettings;
+  }
+
+  async allProfileSettings(userId: string) {
+    const websiteSettings = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        name: true,
+        phone_number: true,
+        email: true,
+        password: true,
+      },
+    });
     return websiteSettings;
   }
 
@@ -72,7 +98,6 @@ export class SettingsService {
           throw new BadRequestException('New passwords do not match');
         }
 
-        
         userData = await this.prisma.user.findUnique({
           where: { id: userId },
           select: {
@@ -100,7 +125,6 @@ export class SettingsService {
         updateData.password = hashedNewPassword;
       }
 
-      
       if ((firstName || lastName) && !userData) {
         userData = await this.prisma.user.findUnique({
           where: { id: userId },
@@ -152,17 +176,16 @@ export class SettingsService {
     }
   }
 
+  // async getRolesAndPermission(userId: string) {
+  //   // Return users who have ADMIN role attached via role_users
+  //   const users = await this.prisma.user.findMany({
+  //     where: {
+  //       role_users: {
+  //         some: { role: { name: { equals: 'ADMIN', mode: 'insensitive' } } },
+  //       },
+  //     },
+  //   });
 
-  async getRolesAndPermission(userId: string) {
-    // Return users who have ADMIN role attached via role_users
-    const users = await this.prisma.user.findMany({
-      where: {
-        role_users: {
-          some: { role: { name: { equals: 'ADMIN', mode: 'insensitive' } } },
-        },
-      },
-    });
-
-    return users;
-  }
+  //   return users;
+  // }
 }

@@ -15,14 +15,17 @@ import { WebsiteSettingsDto } from './dto/websiteUpdate.dto';
 @ApiBearerAuth()
 @ApiTags('User')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@Roles(Role.ADMIN, Role.TEACHER)
 @Controller('settings')
 export class SettingsController {
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(private settingsService: SettingsService) {}
 
   @Get('general-settings')
-  async getGeneralSettings() {
-    return this.settingsService.allSettings()
+  async getGeneralSettings(
+    @GetUser() user: any,
+  ) {
+    console.log(user);
+    return this.settingsService.allSettings(user.userId)
   }
 
   @Post('general-settings')
@@ -47,10 +50,10 @@ export class SettingsController {
     return this.settingsService.profileUpdate(user.userId, updateUserDto)
   }
 
-  @Get('rolesandpermissions')
-  async getRolesAndPermission(
-    @GetUser() user: any
-  ) {
-    return this.settingsService.getRolesAndPermission(user.userId)
-  }
+  // @Get('rolesandpermissions')
+  // async getRolesAndPermission(
+  //   @GetUser() user: any
+  // ) {
+  //   return this.settingsService.getRolesAndPermission(user.userId)
+  // }
 }

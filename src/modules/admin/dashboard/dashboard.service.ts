@@ -1,32 +1,37 @@
-// src/dashboard/dashboard.service.ts
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-
+import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  private getPreviousMonthDateRange(): { start: Date; end: Date } {
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const previousMonthEnd = new Date(currentMonthStart.getTime() - 1);
-    const previousMonthStart = new Date(
-      previousMonthEnd.getFullYear(),
-      previousMonthEnd.getMonth(),
-      1,
-    );
+  async getDashboardData(userId: string) {
+    const userRole = await this.getUserRole(userId);
 
-    return {
-      start: previousMonthStart,
-      end: previousMonthEnd,
-    };
+    if (userRole === 'admin' || userRole === 'Admin' || userRole === 'ADMIN') {
+      return this.getAdminDashboard();
+    } else if (userRole === 'teacher' || userRole === 'Teacher' || userRole === 'TEACHER') {
+      return this.getTeacherDashboard(userId);
+    } else {
+      return { message: 'Student dashboard data', role: userRole };
+    }
   }
 
-  private getCurrentMonthDateRange(): { start: Date; end: Date } {
+  // Role detection
+  async getUserRole(userId: string) {
+    const roleUser = await this.prisma.roleUser.findFirst({
+      where: { user_id: userId },
+      include: { role: true },
+    });
+
+    return roleUser?.role?.name;
+  }
+
+  // Date range helpers
+  private getCurrentMonthDateRange() {
     const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const currentMonthEnd = new Date(
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(
       now.getFullYear(),
       now.getMonth() + 1,
       0,
@@ -35,11 +40,19 @@ export class DashboardService {
       59,
       999,
     );
+    return { start, end };
+  }
 
-    return {
-      start: currentMonthStart,
-      end: currentMonthEnd,
-    };
+  private getPreviousMonthDateRange() {
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const previousMonthEnd = new Date(currentMonthStart.getTime() - 1);
+    const previousMonthStart = new Date(
+      previousMonthEnd.getFullYear(),
+      previousMonthEnd.getMonth(),
+      1,
+    );
+    return { start: previousMonthStart, end: previousMonthEnd };
   }
 
   private calculatePercentageChange(current: number, previous: number): number {
@@ -47,116 +60,218 @@ export class DashboardService {
     return ((current - previous) / previous) * 100;
   }
 
-  async getAdminDashboard() {
+  // ADMIN DASHBOARD FUNCTIONS
+  private async getAdminDashboard() {
+    const [
+      totalStudents,
+      totalOngoingCourses,
+      monthlyRevenue,
+      totalTeachers,
+      recentEnrollments,
+      upcomingClasses,
+      attendanceTracking,
+    ] = await Promise.all([
+      this.getTotalStudents(),
+      this.getTotalOngoingCourses(),
+      this.getMonthlyRevenue(),
+      this.getTotalTeachers(),
+      this.getRecentEnrollments(4),
+      this.getUpcomingClasses(4),
+      this.getAttendanceTracking(),
+    ]);
+
+    return {
+      role: 'admin',
+      totalStudents,
+      totalOngoingCourses,
+      monthlyRevenue,
+      totalTeachers,
+      recentEnrollments,
+      upcomingClasses,
+      attendanceTracking,
+    };
+  }
+
+  // TEACHER DASHBOARD FUNCTIONS
+  private async getTeacherDashboard(teacherId: string) {
+    const [
+      totalStudents,
+      activeCourses,
+      totalAssignments,
+      upcomingClasses,
+      attendanceTracking,
+    ] = await Promise.all([
+      this.getTeacherTotalStudents(teacherId),
+      this.getTeacherActiveCourses(teacherId),
+      this.getTeacherTotalAssignments(teacherId),
+      this.getTeacherUpcomingClasses(teacherId, 4),
+      this.getTeacherAttendanceTracking(teacherId),
+    ]);
+
+    return {
+      role: 'teacher',
+      totalStudents,
+      activeCourses,
+      totalAssignments,
+      upcomingClasses,
+      attendanceTracking,
+    };
+  }
+
+  // INDEPENDENT FUNCTIONS FOR ADMIN
+  private async getTotalStudents() {
     const currentMonth = this.getCurrentMonthDateRange();
     const previousMonth = this.getPreviousMonthDateRange();
 
-    // Total Students (users with type 'student')
-    const currentStudents = await this.prisma.user.count({
-      where: {
-        type: 'student',
-        created_at: { lte: currentMonth.end },
-      },
-    });
-
-    const previousStudents = await this.prisma.user.count({
-      where: {
-        type: 'student',
-        created_at: { lte: previousMonth.end },
-      },
-    });
-
-    // Total Ongoing Courses (active courses with upcoming classes)
-    const currentOngoingCourses = await this.prisma.course.count({
-      where: {
-        status: 'ACTIVE',
-        start_date: { lte: currentMonth.end },
-        modules: {
-          some: {
-            classes: {
-              some: {
-                start_date: { gte: currentMonth.start }
-              }
-            }
-          }
-        }
-      },
-    });
-
-    const previousOngoingCourses = await this.prisma.course.count({
-      where: {
-        status: 'ACTIVE',
-        start_date: { lte: previousMonth.end },
-        modules: {
-          some: {
-            classes: {
-              some: {
-                start_date: { gte: previousMonth.start }
-              }
-            }
-          }
-        }
-      },
-    });
-
-    // Monthly Revenue
-    const currentRevenue = await this.prisma.userPayment.aggregate({
-      _sum: { amount: true },
-      where: {
-        payment_status: 'PAID',
-        payment_date: {
-          gte: currentMonth.start,
-          lte: currentMonth.end,
+    const [current, previous] = await Promise.all([
+      this.prisma.user.count({
+        where: {
+          type: 'student',
+          created_at: { lte: currentMonth.end },
         },
-      },
-    });
-
-    const previousRevenue = await this.prisma.userPayment.aggregate({
-      _sum: { amount: true },
-      where: {
-        payment_status: 'PAID',
-        payment_date: {
-          gte: previousMonth.start,
-          lte: previousMonth.end,
+      }),
+      this.prisma.user.count({
+        where: {
+          type: 'student',
+          created_at: { lte: previousMonth.end },
         },
-      },
-    });
+      }),
+    ]);
 
-    // Total Teachers
-    const currentTeachers = await this.prisma.user.count({
-      where: {
-        type: 'teacher',
-        created_at: { lte: currentMonth.end },
-      },
-    });
+    return {
+      current,
+      previous,
+      percentageChange: this.calculatePercentageChange(current, previous),
+    };
+  }
 
-    const previousTeachers = await this.prisma.user.count({
-      where: {
-        type: 'teacher',
-        created_at: { lte: previousMonth.end },
-      },
-    });
+  private async getTotalOngoingCourses() {
+    const currentMonth = this.getCurrentMonthDateRange();
+    const previousMonth = this.getPreviousMonthDateRange();
 
-    // Recent Enrollments (last 10)
-    const recentEnrollments = await this.prisma.enrollment.findMany({
+    const [current, previous] = await Promise.all([
+      this.prisma.course.count({
+        where: {
+          status: 'ACTIVE',
+          modules: {
+            some: {
+              classes: {
+                some: {
+                  start_date: {
+                    lte: currentMonth.end,
+                    gte: currentMonth.start,
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.course.count({
+        where: {
+          status: 'ACTIVE',
+          modules: {
+            some: {
+              classes: {
+                some: {
+                  start_date: {
+                    lte: previousMonth.end,
+                    gte: previousMonth.start,
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      current,
+      previous,
+      percentageChange: this.calculatePercentageChange(current, previous),
+    };
+  }
+
+  private async getMonthlyRevenue() {
+    const currentMonth = this.getCurrentMonthDateRange();
+    const previousMonth = this.getPreviousMonthDateRange();
+
+    const [currentRevenue, previousRevenue] = await Promise.all([
+      this.prisma.paymentHistory.aggregate({
+        _sum: { amount: true },
+        where: {
+          payment_status: 'PAID',
+          payment_date: {
+            gte: currentMonth.start,
+            lte: currentMonth.end,
+          },
+        },
+      }),
+      this.prisma.paymentHistory.aggregate({
+        _sum: { amount: true },
+        where: {
+          payment_status: 'PAID',
+          payment_date: {
+            gte: previousMonth.start,
+            lte: previousMonth.end,
+          },
+        },
+      }),
+    ]);
+
+    const current = Number(currentRevenue._sum.amount) || 0;
+    const previous = Number(previousRevenue._sum.amount) || 0;
+
+    return {
+      current,
+      previous,
+      percentageChange: this.calculatePercentageChange(current, previous),
+    };
+  }
+
+  private async getTotalTeachers() {
+    const currentMonth = this.getCurrentMonthDateRange();
+    const previousMonth = this.getPreviousMonthDateRange();
+
+    const [current, previous] = await Promise.all([
+      this.prisma.user.count({
+        where: {
+          type: 'teacher',
+          created_at: { lte: currentMonth.end },
+        },
+      }),
+      this.prisma.user.count({
+        where: {
+          type: 'teacher',
+          created_at: { lte: previousMonth.end },
+        },
+      }),
+    ]);
+
+    return {
+      current,
+      previous,
+      percentageChange: this.calculatePercentageChange(current, previous),
+    };
+  }
+
+  private async getRecentEnrollments(limit: number = 4) {
+    return this.prisma.enrollment.findMany({
       where: {
         status: { not: 'PENDING' },
       },
       include: {
-        course: true,
-        user: {
-          select: {
-            name: true,
-            email: true,
-          },
-        },
+        course: { select: { title: true } },
+        user: { select: { name: true, email: true } },
       },
       orderBy: { created_at: 'desc' },
-      take: 10,
+      take: limit,
     });
+  }
 
-    // Upcoming Classes (next 7 days)
-    const upcomingClasses = await this.prisma.moduleClass.findMany({
+  private async getUpcomingClasses(limit: number = 4) {
+    return this.prisma.moduleClass.findMany({
       where: {
         start_date: {
           gte: new Date(),
@@ -168,189 +283,80 @@ export class DashboardService {
           include: {
             course: {
               include: {
-                instructor: {
-                  select: {
-                    name: true,
-                  },
-                },
+                instructor: { select: { name: true } },
               },
             },
           },
         },
       },
       orderBy: { start_date: 'asc' },
-      take: 10,
+      take: limit,
     });
-
-    // Attendance Tracking
-    const totalClasses = await this.prisma.moduleClass.count({
-      where: {
-        start_date: { lte: new Date() },
-      },
-    });
-
-    const completedClasses = await this.prisma.moduleClass.count({
-      where: {
-        start_date: { lte: new Date() },
-        attendances: {
-          some: {},
-        },
-      },
-    });
-
-    const totalStudents = currentStudents;
-
-    // Calculate average attendance manually since Prisma doesn't support _avg on enum fields
-    const attendanceRecords = await this.prisma.attendance.findMany({
-      where: {
-        class: {
-          start_date: { lte: new Date() },
-        },
-      },
-      select: {
-        status: true,
-      },
-    });
-
-    const presentCount = attendanceRecords.filter(
-      (record) => record.status === 'PRESENT',
-    ).length;
-    const averageAttendance =
-      attendanceRecords.length > 0
-        ? (presentCount / attendanceRecords.length) * 100
-        : 0;
-
-    return {
-      totalStudents: {
-        current: currentStudents,
-        previous: previousStudents,
-        percentageChange: this.calculatePercentageChange(
-          currentStudents,
-          previousStudents,
-        ),
-      },
-      totalOngoingCourses: {
-        current: currentOngoingCourses,
-        previous: previousOngoingCourses,
-        percentageChange: this.calculatePercentageChange(
-          currentOngoingCourses,
-          previousOngoingCourses,
-        ),
-      },
-      monthlyRevenue: {
-        current: Number(currentRevenue._sum.amount) || 0,
-        previous: Number(previousRevenue._sum.amount) || 0,
-        percentageChange: this.calculatePercentageChange(
-          Number(currentRevenue._sum.amount) || 0,
-          Number(previousRevenue._sum.amount) || 0,
-        ),
-      },
-      totalTeachers: {
-        current: currentTeachers,
-        previous: previousTeachers,
-        percentageChange: this.calculatePercentageChange(
-          currentTeachers,
-          previousTeachers,
-        ),
-      },
-      recentEnrollments,
-      upcomingClasses,
-      attendanceTracking: {
-        totalClasses,
-        completedClasses,
-        totalStudents,
-        averageAttendance,
-      },
-    };
   }
 
-  async getTeacherDashboard(teacherId: string) {
-    // Total Students for this teacher
-    const totalStudents = await this.prisma.enrollment.count({
+  private async getAttendanceTracking() {
+    const recentClasses = await this.prisma.moduleClass.findMany({
       where: {
-        course: {
-          instructorId: teacherId,
+        start_date: { lte: new Date() },
+      },
+      include: {
+        attendances: {
+          where: { status: 'PRESENT' },
         },
+        module: {
+          include: {
+            course: { select: { title: true } },
+          },
+        },
+      },
+      orderBy: { start_date: 'desc' },
+      take: 5,
+    });
+
+    return recentClasses.map((cls) => ({
+      classTitle: cls.class_title,
+      course: cls.module.course.title,
+      totalStudents: cls.attendances.length,
+      date: cls.start_date,
+    }));
+  }
+
+  // INDEPENDENT FUNCTIONS FOR TEACHER
+  private async getTeacherTotalStudents(teacherId: string) {
+    return this.prisma.enrollment.count({
+      where: {
+        course: { instructorId: teacherId },
         status: 'ACTIVE',
       },
     });
+  }
 
-    // Active Courses
-    const activeCourses = await this.prisma.course.findMany({
+  private async getTeacherActiveCourses(teacherId: string) {
+    return this.prisma.course.count({
       where: {
         instructorId: teacherId,
         status: 'ACTIVE',
       },
-      include: {
-        enrollments: {
-          where: {
-            status: 'ACTIVE',
-          },
-          select: {
-            id: true,
-          },
-        },
-        modules: {
-          include: {
-            classes: {
-              select: {
-                id: true,
-              },
-            },
-          },
-        },
-      },
     });
+  }
 
-    // Active Assignments
-    const activeAssignments = await this.prisma.assignment.findMany({
+  private async getTeacherTotalAssignments(teacherId: string) {
+    return this.prisma.assignment.count({
       where: {
         teacherId: teacherId,
         due_date: { gte: new Date() },
       },
-      include: {
-        moduleClass: {
-          include: {
-            module: {
-              include: {
-                course: {
-                  select: {
-                    title: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      orderBy: { due_date: 'asc' },
     });
+  }
 
-    // Completion Rate (based on assignments)
-    const totalAssignments = await this.prisma.assignment.count({
-      where: {
-        teacherId: teacherId,
-      },
-    });
-
-    const completedAssignments = await this.prisma.assignmentSubmission.count({
-      where: {
-        assignment: {
-          teacherId: teacherId,
-        },
-      },
-    });
-
-    const completionRate =
-      totalAssignments > 0 ? (completedAssignments / totalAssignments) * 100 : 0;
-
-    // Upcoming Classes for this teacher (next 7 days)
-    const upcomingClasses = await this.prisma.moduleClass.findMany({
+  private async getTeacherUpcomingClasses(
+    teacherId: string,
+    limit: number = 4,
+  ) {
+    return this.prisma.moduleClass.findMany({
       where: {
         module: {
-          course: {
-            instructorId: teacherId,
-          },
+          course: { instructorId: teacherId },
         },
         start_date: {
           gte: new Date(),
@@ -360,84 +366,42 @@ export class DashboardService {
       include: {
         module: {
           include: {
-            course: {
-              select: {
-                title: true,
-              },
-            },
+            course: { select: { title: true } },
           },
         },
       },
       orderBy: { start_date: 'asc' },
-      take: 10,
+      take: limit,
     });
+  }
 
-    // Attendance Tracking for teacher's courses
-    const teacherClasses = await this.prisma.moduleClass.findMany({
+  private async getTeacherAttendanceTracking(teacherId: string) {
+    const recentClasses = await this.prisma.moduleClass.findMany({
       where: {
         module: {
-          course: {
-            instructorId: teacherId,
+          course: { instructorId: teacherId },
+        },
+        start_date: { lte: new Date() },
+      },
+      include: {
+        attendances: {
+          where: { status: 'PRESENT' },
+        },
+        module: {
+          include: {
+            course: { select: { title: true } },
           },
         },
       },
-      select: {
-        id: true,
-      },
+      orderBy: { start_date: 'desc' },
+      take: 5,
     });
 
-    const classIds = teacherClasses.map((cls) => cls.id);
-
-    const totalClasses = await this.prisma.moduleClass.count({
-      where: {
-        id: { in: classIds },
-        start_date: { lte: new Date() },
-      },
-    });
-
-    const completedClasses = await this.prisma.moduleClass.count({
-      where: {
-        id: { in: classIds },
-        start_date: { lte: new Date() },
-        attendances: {
-          some: {},
-        },
-      },
-    });
-
-    // Calculate average attendance manually
-    const attendanceRecords = await this.prisma.attendance.findMany({
-      where: {
-        class_id: { in: classIds },
-        class: {
-          start_date: { lte: new Date() },
-        },
-      },
-      select: {
-        status: true,
-      },
-    });
-
-    const presentCount = attendanceRecords.filter(
-      (record) => record.status === 'PRESENT',
-    ).length;
-    const averageAttendance =
-      attendanceRecords.length > 0
-        ? (presentCount / attendanceRecords.length) * 100
-        : 0;
-
-    return {
-      totalStudents,
-      activeCourses,
-      activeAssignments,
-      completionRate,
-      upcomingClasses,
-      attendanceTracking: {
-        totalClasses,
-        completedClasses,
-        totalStudents,
-        averageAttendance,
-      },
-    };
+    return recentClasses.map((cls) => ({
+      classTitle: cls.class_title,
+      course: cls.module.course.title,
+      totalStudents: cls.attendances.length,
+      date: cls.start_date,
+    }));
   }
 }

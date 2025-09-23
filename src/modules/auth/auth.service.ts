@@ -865,4 +865,45 @@ export class AuthService {
     }
   }
   // --------- end 2FA ---------
+
+  // --------- facebook --------- \\
+
+  async findOrCreateUserFromFacebook(facebookData: {
+    email: string;
+    facebookId: string;
+    firstName: string;
+    lastName: string;
+    name: string;
+  }) {
+    // First, try to find user by facebookId
+    let user = await this.prisma.user.findFirst({
+      where: { email: facebookData.email },
+    });
+
+    if (!user) {
+      // Create new user with Facebook data
+      user = await this.prisma.user.create({
+        data: {
+          email: facebookData.email,
+          name: facebookData.name,
+          first_name: facebookData.firstName,
+          last_name: facebookData.lastName,
+          email_verified_at: new Date(), // Mark email as verified since it's from Facebook
+          type: 'user', // Default type
+        },
+      });
+    }
+    
+    return user;
+  }
+
+  async generateJWTForUser(user: any) {
+    const payload = {
+      email: user.email,
+      sub: user.id,
+    };
+
+    return this.jwtService.sign(payload, { expiresIn: '1h' });
+  }
+  // --------- end facebook --------- \\
 }
