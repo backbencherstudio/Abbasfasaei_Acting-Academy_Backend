@@ -25,6 +25,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import appConfig from '../../config/app.config';
 import { AuthGuard } from '@nestjs/passport';
 import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import { GetUser } from './decorators/get-user.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -176,6 +177,41 @@ export class AuthController {
       statusCode: HttpStatus.OK,
       data: req.user,
     };
+  }
+
+  //facebook login
+
+  @Get('/facebook')
+  @UseGuards(AuthGuard('facebook'))
+  async facebookLogin(): Promise<any> {
+    return HttpStatus.OK;
+  }
+
+  @Get('/facebook/redirect')
+  @UseGuards(AuthGuard('facebook'))
+  async facebookLoginRedirect(
+    @GetUser() user: any,
+  ) {
+    try {
+      // Option 1: Return JSON response
+      return {
+        statusCode: HttpStatus.OK,
+        message: 'Facebook login successful',
+        data: {
+          user: user,
+          accessToken: user.accessToken,
+        },
+      };
+
+      // Option 2: Redirect to frontend with token (common practice)
+      // const token = req.user.accessToken;
+      // return res.redirect(`http://localhost:3000/auth/success?token=${token}`);
+    } catch (error) {
+      return {
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Facebook login failed',
+      };
+    }
   }
 
   // update user
