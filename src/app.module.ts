@@ -32,6 +32,10 @@ import { StudentManagementModule } from './modules/admin/student-management/stud
 import { InstructorsModule } from './modules/admin/instructors/instructors.module';
 import { CourseModule } from './modules/course/course.module';
 import { HomeModule } from './modules/home/home.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { FinanceModule } from './modules/finance/finance.module';
+import { FinanceandpaymentsModule } from './modules/financeandpayments/financeandpayments.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -96,6 +100,10 @@ import { HomeModule } from './modules/home/home.module';
     StudentManagementModule,
     InstructorsModule,
     HomeModule,
+    AttendanceModule,
+    DashboardModule,
+    FinanceModule,
+    FinanceandpaymentsModule,
   ],
   controllers: [AppController],
   providers: [
