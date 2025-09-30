@@ -1,10 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
-export class DashboardService {
-  private readonly logger = new Logger(DashboardService.name);
-
+export class FinanceService {
+  private logger = new Logger(FinanceService.name);
   constructor(private prisma: PrismaService) {}
 
   async getDashboardData(userId: string) {
@@ -12,20 +11,13 @@ export class DashboardService {
       const userRole = await this.getUserRole(userId);
 
       if (
-        userRole === 'admin' ||
-        userRole === 'Admin' ||
-        userRole === 'ADMIN' ||
-        userRole === 'su_admin'
+        userRole === 'finance' ||
+        userRole === 'Finance' ||
+        userRole === 'FINANCE'
       ) {
-        return this.getAdminDashboard();
-      } else if (
-        userRole === 'teacher' ||
-        userRole === 'Teacher' ||
-        userRole === 'TEACHER'
-      ) {
-        return this.getTeacherDashboard(userId);
+        return this.getFinanceDashboard();
       } else {
-        return { message: 'Student dashboard data', role: userRole };
+        return { message: 'Restricted', role: userRole };
       }
     } catch (error) {
       this.logger.error(
@@ -106,8 +98,8 @@ export class DashboardService {
     }
   }
 
-  // ADMIN DASHBOARD FUNCTIONS
-  private async getAdminDashboard() {
+  // Finacne DASHBOARD FUNCTIONS
+  private async getFinanceDashboard() {
     try {
       const [
         totalStudents,
@@ -115,7 +107,7 @@ export class DashboardService {
         monthlyRevenue,
         totalTeachers,
         recentEnrollments,
-        upcomingClasses,
+        getRecentTransactions,
         attendanceTracking,
       ] = await Promise.all([
         this.getTotalStudents(),
@@ -123,7 +115,7 @@ export class DashboardService {
         this.getMonthlyRevenue(),
         this.getTotalTeachers(),
         this.getRecentEnrollments(4),
-        this.getUpcomingClasses(4),
+        this.getRecentTransactions(),
         this.getAttendanceTracking(),
       ]);
 
@@ -134,44 +126,11 @@ export class DashboardService {
         monthlyRevenue,
         totalTeachers,
         recentEnrollments,
-        upcomingClasses,
+        getRecentTransactions,
         attendanceTracking,
       };
     } catch (error) {
       this.logger.error(`Error getting admin dashboard: ${error.message}`);
-      throw error;
-    }
-  }
-
-  // TEACHER DASHBOARD FUNCTIONS
-  private async getTeacherDashboard(teacherId: string) {
-    try {
-      const [
-        totalStudents,
-        activeCourses,
-        totalAssignments,
-        upcomingClasses,
-        attendanceTracking,
-      ] = await Promise.all([
-        this.getTeacherTotalStudents(teacherId),
-        this.getTeacherActiveCourses(teacherId),
-        this.getTeacherTotalAssignments(teacherId),
-        this.getTeacherUpcomingClasses(teacherId, 4),
-        this.getTeacherAttendanceTracking(teacherId),
-      ]);
-
-      return {
-        role: 'teacher',
-        totalStudents,
-        activeCourses,
-        totalAssignments,
-        upcomingClasses,
-        attendanceTracking,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error getting teacher dashboard for ${teacherId}: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -355,35 +314,6 @@ export class DashboardService {
     }
   }
 
-  private async getUpcomingClasses(limit: number = 4) {
-    try {
-      return await this.prisma.moduleClass.findMany({
-        where: {
-          start_date: {
-            gte: new Date(),
-            lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          },
-        },
-        include: {
-          module: {
-            include: {
-              course: {
-                include: {
-                  instructor: { select: { name: true } },
-                },
-              },
-            },
-          },
-        },
-        orderBy: { start_date: 'asc' },
-        take: limit,
-      });
-    } catch (error) {
-      this.logger.error(`Error getting upcoming classes: ${error.message}`);
-      return [];
-    }
-  }
-
   private async getAttendanceTracking() {
     try {
       const recentClasses = await this.prisma.moduleClass.findMany({
@@ -413,125 +343,18 @@ export class DashboardService {
     } catch (error) {
       this.logger.error(`Error getting attendance tracking: ${error.message}`);
       return [];
-    }
+    }    
   }
 
-  // INDEPENDENT FUNCTIONS FOR TEACHER
-  private async getTeacherTotalStudents(teacherId: string) {
+  private async getRecentTransactions(limit: number = 6) {
     try {
-      return await this.prisma.enrollment.count({
-        where: {
-          course: { instructorId: teacherId },
-          status: 'ACTIVE',
-        },
-      });
+        const recentTransactions = await this.prisma.paymentHistory.findMany({
+            take: limit,
+        });
+        return recentTransactions;
     } catch (error) {
-      this.logger.error(
-        `Error getting teacher total students for ${teacherId}: ${error.message}`,
-      );
-      return 0;
-    }
-  }
-
-  private async getTeacherActiveCourses(teacherId: string) {
-    try {
-      return await this.prisma.course.count({
-        where: {
-          instructorId: teacherId,
-          status: 'ACTIVE',
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `Error getting teacher active courses for ${teacherId}: ${error.message}`,
-      );
-      return 0;
-    }
-  }
-
-  private async getTeacherTotalAssignments(teacherId: string) {
-    try {
-      return await this.prisma.assignment.count({
-        where: {
-          teacherId: teacherId,
-          due_date: { gte: new Date() },
-        },
-      });
-    } catch (error) {
-      this.logger.error(
-        `Error getting teacher total assignments for ${teacherId}: ${error.message}`,
-      );
-      return 0;
-    }
-  }
-
-  private async getTeacherUpcomingClasses(
-    teacherId: string,
-    limit: number = 4,
-  ) {
-    try {
-      return await this.prisma.moduleClass.findMany({
-        where: {
-          module: {
-            course: { instructorId: teacherId },
-          },
-          start_date: {
-            gte: new Date(),
-            lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          },
-        },
-        include: {
-          module: {
-            include: {
-              course: { select: { title: true } },
-            },
-          },
-        },
-        orderBy: { start_date: 'asc' },
-        take: limit,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Error getting teacher upcoming classes for ${teacherId}: ${error.message}`,
-      );
-      return [];
-    }
-  }
-
-  private async getTeacherAttendanceTracking(teacherId: string) {
-    try {
-      const recentClasses = await this.prisma.moduleClass.findMany({
-        where: {
-          module: {
-            course: { instructorId: teacherId },
-          },
-          start_date: { lte: new Date() },
-        },
-        include: {
-          attendances: {
-            where: { status: 'PRESENT' },
-          },
-          module: {
-            include: {
-              course: { select: { title: true } },
-            },
-          },
-        },
-        orderBy: { start_date: 'desc' },
-        take: 5,
-      });
-
-      return recentClasses.map((cls) => ({
-        classTitle: cls.class_title,
-        course: cls.module.course.title,
-        totalStudents: cls.attendances.length,
-        date: cls.start_date,
-      }));
-    } catch (error) {
-      this.logger.error(
-        `Error getting teacher attendance tracking for ${teacherId}: ${error.message}`,
-      );
-      return [];
+        this.logger.error(`Error getting recent transactions: ${error.message}`);
+        return [];
     }
   }
 }

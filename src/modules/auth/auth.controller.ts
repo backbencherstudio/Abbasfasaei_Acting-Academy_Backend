@@ -193,7 +193,6 @@ export class AuthController {
     @GetUser() user: any,
   ) {
     try {
-      // Option 1: Return JSON response
       return {
         statusCode: HttpStatus.OK,
         message: 'Facebook login successful',
@@ -202,10 +201,6 @@ export class AuthController {
           accessToken: user.accessToken,
         },
       };
-
-      // Option 2: Redirect to frontend with token (common practice)
-      // const token = req.user.accessToken;
-      // return res.redirect(`http://localhost:3000/auth/success?token=${token}`);
     } catch (error) {
       return {
         statusCode: HttpStatus.INTERNAL_SERVER_ERROR,

@@ -73,7 +73,6 @@ export class InstructorsService {
             type: createTeacherDto.teacherType,
             status: 1,
             experience_level: createTeacherDto.experienceLevel,
-            email_verified_at: new Date(),
           },
         });
         // Attach TEACHER role to the newly created user
@@ -233,9 +232,3 @@ export class InstructorsService {
     return { teacherDetails, classes, students, modules };
   }
 }
-
-/*
-
-
-
-*/

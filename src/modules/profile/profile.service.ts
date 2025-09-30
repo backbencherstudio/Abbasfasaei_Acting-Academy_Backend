@@ -6,10 +6,14 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class ProfileService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly authService: AuthService,
+  ) {}
 
   async getCompleteProfile(userId: string) {
   // Step 1: Check if user exists
@@ -197,7 +201,9 @@ export class ProfileService {
       },
     });
 
-    return { message: 'Account disabled successfully' };
+    const response = await this.authService.revokeRefreshToken(userId);
+
+    return { message: 'Account disabled successfully', response };
   }
 
   async deleteAccount(userId: string) {
@@ -226,7 +232,11 @@ export class ProfileService {
       },
     });
 
-    return { message: 'Account deleted successfully' };
+    const response = await this.authService.revokeRefreshToken(userId);
+
+
+
+    return { message: 'Account deleted successfully', response };
   }
 
   // async getNotificationSettings(userId: string) {
@@ -326,7 +336,9 @@ export class ProfileService {
       data: { lastSeenAt: new Date() },
     });
 
-    return { message: 'Logged out successfully' };
+    const response = await this.authService.revokeRefreshToken(userId);
+
+    return { message: 'Logged out successfully', response  };
   }
 
   // Active User Only Methods
