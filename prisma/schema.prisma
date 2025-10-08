@@ -803,6 +803,8 @@ model CallParticipant {
   userId   String
   joinedAt DateTime    @default(now())
   leftAt   DateTime?
+  camera   String       @default("on")
+  microphone String     @default("on")
   call     CallSession @relation(fields: [callId], references: [id], onDelete: Cascade)
   user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 

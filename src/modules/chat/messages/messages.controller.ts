@@ -9,6 +9,8 @@ import {
   Post,
   Query,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { UseInterceptors, UploadedFile } from '@nestjs/common';
@@ -18,6 +20,9 @@ import { extname } from 'path';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { SendMessageDto } from '../conversations/dto/send-message.dto';
+import { SearchMessagesDto } from './dto/search-messages.dto';
+import { ReportMessageDto } from './dto/report-message.dto';
+import { CursorPaginationDto } from './dto/pagination.dto';
 import { text } from 'stream/consumers';
 
 const MAX_SIZE = 10 * 1024 * 1024;
@@ -32,13 +37,18 @@ export class MessagesController {
   constructor(private readonly service: MessagesService) {}
 
   @Get('conversations/:id/messages')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   list(
     @Param('id') conversationId: string,
     @GetUser() user: any,
-    @Query('cursor') cursor?: string,
-    @Query('take') take = '500',
+    @Query() query: CursorPaginationDto,
   ) {
-    return this.service.list(conversationId, user.userId, cursor, Number(take));
+    return this.service.list(
+      conversationId,
+      user.userId,
+      query.cursor,
+      query.take,
+    );
   }
 
   // @Post('conversations/:id/messages')
@@ -57,19 +67,17 @@ export class MessagesController {
 
   // /messages/search?q=hello&conversationId=...&take=20&skip=0
   @Get('messages/search')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   search(
     @GetUser() user: any,
-    @Query('q') q: string,
-    @Query('conversationId') conversationId?: string,
-    @Query('take') take = '20',
-    @Query('skip') skip = '0',
+    @Query() dto: SearchMessagesDto,
   ) {
     return this.service.search(
       user.userId,
-      q || '',
-      conversationId,
-      Number(take),
-      Number(skip),
+      dto.q,
+      dto.conversationId,
+      dto.take,
+      dto.skip,
     );
   }
 
@@ -79,6 +87,7 @@ export class MessagesController {
       storage: memoryStorage(),
     }),
   )
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   async uploadAndSend(
     @Param('id') conversationId: string,
     @GetUser() user: any,
@@ -113,46 +122,47 @@ export class MessagesController {
   }
 
   @Post('messages/:messageId/report')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   report(
     @Param('messageId') messageId: string,
     @GetUser() user: any,
-    @Body() body: { reason: string },
+    @Body() body: ReportMessageDto,
   ) {
     return this.service.reportMessage(
       messageId,
       user?.userId,
-      body?.reason || 'No reason provided',
+      body?.reason || 'Reported by user',
     );
   }
 
   // --- media & files ---
   @Get('conversations/:id/media')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   listMedia(
     @Param('id') conversationId: string,
     @GetUser() user: any,
-    @Query('cursor') cursor?: string,
-    @Query('take') take = '20',
+    @Query() query: CursorPaginationDto,
   ) {
     return this.service.listMedia(
       conversationId,
       user.userId,
-      cursor,
-      Number(take),
+      query.cursor,
+      query.take,
     );
   }
 
   @Get('conversations/:id/files')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   listFiles(
     @Param('id') conversationId: string,
     @GetUser() user: any,
-    @Query('cursor') cursor?: string,
-    @Query('take') take = '20',
+    @Query() query: CursorPaginationDto,
   ) {
     return this.service.listFiles(
       conversationId,
       user.userId,
-      cursor,
-      Number(take),
+      query.cursor,
+      query.take,
     );
   }
 }

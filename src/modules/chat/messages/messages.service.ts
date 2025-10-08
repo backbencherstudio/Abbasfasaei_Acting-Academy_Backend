@@ -248,34 +248,58 @@ export class MessagesService {
     take = 20,
     skip = 0,
   ) {
-    const whereConv = conversationId
-      ? Prisma.sql`AND "conversationId" = ${conversationId}`
-      : Prisma.sql``;
+    const safeTake = Math.min(take, 100);
 
-    // Ensure access if conversationId provided
-    if (conversationId) await this.conv.ensureMember(conversationId, userId);
+    // If a single conversation search, verify membership & floor
+    if (conversationId) {
+      // Single-conversation search: membership + per-user floor (clearedAt)
+      await this.conv.ensureMember(conversationId, userId);
+      const cleared = await this.prisma.membership.findFirst({
+        where: { conversationId, userId },
+        select: { clearedAt: true },
+      });
+      const floor = cleared?.clearedAt ?? new Date(0);
+      // IMPORTANT: Prisma model Message is mapped to physical table "messages" (see @@map in schema)
+      return this.prisma.$queryRaw<any[]>`
+        SELECT id, kind, content, "createdAt", "senderId", "conversationId"
+        FROM "messages"
+        WHERE kind = 'TEXT'
+          AND "conversationId" = ${conversationId}
+          AND "createdAt" > ${floor}
+          AND "deletedAt" IS NULL
+          AND content->>'text' ILIKE '%' || ${q} || '%'
+        ORDER BY "createdAt" DESC
+        LIMIT ${safeTake} OFFSET ${skip}
+      `;
+    }
 
-    // Determine per-user floor (clearedAt)
-    const clearedRow = conversationId
-      ? await this.prisma.membership.findFirst({
-          where: { conversationId, userId },
-          select: { clearedAt: true },
-        })
-      : null;
-    const floor = clearedRow?.clearedAt ?? new Date(0);
+    // Multi-conversation search: restrict to user's memberships
+    const memberConvIds = await this.prisma.membership.findMany({
+      where: { userId },
+      select: { conversationId: true, clearedAt: true },
+    });
+    if (memberConvIds.length === 0) return [];
 
+    // Build temporary table of floors
+    const convIds = memberConvIds.map((m) => m.conversationId);
+    const floors: Record<string, Date> = {};
+    memberConvIds.forEach((m) => (floors[m.conversationId] = m.clearedAt ?? new Date(0)));
+
+    // Raw query limited to membership conversations; apply floor in post-filter (simpler & portable)
+    // Build an IN clause safely. Using Prisma.sql join ensures proper parameterization.
+    const inList = Prisma.join(convIds.map((id) => Prisma.sql`${id}`));
     const rows = await this.prisma.$queryRaw<any[]>`
       SELECT id, kind, content, "createdAt", "senderId", "conversationId"
-      FROM "Message"
+      FROM "messages"
       WHERE kind = 'TEXT'
-        ${whereConv}
-        AND "createdAt" > ${floor}
+        AND "conversationId" IN (${inList})
         AND "deletedAt" IS NULL
         AND content->>'text' ILIKE '%' || ${q} || '%'
       ORDER BY "createdAt" DESC
-      LIMIT ${take} OFFSET ${skip}
+      LIMIT ${safeTake} OFFSET ${skip}
     `;
-    return rows;
+
+    return rows.filter((r) => r.createdAt > floors[r.conversationId]);
   }
 
   /**

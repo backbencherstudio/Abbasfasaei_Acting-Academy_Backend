@@ -31,6 +31,14 @@ const typingIndicator = document.getElementById('typing-indicator');
 // Placeholder feature buttons
 const audioCallBtn = document.getElementById('audio-call-btn');
 const videoCallBtn = document.getElementById('video-call-btn');
+// Call UI elements
+const callOverlay = document.getElementById('call-overlay');
+const localVideoEl = document.getElementById('local-video');
+const remoteVideosEl = document.getElementById('remote-videos');
+const toggleMicBtn = document.getElementById('toggle-mic-btn');
+const toggleCamBtn = document.getElementById('toggle-cam-btn');
+const hangupBtn = document.getElementById('hangup-btn');
+const callStatusEl = document.getElementById('call-status');
 const newChatBtn = document.getElementById('new-chat-btn');
 const newGroupBtn = document.getElementById('new-group-btn');
 const attachBtn = document.getElementById('attach-btn');
@@ -47,6 +55,10 @@ const onlineUsers = new Set();
 let isSending = false;
 let searchDebounce;
 let isRendering = false;
+// LiveKit room & state
+let lkRoom = null;
+let micEnabled = true;
+let camEnabled = true;
 
 console.log('online users:', onlineUsers);
 
@@ -86,8 +98,8 @@ const showAuthView = () => {
 
 // --- Authentication Functions (Simulated) ---
 const handleLogin = async () => {
-  const email = emailInput.value;
-  const password = passwordInput.value;
+  const email = emailInput.value.trim().toLowerCase();
+  const password = passwordInput.value; // keep original case for password
   try {
     const response = await fetch('http://localhost:4000/api/auth/login', {
       method: 'POST',
@@ -96,25 +108,53 @@ const handleLogin = async () => {
       },
       body: JSON.stringify({ email, password }),
     });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(`Login failed: ${errorData}`);
+    const rawText = await response.text();
+    let data;
+    console.log('rawText:', rawText);
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      data = { success: false, message: rawText };
     }
 
-    const data = await response.json();
-
-    if (data.success) {
-      localStorage.setItem('access_token', data.authorization.access_token);
-      localStorage.setItem('refresh_token', data.authorization.refresh_token);
-      userId = data.userId;
-      showMessageBox('Login successful!');
-      showChatView();
-      await renderConversations();
-      connectSocket(); // Initialize WebSocket connection after login
-    } else {
-      showMessageBox(data.message, 'error');
+    if (!response.ok || !data.success) {
+      // Distinguish likely causes
+      let userMsg = 'Login failed';
+      if (response.status === 401) {
+        userMsg = 'Invalid email or password';
+      } else if (data?.message?.message) {
+        userMsg = data.message.message;
+      } else if (typeof data.message === 'string') {
+        userMsg = data.message;
+      }
+      console.warn('Login debug:', {
+        status: response.status,
+        payloadSent: { email },
+        server: data,
+      });
+      showMessageBox(userMsg, 'error');
+      return;
     }
+
+    // Backend login response does not include userId directly, decode from access token
+    const access = data.authorization?.access_token;
+    const refresh = data.authorization?.refresh_token;
+    if (!access) {
+      showMessageBox('Server response missing access token', 'error');
+      return;
+    }
+    localStorage.setItem('access_token', access);
+    if (refresh) localStorage.setItem('refresh_token', refresh);
+    try {
+      const decoded = JSON.parse(atob(access.split('.')[1]));
+      userId = decoded.sub;
+    } catch (e) {
+      console.warn('Failed decoding JWT', e);
+    }
+    showMessageBox('Login successful!');
+    showChatView();
+    await renderConversations();
+    connectSocket();
   } catch (error) {
     console.error('Error logging in:', error);
     showMessageBox('Login failed. Please try again.', 'error');
@@ -464,7 +504,7 @@ searchInput.addEventListener('input', () => {
             item.querySelector('.name').textContent,
           );
           suggestionBox.innerHTML = '';
-          suggestionBox.style.display = 'none'; // hide after selection
+          suggestionBox.style.display = 'none'; 
         });
       });
     } catch (err) {
@@ -472,6 +512,7 @@ searchInput.addEventListener('input', () => {
     }
   }, 250);
 });
+
 // --- Message Sending Function ---
 
 const sendMessage = (e) => {
@@ -556,13 +597,9 @@ sidebarToggle.addEventListener('click', () => {
   sidebar.classList.toggle('sidebar-hidden');
 });
 
-// Placeholder feature buttons
-audioCallBtn.addEventListener('click', () =>
-  handlePlaceholderFeature('Audio Call'),
-);
-videoCallBtn.addEventListener('click', () =>
-  handlePlaceholderFeature('Video Call'),
-);
+// Call buttons
+audioCallBtn.addEventListener('click', () => startCallFlow('AUDIO'));
+videoCallBtn.addEventListener('click', () => startCallFlow('VIDEO'));
 newChatBtn.addEventListener('click', () =>
   handlePlaceholderFeature('New Chat'),
 );
@@ -572,6 +609,316 @@ newGroupBtn.addEventListener('click', () =>
 attachBtn.addEventListener('click', () =>
   handlePlaceholderFeature('File Attachment'),
 );
+
+// ---------------- RTC / LiveKit Integration ----------------
+async function startCallFlow(kind = 'VIDEO') {
+  if (!currentConversationId) {
+    showMessageBox('Select a conversation first', 'error');
+    return;
+  }
+  try {
+    showCallOverlay('Requesting token...');
+    // Request token (auto start if not active)
+    const tokenResp = await fetch(
+      `http://localhost:4000/api/rtc/conversations/${currentConversationId}/token`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+        },
+      },
+    );
+    if (!tokenResp.ok) throw new Error('Failed to get token');
+    const { success, data } = await tokenResp.json();
+    if (!success) throw new Error('Token API returned error');
+    const { token, url, roomName } = data;
+    if (url.includes('your-livekit-host')) {
+      showMessageBox('Server not configured for LiveKit yet. Set LIVEKIT_URL in backend .env to your instance (e.g. ws://localhost:7880) and restart.', 'error');
+      hideCallOverlay();
+      return;
+    }
+    callStatusEl.textContent = `Connecting to ${roomName}...`;
+    await connectLiveKit(url, token, kind);
+  } catch (e) {
+    console.error('Call start error:', e);
+    showMessageBox('Failed to start call', 'error');
+    hideCallOverlay();
+  }
+}
+
+function showCallOverlay(statusText = 'Connecting...') {
+  if (callOverlay) {
+    callOverlay.classList.remove('hidden');
+    callStatusEl.textContent = statusText;
+  }
+}
+
+function hideCallOverlay() {
+  if (callOverlay) callOverlay.classList.add('hidden');
+}
+
+async function connectLiveKit(serverUrl, accessToken, kind) {
+  if (lkRoom) {
+    // Already connected, hang up first
+    await leaveCall();
+  }
+  const LK =
+    window.LivekitClient ||
+    window.livekitClient ||
+    window.livekit ||
+    window.LiveKitClient ||
+    {};
+
+  // Fallback factory: if connect() helper missing but Room exists, recreate it.
+  let connectFn = LK.connect;
+  if (typeof connectFn !== 'function' && typeof LK.Room === 'function') {
+    console.warn('[LiveKit] connect() helper missing on global. Using fallback Room constructor.');
+    connectFn = async (url, token, opts) => {
+      const room = new LK.Room(opts);
+      await room.connect(url, token);
+      return room;
+    };
+  }
+
+  // Provide track creation fallbacks (older/newer SDK discrepancies)
+  let createLocalAudioTrack = LK.createLocalAudioTrack;
+  let createLocalVideoTrack = LK.createLocalVideoTrack;
+  const createLocalTracks = LK.createLocalTracks; // alternative API
+
+  if (typeof connectFn !== 'function') {
+    console.error('LiveKit SDK connect() not found even after fallback. Global keys:', Object.keys(LK));
+    showMessageBox('LiveKit SDK not loaded (check script tag or version)', 'error');
+    hideCallOverlay();
+    return;
+  }
+
+  if (typeof createLocalAudioTrack !== 'function' && typeof createLocalTracks === 'function') {
+    console.warn('[LiveKit] createLocalAudioTrack() missing, deriving from createLocalTracks().');
+    createLocalAudioTrack = async () => {
+      const tracks = await createLocalTracks({ audio: true });
+      return tracks.find((t) => t.kind === 'audio');
+    };
+  }
+  if (kind === 'VIDEO' && typeof createLocalVideoTrack !== 'function' && typeof createLocalTracks === 'function') {
+    console.warn('[LiveKit] createLocalVideoTrack() missing, deriving from createLocalTracks().');
+    createLocalVideoTrack = async () => {
+      const tracks = await createLocalTracks({ video: true });
+      return tracks.find((t) => t.kind === 'video');
+    };
+  }
+
+  lkRoom = await connectFn(serverUrl, accessToken, { autoSubscribe: true });
+  callStatusEl.textContent = 'Connected';
+
+  // Event listeners
+  lkRoom.on('participantConnected', (p) =>
+    console.log('participantConnected', p.identity),
+  );
+  lkRoom.on('participantDisconnected', (p) =>
+    removeRemoteParticipant(p.identity),
+  );
+  lkRoom.on('trackSubscribed', (track, pub, participant) => {
+    attachRemoteTrack(track, participant.identity);
+  });
+  lkRoom.on('trackUnsubscribed', (track, pub, participant) => {
+    detachRemoteTrack(participant.identity);
+  });
+  lkRoom.on('disconnected', () => {
+    cleanupCallUI();
+  });
+
+  // Publish local tracks
+  try {
+    if (typeof createLocalAudioTrack === 'function') {
+      const audioTrack = await createLocalAudioTrack();
+      if (audioTrack) await lkRoom.localParticipant.publishTrack(audioTrack);
+    } else {
+      console.warn('[LiveKit] No audio track API available. Audio will be disabled.');
+    }
+    if (kind === 'VIDEO') {
+      if (typeof createLocalVideoTrack === 'function') {
+        const videoTrack = await createLocalVideoTrack();
+        if (videoTrack) {
+          localVideoEl.srcObject = videoTrack.mediaStreamTrack
+            ? new MediaStream([videoTrack.mediaStreamTrack])
+            : null;
+          localVideoEl.style.display = 'block';
+          toggleCamBtn.style.display = 'inline-flex';
+          await lkRoom.localParticipant.publishTrack(videoTrack);
+        }
+      } else {
+        console.warn('[LiveKit] No video track API available. Proceeding audio-only.');
+        localVideoEl.srcObject = null;
+        localVideoEl.style.display = 'none';
+        toggleCamBtn.style.display = 'none';
+      }
+    } else {
+      // Audio only call
+      localVideoEl.srcObject = null;
+      localVideoEl.style.display = 'none';
+      toggleCamBtn.style.display = 'none';
+    }
+  } catch (trackErr) {
+    console.error('Error publishing local tracks:', trackErr);
+    showMessageBox('Failed to capture local media (permissions?)', 'error');
+  }
+
+  // Show existing participants' tracks (if they were already in the room)
+  try {
+    const participantCollection =
+      lkRoom.participants || // modern SDK Map
+      lkRoom.remoteParticipants || // possible alternate naming
+      null;
+
+    if (participantCollection) {
+      // If it's a Map (has forEach) use directly; if it's a plain object, iterate values
+      if (typeof participantCollection.forEach === 'function') {
+        participantCollection.forEach((participant) => {
+          if (!participant || !participant.tracks) return;
+            participant.tracks.forEach((pub) => {
+              if (pub && pub.track) {
+                attachRemoteTrack(pub.track, participant.identity);
+              }
+            });
+        });
+      } else if (typeof participantCollection === 'object') {
+        Object.values(participantCollection).forEach((participant) => {
+          if (!participant || !participant.tracks) return;
+          // tracks could be a Map or array depending on SDK version
+          const trackIter = typeof participant.tracks.forEach === 'function'
+            ? participant.tracks
+            : Array.isArray(participant.tracks)
+              ? participant.tracks
+              : [];
+          trackIter.forEach((pub) => {
+            if (pub && pub.track) {
+              attachRemoteTrack(pub.track, participant.identity);
+            }
+          });
+        });
+      }
+    } else {
+      console.debug('[LiveKit] No participant collection found on room; keys:', Object.keys(lkRoom || {}));
+    }
+  } catch (e) {
+    console.warn('[LiveKit] Failed enumerating existing participants:', e);
+  }
+
+  wireCallButtons();
+}
+
+function attachRemoteTrack(track, identity) {
+  if (track.kind === 'video' || track.kind === 'audio') {
+    let wrapper = document.getElementById(`remote-${identity}`);
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.id = `remote-${identity}`;
+      wrapper.className = 'remote-wrapper';
+      const vid = document.createElement(
+        track.kind === 'video' ? 'video' : 'audio',
+      );
+      vid.autoplay = true;
+      if (track.kind === 'video') vid.playsInline = true;
+      wrapper.appendChild(vid);
+      remoteVideosEl.appendChild(wrapper);
+    }
+    const mediaEl = wrapper.querySelector(
+      track.kind === 'video' ? 'video' : 'audio',
+    );
+    track.attach(mediaEl);
+  }
+}
+
+function detachRemoteTrack(identity) {
+  const wrapper = document.getElementById(`remote-${identity}`);
+  if (wrapper) wrapper.remove();
+}
+
+function removeRemoteParticipant(identity) {
+  detachRemoteTrack(identity);
+}
+
+function wireCallButtons() {
+  toggleMicBtn.onclick = () => {
+    micEnabled = !micEnabled;
+    const lp = lkRoom && lkRoom.localParticipant;
+    if (!lp) {
+      console.warn('[LiveKit] No localParticipant when toggling mic');
+      return;
+    }
+    const audioTracks = lp.audioTracks || lp.tracks || [];
+    // audioTracks may be a Map, array, or object
+    if (typeof audioTracks.forEach === 'function') {
+      audioTracks.forEach((pub) => {
+        if (pub && pub.track) (micEnabled ? pub.track.unmute() : pub.track.mute());
+      });
+    } else if (Array.isArray(audioTracks)) {
+      audioTracks.forEach((pub) => {
+        if (pub && pub.track) (micEnabled ? pub.track.unmute() : pub.track.mute());
+      });
+    } else {
+      Object.values(audioTracks).forEach((pub) => {
+        if (pub && pub.track) (micEnabled ? pub.track.unmute() : pub.track.mute());
+      });
+    }
+    toggleMicBtn.textContent = micEnabled ? 'Mute' : 'Unmute';
+  };
+  toggleCamBtn.onclick = () => {
+    camEnabled = !camEnabled;
+    const lp = lkRoom && lkRoom.localParticipant;
+    if (!lp) {
+      console.warn('[LiveKit] No localParticipant when toggling camera');
+      return;
+    }
+    const videoTracks = lp.videoTracks || lp.tracks || [];
+    if (typeof videoTracks.forEach === 'function') {
+      videoTracks.forEach((pub) => {
+        if (pub && pub.track) (camEnabled ? pub.track.unmute() : pub.track.mute());
+      });
+    } else if (Array.isArray(videoTracks)) {
+      videoTracks.forEach((pub) => {
+        if (pub && pub.track) (camEnabled ? pub.track.unmute() : pub.track.mute());
+      });
+    } else {
+      Object.values(videoTracks).forEach((pub) => {
+        if (pub && pub.track) (camEnabled ? pub.track.unmute() : pub.track.mute());
+      });
+    }
+    toggleCamBtn.textContent = camEnabled ? 'Camera Off' : 'Camera On';
+  };
+  hangupBtn.onclick = () => leaveCall();
+}
+
+async function leaveCall() {
+  try {
+    if (lkRoom) {
+      lkRoom.disconnect();
+    }
+    if (currentConversationId) {
+      // Inform backend (soft end)
+      fetch(
+        `http://localhost:4000/api/rtc/conversations/${currentConversationId}/end`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+          },
+        },
+      ).catch(() => {});
+    }
+  } finally {
+    cleanupCallUI();
+  }
+}
+
+function cleanupCallUI() {
+  remoteVideosEl.innerHTML = '';
+  localVideoEl.srcObject = null;
+  hideCallOverlay();
+  lkRoom = null;
+  micEnabled = true;
+  camEnabled = true;
+}
 
 // Initially show login form
 window.onload = async () => {

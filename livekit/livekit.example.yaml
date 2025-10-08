@@ -1,0 +1,40 @@
+# LiveKit example configuration
+# To use: copy to livekit.yaml and mount in docker-compose (uncomment volume + command)
+# Docs: https://docs.livekit.io
+
+# API credentials
+api_key: devkey
+api_secret: devsecret
+
+# Web server listen (signaling)
+port: 7880
+bind_addresses:
+  - 0.0.0.0
+
+# Logging
+log_level: info
+
+dev: true
+
+authorization:
+  # token verification is default when using API key/secret
+  enabled: true
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+
+turn:
+  enabled: true
+  domain: turnserver
+  username: webrtc
+  password: strongpassword
+  tls: false
+  udp_port: 3478
+  tcp_port: 3478
+
+# Uncomment to set a public base URL (useful behind reverse proxy)
+# external: 
+#   ws_url: ws://localhost:7880

@@ -96,15 +96,31 @@ async function bootstrap() {
   }
 
   // swagger
-  const options = new DocumentBuilder()
-    .setTitle(`${process.env.APP_NAME} api`)
-    .setDescription(`${process.env.APP_NAME} api docs`)
-    .setVersion('1.0')
-    .addTag(`${process.env.APP_NAME}`)
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, options);
-  SwaggerModule.setup('api/docs', app, document);
+  // Allow disabling swagger generation if circular ref errors occur
+  if (process.env.ENABLE_SWAGGER !== 'false') {
+    try {
+      const options = new DocumentBuilder()
+        .setTitle(`${process.env.APP_NAME} api`)
+        .setDescription(`${process.env.APP_NAME} api docs`)
+        .setVersion('1.0')
+        .addTag(`${process.env.APP_NAME}`)
+        .addBearerAuth()
+        .build();
+      const document = SwaggerModule.createDocument(app, options, {
+        // deepScanRoutes can sometimes help with complex module graphs
+        deepScanRoutes: true,
+      });
+      SwaggerModule.setup('api/docs', app, document);
+    } catch (err) {
+      // Do not crash the app; log and proceed so core APIs (auth/login) keep working.
+      // Later we can isolate the offending DTO or enum causing the circular dependency.
+      // eslint-disable-next-line no-console
+      console.error('[Swagger Init] Skipped due to error:', err?.message || err);
+    }
+  } else {
+    // eslint-disable-next-line no-console
+    console.log('Swagger disabled via ENABLE_SWAGGER flag');
+  }
   // end swagger
 
   await app.listen(process.env.PORT ?? 4000, '0.0.0.0');

@@ -32,6 +32,7 @@ import { StudentManagementModule } from './modules/admin/student-management/stud
 import { InstructorsModule } from './modules/admin/instructors/instructors.module';
 import { CourseModule } from './modules/course/course.module';
 import { HomeModule } from './modules/home/home.module';
+import { RtcModule } from './modules/chat/rtc/rtc.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { FinanceModule } from './modules/finance/finance.module';
@@ -100,6 +101,7 @@ import { FinanceandpaymentsModule } from './modules/financeandpayments/financean
     StudentManagementModule,
     InstructorsModule,
     HomeModule,
+    RtcModule,
     AttendanceModule,
     DashboardModule,
     FinanceModule,
