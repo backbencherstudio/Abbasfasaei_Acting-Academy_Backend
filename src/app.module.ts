@@ -33,6 +33,10 @@ import { InstructorsModule } from './modules/admin/instructors/instructors.modul
 import { CourseModule } from './modules/course/course.module';
 import { HomeModule } from './modules/home/home.module';
 import { RtcModule } from './modules/chat/rtc/rtc.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { FinanceModule } from './modules/finance/finance.module';
+import { FinanceandpaymentsModule } from './modules/financeandpayments/financeandpayments.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -98,6 +102,10 @@ import { RtcModule } from './modules/chat/rtc/rtc.module';
     InstructorsModule,
     HomeModule,
     RtcModule,
+    AttendanceModule,
+    DashboardModule,
+    FinanceModule,
+    FinanceandpaymentsModule,
   ],
   controllers: [AppController],
   providers: [
