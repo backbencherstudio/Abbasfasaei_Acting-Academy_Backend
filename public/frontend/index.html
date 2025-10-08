@@ -16,6 +16,8 @@
 
     <!-- Load Socket.IO client library -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <!-- LiveKit client (UMD) -->
+    <script src="https://unpkg.com/livekit-client/dist/livekit-client.umd.js"></script>
   </head>
   <body
     class="bg-gray-100 min-h-screen flex items-center justify-center p-4 md:p-8"
@@ -261,6 +263,7 @@
               <em>Someone is typing...</em>
             </div>
 
+            
             <!-- Message Input Area -->
             <div class="message-input-area">
               <div class="input-group">
@@ -317,6 +320,21 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+    <!-- Call Overlay -->
+    <div id="call-overlay" class="call-overlay hidden">
+      <div class="call-inner">
+        <div class="call-videos">
+          <video id="local-video" autoplay muted playsinline></video>
+          <div id="remote-videos" class="remote-videos"></div>
+        </div>
+        <div class="call-controls">
+          <button id="toggle-mic-btn" class="call-btn">Mute</button>
+          <button id="toggle-cam-btn" class="call-btn">Camera Off</button>
+          <button id="hangup-btn" class="call-btn hangup">Hang Up</button>
+        </div>
+        <div id="call-status" class="call-status">Connecting...</div>
       </div>
     </div>
     <script src="js/script.js"></script>

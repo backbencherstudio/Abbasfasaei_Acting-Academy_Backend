@@ -78,4 +78,24 @@ export class MailService {
       console.log(error);
     }
   }
+
+  async sendEnrollmentSuccess(params: { email: string; name: string }) {
+    try {
+      const from = `${process.env.APP_NAME} <${appConfig().mail.from}>`;
+      const subject = 'Enrollment Successful';
+
+      // add to queue
+      await this.queue.add('sendEnrollmentSuccess', {
+        to: params.email,
+        from: from,
+        subject: subject,
+        template: 'enrollment-success.ejs',
+        context: {
+          name: params.name,
+        },
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  }
 }

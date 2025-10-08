@@ -31,6 +31,30 @@ body {
   padding: 1rem;
 }
 
+/* ---- Call Overlay ---- */
+.call-overlay.hidden { display: none; }
+.call-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,15,20,0.92);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  backdrop-filter: blur(4px);
+}
+.call-inner { width: 100%; max-width: 1200px; display: flex; flex-direction: column; gap: 0.75rem; }
+.call-videos { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); width: 100%; }
+.call-videos video { width: 100%; background:#111; border-radius: .5rem; aspect-ratio: 16/9; object-fit: cover; }
+.remote-videos video { position: relative; }
+.call-controls { display: flex; gap: .75rem; justify-content: center; }
+.call-btn { background: var(--gray-700); color:#fff; border:none; padding: .6rem 1rem; border-radius: .5rem; cursor: pointer; font-weight: 500; }
+.call-btn:hover { background: var(--violet-600); }
+.call-btn.hangup { background:#dc2626; }
+.call-btn.hangup:hover { background:#b91c1c; }
+.call-status { text-align:center; color: var(--gray-300); font-size: .85rem; }
+
 .main-container {
   display: flex;
   flex-direction: column;

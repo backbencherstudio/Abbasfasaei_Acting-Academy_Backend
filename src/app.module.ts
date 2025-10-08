@@ -32,6 +32,7 @@ import { StudentManagementModule } from './modules/admin/student-management/stud
 import { InstructorsModule } from './modules/admin/instructors/instructors.module';
 import { CourseModule } from './modules/course/course.module';
 import { HomeModule } from './modules/home/home.module';
+import { RtcModule } from './modules/chat/rtc/rtc.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -96,6 +97,7 @@ import { HomeModule } from './modules/home/home.module';
     StudentManagementModule,
     InstructorsModule,
     HomeModule,
+    RtcModule,
   ],
   controllers: [AppController],
   providers: [

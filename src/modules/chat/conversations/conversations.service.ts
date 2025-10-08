@@ -140,7 +140,6 @@ export class ConversationsService {
       to?: Date;
     },
   ) {
-    console.log("hit in myConversations service");
     const convs = await this.prisma.conversation.findMany({
       where: {
         memberships: { some: { userId, archivedAt: null } },
@@ -167,32 +166,35 @@ export class ConversationsService {
         },
       },
     });
+    if (convs.length === 0) return [];
 
-    const epoch = new Date(0);
+    // Compute per conversation lowerBound for the user
+    const bounds: Record<string, Date> = {};
+    for (const c of convs) {
+      const me = c.memberships.find((m) => m.userId === userId);
+      const lb = new Date(
+        Math.max(
+          me?.lastReadAt?.getTime() ?? 0,
+          me?.clearedAt?.getTime() ?? 0,
+        ),
+      );
+      bounds[c.id] = lb;
+    }
 
-    const results = await Promise.all(
-      convs.map(async (c) => {
-        const me = c.memberships.find((m) => m.userId === userId);
-        const lowerBound = new Date(
-          Math.max(
-            me?.lastReadAt?.getTime() ?? 0,
-            me?.clearedAt?.getTime() ?? 0,
-          ),
-        );
-
-        const unread = await this.prisma.message.count({
-          where: {
-            conversationId: c.id,
-            deletedAt: null,
-            createdAt: { gt: lowerBound },
-            senderId: { not: userId },
-          },
-        });
-        return { ...c, unread };
-      }),
-    );
-
-    return opts?.unreadOnly ? results.filter((c) => c.unread > 0) : results;
+    const enriched = [] as any[];
+    for (const c of convs) {
+      const lb = bounds[c.id];
+      const unread = await this.prisma.message.count({
+        where: {
+          conversationId: c.id,
+          deletedAt: null,
+          senderId: { not: userId },
+          createdAt: { gt: lb },
+        },
+      });
+      enriched.push({ ...c, unread });
+    }
+    return opts?.unreadOnly ? enriched.filter((c) => c.unread > 0) : enriched;
   }
 
 

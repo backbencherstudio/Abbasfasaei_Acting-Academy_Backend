@@ -8,23 +8,20 @@ services:
     ports:
       - "4000:4000"
     environment:
-      # Required for hot-reloading to work on Windows
-      - CHOKIDAR_USEPOLLING=true
-      # 1 second polling interval
-      - CHOKIDAR_INTERVAL=1000
-
-      - NODE_ENV=development
+      CHOKIDAR_USEPOLLING: "true"             # Required for hot-reloading on Windows
+      CHOKIDAR_INTERVAL: "1000"               # 1 second polling interval
+      NODE_ENV: development
       # host.docker.internal is the host machine's IP address
-      # - DATABASE_URL=postgresql://postgres:root@host.docker.internal/backend 
-      # for use the "postgres" "service" name
-      - DATABASE_URL=postgresql://postgres:root@postgres/backend
-
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-
-      - TURN_SERVER=turn:turnserver:3478
-      - TURN_USERNAME=webrtc
-      - TURN_PASSWORD=strongpassword
+      # DATABASE_URL: postgresql://postgres:root@host.docker.internal/backend
+      # DATABASE_URL: postgresql://postgres:root@postgres/backend
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      TURN_SERVER: turn:turnserver:3478
+      TURN_USERNAME: webrtc
+      TURN_PASSWORD: strongpassword
+      LIVEKIT_URL: ws://localhost:7880  # Browser-accessible mapped port
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: devsecret
     volumes:
       - .:/usr/src/app
       - /usr/src/app/node_modules
@@ -59,12 +56,38 @@ services:
       - "3478:3478/udp"
       - "3478:3478/tcp"
       - "5349:5349/tcp" # TLS support
-      - "49152-65535:49152-65535/udp" # RTP relay ports
+      # Narrow relay port window to avoid Windows ephemeral port exclusions
+      - "55000-55050:55000-55050/udp" # TURN relay ports (50 ports)
     volumes:
-      - ./dockerfiles/coturn/turnserver.conf:/etc/turnserver.conf
+      # Expect a single config file (create dockerfiles/coturn/turnserver.conf if missing)
+      - ./dockerfiles/coturn/turnserver.conf:/etc/turnserver.conf:ro
     environment:
       - TURN_USERNAME=webrtc
       - TURN_PASSWORD=strongpassword
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: livekit
+    depends_on:
+      - turnserver
+    ports:
+      - "7880:7880/tcp"   # HTTP / WebSocket (signal + REST)
+      - "7881:7881/tcp"   # Fallback / additional transport
+      - "7881:7881/udp"   # Primary UDP port (if used)
+      - "55100-55150:55100-55150/udp" # Ephemeral UDP media range (matches --udp-port flag)
+    environment:
+      LIVEKIT_LOG_LEVEL: info
+      # LiveKit expects the format "key: secret" with a space after the colon
+      LIVEKIT_KEYS: "devkey: devsecret"
+    command: >
+      --dev
+      --bind 0.0.0.0
+      --node-ip 127.0.0.1
+      --udp-port 55100-55150
+    # Optionally mount a config file if you prefer a YAML instead of flags
+    # volumes:
+    #   - ./livekit/livekit.yaml:/livekit.yaml
+    # command: --config /livekit.yaml
 
 volumes:
   postgres_data:

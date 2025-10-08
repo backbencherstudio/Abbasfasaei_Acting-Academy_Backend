@@ -8,6 +8,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { z } from 'zod';
 import { JwtService } from '@nestjs/jwt';
 import { MessagesService } from '../messages/messages.service';
 import { ConversationsService } from '../conversations/conversations.service';
@@ -26,6 +27,17 @@ export class RealtimeGateway
 {
   @WebSocketServer() io: Server;
 
+  // In-memory caches / limits (sufficient for single-instance deployment)
+  private usernameCache = new Map<string, { name: string | null; ts: number }>();
+  private messageTimestamps = new Map<string, number[]>(); // userId -> send times (ms)
+  private typingLastEmit = new Map<string, number>(); // key: userId:conversationId -> last emit ms
+
+  // Config knobs
+  private MESSAGE_RATE_WINDOW_MS = 10_000; // 10s sliding window
+  private MESSAGE_RATE_LIMIT = 30; // max messages per window
+  private USERNAME_CACHE_TTL_MS = 60_000; // 1 minute
+  private TYPING_MIN_INTERVAL_MS = 1500; // throttle typing broadcast per user per conversation
+
   constructor(
     private jwt: JwtService,
     private messagesService: MessagesService,
@@ -33,10 +45,15 @@ export class RealtimeGateway
     private prisma: PrismaService,
   ) {}
 
+  private dbg(...args: any[]) {
+    if (process.env.CHAT_DEBUG === '1') {
+      // eslint-disable-next-line no-console
+      console.log('[Realtime]', ...args);
+    }
+  }
+
   // Handle incoming connection
   async handleConnection(socket: Socket) {
-    // console.log('Hit in handleConnection');
-
     try {
       const token =
         socket.handshake.auth?.token ||
@@ -49,19 +66,32 @@ export class RealtimeGateway
 
       socket.data.userId = payload.sub;
       socket.join(`user:${payload.sub}`);
-
-      // Notify others that this user is online
-      await this.prisma.user.update({
+  this.dbg('connection', { sid: socket.id, userId: payload.sub });
+      // Ensure user still exists (token may reference deleted user in dev environments)
+      const userExists = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        data: { lastSeenAt: null }, // null means online
+        select: { id: true },
+      });
+      if (!userExists) {
+        socket.emit('connection:error', {
+          code: 'USER_NOT_FOUND',
+          message: 'User referenced by token does not exist',
+        });
+        socket.disconnect(true);
+        return;
+      }
+
+      // Mark online (use updateMany to avoid throwing if race condition deletes user)
+      await this.prisma.user.updateMany({
+        where: { id: payload.sub },
+        data: { lastSeenAt: null },
       });
 
       socket.emit('connection:ok', { userId: payload.sub });
-
       this.io.emit('presence:update', { userId: payload.sub, online: true });
       
     } catch (err) {
-      socket.emit('connection:error', { message: 'Unauthorized' });
+      socket.emit('connection:error', { code: 'UNAUTHORIZED', message: 'Unauthorized' });
       socket.disconnect(true);
     }
   }
@@ -69,13 +99,15 @@ export class RealtimeGateway
   // Handle disconnection
   async handleDisconnect(socket: Socket) {
     const userId = socket.data.userId as string;
-
     if (userId) {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { lastSeenAt: new Date() }, // This stores the time when user was last seen
-      });
-
+      try {
+        await this.prisma.user.updateMany({
+          where: { id: userId },
+          data: { lastSeenAt: new Date() },
+        });
+      } catch (_) {
+        // swallow; user might have been deleted concurrently
+      }
       this.io.emit('presence:update', { userId, online: false });
     }
   }
@@ -86,28 +118,22 @@ export class RealtimeGateway
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: { conversationId: string },
   ) {
-    console.log('Hit in onJoin');
     const userId = socket.data.userId as string;
     if (!userId) return;
-
-    console.log('Joining conversation:', body.conversationId);
-
+    if (!body?.conversationId) {
+      socket.emit('error:conversation', { code: 'BAD_REQUEST', message: 'conversationId required' });
+      return;
+    }
     try {
-      // Ensure the user is a member of the conversation
+      this.dbg('onJoin:incoming', { userId, body });
       await this.conversationsService.ensureMember(body.conversationId, userId);
-
       socket.join(`conv:${body.conversationId}`);
-      socket.emit('conversation:joined', {
-        conversationId: body.conversationId,
-      });
-
-      socket
-        .to(`conv:${body.conversationId}`)
-        .emit('presence:update', { userId, online: true });
-
-      console.log('OnJoin completed');
+      socket.emit('conversation:joined', { conversationId: body.conversationId });
+      socket.to(`conv:${body.conversationId}`).emit('presence:update', { userId, online: true });
+      this.dbg('onJoin:success', { userId, conversationId: body.conversationId, rooms: Array.from(socket.rooms) });
     } catch (err) {
-      socket.emit('error', { message: 'Failed to join the conversation' });
+      this.dbg('onJoin:failed', { userId, body, err: (err as any)?.message });
+      socket.emit('error:conversation', { code: 'JOIN_FAILED', message: 'Not a member of conversation' });
     }
   }
 
@@ -117,7 +143,6 @@ export class RealtimeGateway
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: { conversationId: string; kind: string; content: any },
   ) {
-    console.log('Hit in onSend');
     const { conversationId, kind, content } = body;
     const userId = socket.data.userId as string;
 
@@ -125,30 +150,52 @@ export class RealtimeGateway
       return { error: 'User not authenticated' };
     }
 
-    try {
-      // Ensure the user is part of the conversation
-      await this.conversationsService.ensureMember(conversationId, userId);
+    // Lightweight body validation using zod to avoid malformed payloads
+    // Accept Prisma cuid (not UUID) -> loosen validation to safe slug/id
+    const schema = z.object({
+      conversationId: z
+        .string()
+        .min(10)
+        .max(100)
+        .regex(/^[a-zA-Z0-9_-]+$/, 'invalid id'),
+      kind: z.nativeEnum(MessageKind).default(MessageKind.TEXT),
+      content: z.any().optional(),
+    });
+    const parseResult = schema.safeParse(body);
+    if (!parseResult.success) {
+      socket.emit('error:message', { code: 'BAD_MESSAGE', message: 'Invalid payload', issues: parseResult.error.issues });
+      return;
+    }
 
-      // Send the message
+    // Rate limiting (sliding window)
+    const now = Date.now();
+    const windowStart = now - this.MESSAGE_RATE_WINDOW_MS;
+    const stamps = this.messageTimestamps.get(userId) || [];
+    const recent = stamps.filter((t) => t > windowStart);
+    if (recent.length >= this.MESSAGE_RATE_LIMIT) {
+      socket.emit('error:message', { code: 'RATE_LIMIT', message: 'Too many messages, slow down.' });
+      return;
+    }
+    recent.push(now);
+    this.messageTimestamps.set(userId, recent);
+
+    try {
+      await this.conversationsService.ensureMember(conversationId, userId);
+      this.dbg('onSend:validated', { userId, conversationId, kind });
       const msg = await this.messagesService.sendMessage(
         conversationId,
         userId,
-        kind as MessageKind,
+        (kind as MessageKind) || MessageKind.TEXT,
         content,
       );
-
-      console.log('Message sent:', msg);
-
-      // Emit the message to all other members of the conversation
       socket.to(`conv:${conversationId}`).emit('message:new', msg);
-
-      // Acknowledge the sender that the message has been sent
+      // Echo back for unified stream UX
+      socket.emit('message:new', msg);
       socket.emit('message:ack', { messageId: msg.id });
+      this.dbg('onSend:delivered', { messageId: msg.id, conversationId, userId });
     } catch (e) {
-      socket.emit('error', {
-        code: 'SEND_FAILED',
-        message: 'Failed to send message',
-      });
+      this.dbg('onSend:failed', { userId, conversationId, err: (e as any)?.message });
+      socket.emit('error:message', { code: 'SEND_FAILED', message: 'Failed to send message' });
     }
   }
 
@@ -158,22 +205,29 @@ export class RealtimeGateway
     @ConnectedSocket() socket: Socket,
     @MessageBody() body: { conversationId: string; on: boolean },
   ) {
-    console.log('Hit in onTyping');
     const userId = socket.data.userId as string;
+    if (!body?.conversationId) return;
+    // Throttle typing events per user per conversation
+    const key = `${userId}:${body.conversationId}`;
+    const last = this.typingLastEmit.get(key) || 0;
+    const now = Date.now();
+    if (now - last < this.TYPING_MIN_INTERVAL_MS) return;
+    this.typingLastEmit.set(key, now);
 
     try {
-      // Fetch the user name
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { name: true },
-      });
-
-      // Emit the typing event to the conversation
-      socket
-        .to(`conv:${body.conversationId}`)
-        .emit('typing', { userId, userName: user?.name, on: body.on });
-    } catch (error) {
-      console.error('Failed to fetch user data for typing event:', error);
+      // Username lookup w/ simple TTL cache
+      const cached = this.usernameCache.get(userId);
+      if (!cached || now - cached.ts > this.USERNAME_CACHE_TTL_MS) {
+        const user = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true },
+        });
+        this.usernameCache.set(userId, { name: user?.name ?? null, ts: now });
+      }
+      const name = this.usernameCache.get(userId)?.name;
+      socket.to(`conv:${body.conversationId}`).emit('typing', { userId, userName: name, on: body.on });
+    } catch (_) {
+      // swallow silently; typing is best-effort
     }
   }
 
