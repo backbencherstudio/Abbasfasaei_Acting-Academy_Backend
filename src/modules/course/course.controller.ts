@@ -15,12 +15,13 @@ import { CourseService } from './course.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { SubmitAssignmentDto } from './dto/submit-assignment.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 
+@ApiTags('Course')
 @UseGuards(JwtAuthGuard)
 @Controller('course')
 export class CourseController {
@@ -30,7 +31,7 @@ export class CourseController {
   @Get('all')
   async getAllCourses() {
     try {
-      console.log('hitted');
+      // console.log('hitted');
       const result = await this.courseService.getAllCourses();
       return result;
     } catch (error) {
