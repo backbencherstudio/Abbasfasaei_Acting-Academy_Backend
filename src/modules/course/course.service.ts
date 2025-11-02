@@ -23,7 +23,6 @@ export class CourseService {
     }
   }
 
-
   async getMyCourses(userId: string) {
     try {
       if (!userId) {
@@ -33,20 +32,113 @@ export class CourseService {
         };
       }
 
+      // 1) Get all courseIds the user is enrolled in
       const enrollments = await this.prisma.enrollment.findMany({
         where: { user_id: userId },
-        include: {
-          course: {
-            select: {
-              id: true,
-              title: true,
-              course_overview: true,
-              modules: true,
+        select: { courseId: true },
+      });
+      const myCourseIds = enrollments.map((e) => e.courseId);
+
+      // 2) Fetch my courses with modules and basic fields
+      const myCoursesRaw = myCourseIds.length
+        ? await this.prisma.course.findMany({
+            where: { id: { in: myCourseIds } },
+            orderBy: { created_at: 'desc' },
+            include: {
+              modules: {
+                select: {
+                  id: true,
+                  module_title: true,
+                  module_name: true,
+                  classes: { select: { id: true } },
+                },
+              },
             },
-          },
+          })
+        : [];
+
+      // 3) Compute total classes per course
+      const totalClassesByCourse: Record<string, number> = {};
+      for (const c of myCoursesRaw) {
+        const total = c.modules.reduce((sum, m) => sum + (m.classes?.length || 0), 0);
+        totalClassesByCourse[c.id] = total;
+      }
+
+      // 4) Compute attended (present) classes per course for this user
+      const attended = await this.prisma.attendance.findMany({
+        where: {
+          student_id: userId,
+          status: 'PRESENT',
+          class: { module: { courseId: { in: myCourseIds } } },
+        },
+        select: { id: true, class: { select: { module: { select: { courseId: true } } } } },
+      });
+      const attendedByCourse: Record<string, number> = {};
+      for (const a of attended) {
+        const cid = a.class.module.courseId;
+        attendedByCourse[cid] = (attendedByCourse[cid] || 0) + 1;
+      }
+
+      // 5) Shape my courses for UI (progress, summary)
+      const myCourses = myCoursesRaw.map((c) => {
+        const modulesCount = c.modules.length;
+        const totalClasses = totalClassesByCourse[c.id] || 0;
+        const attendedCount = attendedByCourse[c.id] || 0;
+        const progress = totalClasses > 0 ? Math.round((attendedCount / totalClasses) * 100) : 0;
+        const scheduleLabel = c.class_time
+          ? `${c.class_time} lessons`
+          : c.duration
+            ? `${c.duration}`
+            : 'Flexible schedule';
+        const infoLine = `${scheduleLabel}, ${modulesCount} module${modulesCount === 1 ? '' : 's'}.`;
+
+        return {
+          id: c.id,
+          title: c.title,
+          course_overview: c.course_overview,
+          modulesCount,
+          totalClasses,
+          attendedClasses: attendedCount,
+          progressPercent: progress,
+          progressLabel: `Progress : ${progress}%`,
+          infoLine,
+        };
+      });
+
+      // 6) Others courses (not enrolled)
+      const otherCoursesRaw = await this.prisma.course.findMany({
+        where: myCourseIds.length ? { id: { notIn: myCourseIds } } : {},
+        orderBy: { created_at: 'desc' },
+        include: {
+          _count: { select: { modules: true } },
         },
       });
-      return { success: true, data: enrollments.map((e) => e.course) };
+
+      const otherCourses = otherCoursesRaw.map((c) => {
+        const modulesCount = (c as any)._count?.modules ?? 0;
+        const scheduleLabel = c.class_time
+          ? `${c.class_time} lessons`
+          : c.duration
+            ? `${c.duration}`
+            : 'Flexible schedule';
+        const infoLine = `${scheduleLabel}, ${modulesCount} module${modulesCount === 1 ? '' : 's'}.`;
+
+        return {
+          id: c.id,
+          title: c.title,
+          course_overview: c.course_overview,
+          modulesCount,
+          infoLine,
+        };
+      });
+
+      return {
+        success: true,
+        data: {
+          myCourses,
+          otherCourses,
+        },
+      };
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException('Error fetching my courses');
@@ -58,7 +150,16 @@ export class CourseService {
       const course = await this.prisma.course.findUnique({
         where: { id: courseId },
         include: {
-          modules: { include: { classes: true } },
+          // We don't need full class payload for the details card; keep it light
+          modules: {
+            select: {
+              id: true,
+              module_title: true,
+              module_name: true,
+              // keep classes count only if needed later
+              _count: { select: { classes: true } },
+            },
+          },
           instructor: {
             select: { id: true, name: true, avatar: true, about: true },
           },
@@ -73,7 +174,98 @@ export class CourseService {
         where: { courseId, user_id: userId },
       });
 
-      return { success: true, data: { ...course, isEnrolled: !!isEnrolled } };
+      // Derive UI-friendly fields
+      const startDate = course.start_date ? new Date(course.start_date) : null;
+      const dayOfWeek = startDate
+        ? startDate.toLocaleDateString('en-US', { weekday: 'long' })
+        : null;
+      const timeLabel = course.class_time
+        ? course.class_time
+        : startDate
+          ? startDate.toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+            })
+          : null;
+      const scheduleLabel = dayOfWeek && timeLabel
+        ? `Every ${dayOfWeek} ${timeLabel}`
+        : dayOfWeek
+          ? `Every ${dayOfWeek}`
+          : timeLabel || 'Flexible schedule';
+
+      // Modules mapping
+      const modules = (course.modules || []).map((m: any) => ({
+        id: m.id,
+        module_title: m.module_title,
+        module_name: m.module_name,
+        classesCount: m?._count?.classes ?? 0,
+      }));
+      const modulesCount = modules.length;
+      const modulesList = modules.map((m) => m.module_title ?? m.module_name).filter(Boolean);
+
+      // Extract overview text and includes from JSON blobs with safe fallbacks
+      const normalizeToText = (j: unknown): string | null => {
+        if (!j) return null;
+        if (typeof j === 'string') return j;
+        try {
+          const obj = j as any;
+          // common keys that might hold the paragraph
+          const text = obj?.overview || obj?.summary || obj?.description || obj?.text || null;
+          return typeof text === 'string' ? text : null;
+        } catch {
+          return null;
+        }
+      };
+
+      const overviewText =
+        normalizeToText(course.course_overview) ??
+        `This course runs on a ${dayOfWeek ?? 'flexible'} schedule.`;
+
+      const pullIncludes = (j: unknown): string[] => {
+        try {
+          const obj = j as any;
+          const inc = obj?.includes;
+          if (Array.isArray(inc)) return inc.filter((x) => typeof x === 'string');
+          return [];
+        } catch {
+          return [];
+        }
+      };
+
+      const includes: string[] = [
+        ...pullIncludes(course.course_module_details),
+        ...pullIncludes(course.course_overview),
+        ...pullIncludes(course.installment_process),
+      ];
+
+      // De-duplicate includes while preserving order
+      const seen = new Set<string>();
+      const uniqueIncludes = includes.filter((x) => {
+        if (seen.has(x)) return false;
+        seen.add(x);
+        return true;
+      });
+
+      return {
+        success: true,
+        data: {
+          ...course,
+          isEnrolled: !!isEnrolled,
+          // UI helpers
+          schedule: {
+            day: dayOfWeek,
+            time: timeLabel,
+            label: scheduleLabel,
+          },
+          scheduleLabel,
+          modulesCount,
+          modules,
+          modulesList,
+          overviewText,
+          includes: uniqueIncludes,
+        },
+      };
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException('Error fetching course details');
@@ -336,7 +528,9 @@ export class CourseService {
         const gradeDirect = gradeByAssignment.get(a.id) || null;
         const grade = gradeFromSubmission?.grade ?? gradeDirect?.grade ?? null;
         const grade_number =
-          gradeFromSubmission?.grade_number ?? gradeDirect?.grade_number ?? null;
+          gradeFromSubmission?.grade_number ??
+          gradeDirect?.grade_number ??
+          null;
         const status = grade ? 'GRADED' : submission ? 'SUBMITTED' : 'PENDING';
 
         let due_in_days: number | null = null;
@@ -379,7 +573,12 @@ export class CourseService {
         where: enrollment?.courseModuleId
           ? { id: enrollment.courseModuleId }
           : { courseId },
-        select: { id: true, module_title: true, module_name: true, createdAt: true },
+        select: {
+          id: true,
+          module_title: true,
+          module_name: true,
+          createdAt: true,
+        },
         orderBy: { createdAt: 'asc' },
       });
 
@@ -410,7 +609,10 @@ export class CourseService {
 
       // Build sorted array of modules with their assignments sorted by due_date
       const grouped = Array.from(groupedMap.values())
-        .sort((a, b) => (moduleIndex.get(a.module_id)! - moduleIndex.get(b.module_id)!))
+        .sort(
+          (a, b) =>
+            moduleIndex.get(a.module_id)! - moduleIndex.get(b.module_id)!,
+        )
         .map((grp) => ({
           module_id: grp.module_id,
           module_title: grp.module_title,
@@ -537,10 +739,8 @@ export class CourseService {
     }
   }
 
-
   async getAllAssetsFromCourse(courseId: string, userId: string) {
     try {
-
       if (!userId) {
         return {
           success: false,
@@ -555,7 +755,9 @@ export class CourseService {
         };
       }
 
-      const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+      const course = await this.prisma.course.findUnique({
+        where: { id: courseId },
+      });
 
       if (!course) {
         return {
@@ -612,38 +814,36 @@ export class CourseService {
         module_id: m.id,
         module_title: m.module_title,
         module_name: m.module_name,
-        assets: m.classes
-          .flatMap((c) =>
-            c.classAssets
-              .filter((a) => a.asset_type === 'VIDEO')
-              .map((a) => ({
-                id: a.id,
-                class_id: c.id,
-                class_title: c.class_title,
-                class_name: c.class_name,
-                asset_url: a.asset_url,
-                file_name: fileNameFromUrl(a.asset_url),
-              })),
-          ),
+        assets: m.classes.flatMap((c) =>
+          c.classAssets
+            .filter((a) => a.asset_type === 'VIDEO')
+            .map((a) => ({
+              id: a.id,
+              class_id: c.id,
+              class_title: c.class_title,
+              class_name: c.class_name,
+              asset_url: a.asset_url,
+              file_name: fileNameFromUrl(a.asset_url),
+            })),
+        ),
       }));
 
       const pdfs = modules.map((m) => ({
         module_id: m.id,
         module_title: m.module_title,
         module_name: m.module_name,
-        assets: m.classes
-          .flatMap((c) =>
-            c.classAssets
-              .filter((a) => a.asset_type === 'FILE')
-              .map((a) => ({
-                id: a.id,
-                class_id: c.id,
-                class_title: c.class_title,
-                class_name: c.class_name,
-                asset_url: a.asset_url,
-                file_name: fileNameFromUrl(a.asset_url),
-              })),
-          ),
+        assets: m.classes.flatMap((c) =>
+          c.classAssets
+            .filter((a) => a.asset_type === 'FILE')
+            .map((a) => ({
+              id: a.id,
+              class_id: c.id,
+              class_title: c.class_title,
+              class_name: c.class_name,
+              asset_url: a.asset_url,
+              file_name: fileNameFromUrl(a.asset_url),
+            })),
+        ),
       }));
 
       return { success: true, data: { videos, pdfs } };

@@ -22,6 +22,7 @@ import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import { ApiOperation } from '@nestjs/swagger';
 
 @Controller('community')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -51,6 +52,16 @@ export class CommunityController {
       file, // pass file to service
     );
   }
+
+  // @ApiOperation({ summary: 'Create poll' })
+  // @Post('poll')
+  // createPoll(@GetUser() user: any, @Body() dto: CreatePostDto) {
+  //   try {
+  //     return this.service.createPoll(user.userId, dto);
+  //   } catch (error) {
+  //     throw new Error('Error creating poll');
+  //   }
+  // }
 
   @Get('feed')
   getFeed(@GetUser() user: any) {
