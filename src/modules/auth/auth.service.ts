@@ -162,10 +162,15 @@ export class AuthService {
           }
 
           data.avatar = mediaUrl;
+
+          console.log('mediaUrl', mediaUrl);
         } catch (e) {
           console.warn('Avatar upload failed:', e?.message || e);
         }
       }
+
+      console.log('avater url', data.avatar);
+
       const user = await UserRepository.getUserDetails(userId);
       if (user) {
         await this.prisma.user.update({
@@ -893,7 +898,7 @@ export class AuthService {
         },
       });
     }
-    
+
     return user;
   }
 
