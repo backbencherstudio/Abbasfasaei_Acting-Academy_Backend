@@ -291,21 +291,22 @@ model PaymentHistory {
 }
 
 model Course {
-  id                    String         @id @default(cuid())
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+  start_date DateTime
+
   title                 String
   createdBy             String
   instructorId          String?
   fee                   Decimal
-  duration              String
-  start_date            DateTime
-  created_at            DateTime       @default(now())
-  course_overview       Json?
-  course_module_details Json?
-  installment_process   Json?
-  status                CourseStatus   @default(ACTIVE)
-  updated_at            DateTime       @default(now()) @updatedAt
+  course_overview       String
+  course_module_details String
+  installment_process   String
   seat_capacity         String         @default("50")
-  class_time            String?
+  class_time            String
+  duration              String
+  status                CourseStatus   @default(ACTIVE)
   instructor            User?          @relation(fields: [instructorId], references: [id], onDelete: Cascade)
   modules               CourseModule[]
   enrollments           Enrollment[]

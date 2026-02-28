@@ -37,20 +37,8 @@ export class CoursesService {
 
     const course = await this.prisma.course.create({
       data: {
-        title: createCourseDto.title,
+        ...createCourseDto,
         createdBy: adminUserId,
-        created_at: new Date(),
-        installment_process: createCourseDto.installment_process || null,
-        course_overview: createCourseDto.course_overview || null,
-        course_module_details: createCourseDto.course_module_details || null,
-        seat_capacity: createCourseDto.seat_capacity,
-        instructor: {
-          connect: { id: createCourseDto.instructorId },
-        },
-        fee: parseFloat(createCourseDto.fee.toString()),
-        duration: createCourseDto.duration,
-        start_date: new Date(createCourseDto.start_date),
-        class_time: createCourseDto.class_time,
       },
       select: {
         id: true,
