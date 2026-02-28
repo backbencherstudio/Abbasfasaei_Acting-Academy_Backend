@@ -9,16 +9,70 @@ import { UpdateTeacherDto } from './dto/update-teacher.dto';
 export class InstructorsService {
   constructor(private prisma: PrismaService) {}
 
-  async getAllTeachers() {
-    return await this.prisma.user.findMany({
-      where: {
-        deleted_at: null,
-        role_users: {
-          some: { role: { name: { equals: 'TEACHER', mode: 'insensitive' } } },
-        },
+  async getAllTeachers(query?: {
+    search?: string;
+    status?: 'ACTIVE' | 'INACTIVE';
+    page?: string;
+    limit?: string;
+  }) {
+    const where: Prisma.UserWhereInput = {
+      deleted_at: null,
+      role_users: {
+        some: { role: { name: { equals: 'TEACHER', mode: 'insensitive' } } },
       },
-      orderBy: { created_at: 'desc' },
-    });
+    };
+
+    if (query?.search) {
+      where.OR = [
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { email: { contains: query.search, mode: 'insensitive' } },
+        { phone_number: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (query?.status) {
+      where.status = query.status == 'ACTIVE' ? 1 : 0;
+    }
+
+    const page = parseInt(query?.page) || 1;
+    const limit = parseInt(query?.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const [teachers, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone_number: true,
+          experience_level: true,
+          status: true,
+          joined_at: true,
+          created_at: true,
+        },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return {
+      success: true,
+      message: 'Teachers fetched successfully',
+      data: teachers.map((t) => {
+        return {
+          ...t,
+          status: t.status == 1 ? 'ACTIVE' : 'INACTIVE',
+        };
+      }),
+      meta_data: {
+        total,
+        page,
+        limit,
+        total_pages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async addTeacher(createTeacherDto: CreateTeacherDto) {
@@ -34,17 +88,20 @@ export class InstructorsService {
           select: { id: true, name: true },
         });
       }
-      const existingCourse = await this.prisma.course.findUnique({
-        where: {
-          id: createTeacherDto.courseId,
-        },
-      });
+      let existingCourse = null;
+      if (createTeacherDto.courseId) {
+        existingCourse = await this.prisma.course.findUnique({
+          where: {
+            id: createTeacherDto.courseId,
+          },
+        });
 
-      if (!existingCourse) {
-        return {
-          success: false,
-          message: 'Course not found',
-        };
+        if (!existingCourse) {
+          return {
+            success: false,
+            message: 'Course not found',
+          };
+        }
       }
 
       const existingUser = await this.prisma.user.findFirst({
@@ -57,10 +114,11 @@ export class InstructorsService {
         },
       });
 
-  let teacher;
+      let teacher;
 
       if (!existingUser) {
-        const hashedPassword = await bcrypt.hash('defaultPassword123', 10);
+        const passwordToUse = createTeacherDto.password || 'teacher123';
+        const hashedPassword = await bcrypt.hash(passwordToUse, 10);
         const username = createTeacherDto.email.split('@')[0];
 
         teacher = await this.prisma.user.create({
@@ -73,6 +131,7 @@ export class InstructorsService {
             type: createTeacherDto.teacherType,
             status: 1,
             experience_level: createTeacherDto.experienceLevel,
+            joined_at: createTeacherDto.joined_at,
           },
         });
         // Attach TEACHER role to the newly created user
@@ -89,6 +148,7 @@ export class InstructorsService {
             type: createTeacherDto.teacherType,
             experience_level: createTeacherDto.experienceLevel,
             phone_number: createTeacherDto.phone_number,
+            joined_at: createTeacherDto.joined_at,
           },
         });
         // Ensure the existing user has TEACHER role attached
@@ -106,28 +166,33 @@ export class InstructorsService {
       }
 
       // 5. Check if course already has a different instructor
-      if (
-        existingCourse.instructorId &&
-        existingCourse.instructorId !== teacher.id
-      ) {
-        return {
-          success: false,
-          message: 'Course already assigned to another teacher',
-        };
-      }
+      let courseUpdate = null;
+      if (existingCourse) {
+        if (
+          existingCourse.instructorId &&
+          existingCourse.instructorId !== teacher.id
+        ) {
+          return {
+            success: false,
+            message: 'Course already assigned to another teacher',
+          };
+        }
 
-      const courseUpdate = await this.prisma.course.update({
-        where: { id: createTeacherDto.courseId },
-        data: {
-          instructorId: teacher.id,
-        },
-      });
+        courseUpdate = await this.prisma.course.update({
+          where: { id: createTeacherDto.courseId },
+          data: {
+            instructorId: teacher.id,
+          },
+        });
+      }
 
       return {
         success: true,
         message: existingUser
-          ? 'Teacher assigned to course successfully'
-          : 'Teacher created and assigned to course successfully',
+          ? 'Teacher updated successfully' +
+            (courseUpdate ? ' and assigned to course' : '')
+          : 'Teacher created successfully' +
+            (courseUpdate ? ' and assigned to course' : ''),
         data: { teacher, course: courseUpdate },
       };
     } catch (error) {
@@ -146,7 +211,9 @@ export class InstructorsService {
           id: teacherId,
           deleted_at: null,
           role_users: {
-            some: { role: { name: { equals: 'TEACHER', mode: 'insensitive' } } },
+            some: {
+              role: { name: { equals: 'TEACHER', mode: 'insensitive' } },
+            },
           },
         },
       });

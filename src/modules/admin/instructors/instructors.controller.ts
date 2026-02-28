@@ -1,14 +1,16 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { InstructorsService } from './instructors.service';
-import { Role } from '../../../common/guard/role/role.enum';
-import { Roles } from '../../../common/guard/role/roles.decorator';
-import { RolesGuard } from '../../../common/guard/role/roles.guard';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { CreateUserDto } from '../user/dto/create-user.dto';
-import { UserRepository } from 'src/common/repository/user/user.repository';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
-import { create } from 'domain';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
 
 @ApiBearerAuth()
@@ -20,15 +22,17 @@ export class InstructorsController {
 
   @ApiResponse({ description: 'Get all teacher' })
   @Get()
-  async getAllTeachers() // @Query() query: { q?: string; type?: string; approved?: string },
-  {
+  async getAllTeachers(
+    @Query()
+    query: {
+      search?: string;
+      status?: 'ACTIVE' | 'INACTIVE';
+      page?: string;
+      limit?: string;
+    },
+  ) {
     try {
-      // const q = query.q;
-      // const type = query.type;
-      // const approved = query.approved;
-
-      const teachers = await this.instructorsService.getAllTeachers();
-      return teachers;
+      return await this.instructorsService.getAllTeachers(query);
     } catch (error) {
       return {
         success: false,
@@ -55,16 +59,11 @@ export class InstructorsController {
 
   @ApiResponse({ description: 'Get Teacher Details' })
   @Get('details/:id')
-  async teacherDetails(
-    @Param('id') teacherId: string
-  ) {
+  async teacherDetails(@Param('id') teacherId: string) {
     try {
       return this.instructorsService.getTeacherDetails(teacherId);
-    }
-    catch (error) {}
+    } catch (error) {}
   }
-
-
 
   @ApiResponse({ description: 'Update a teacher' })
   @Patch('update/:id')

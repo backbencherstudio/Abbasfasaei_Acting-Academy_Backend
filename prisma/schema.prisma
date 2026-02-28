@@ -33,6 +33,7 @@ model User {
   id           String    @id @default(cuid())
   created_at   DateTime  @default(now())
   updated_at   DateTime  @default(now())
+  joined_at    DateTime?
   deleted_at   DateTime?
   status       Int?      @default(1) @db.SmallInt
   approved_at  DateTime?
@@ -245,9 +246,9 @@ model UserPayment {
   payment_status    PaymentStatus    @default(DUE)
   payment_method    String?
   account_holder    String?
-  card_number       String?         
-  card_expiry       String?          
-  card_cvc          String?          
+  card_number       String?
+  card_expiry       String?
+  card_cvc          String?
   provider          String?          @default("STRIPE")
   customer_id       String?
   payment_method_id String?
@@ -798,15 +799,15 @@ model CallSession {
 }
 
 model CallParticipant {
-  id       String      @id @default(cuid())
-  callId   String
-  userId   String
-  joinedAt DateTime    @default(now())
-  leftAt   DateTime?
-  camera   String       @default("on")
-  microphone String     @default("on")
-  call     CallSession @relation(fields: [callId], references: [id], onDelete: Cascade)
-  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String      @id @default(cuid())
+  callId     String
+  userId     String
+  joinedAt   DateTime    @default(now())
+  leftAt     DateTime?
+  camera     String      @default("on")
+  microphone String      @default("on")
+  call       CallSession @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([callId])
 }
