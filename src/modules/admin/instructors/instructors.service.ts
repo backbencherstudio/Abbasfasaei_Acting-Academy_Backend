@@ -4,6 +4,8 @@ import { CreateTeacherDto } from './dto/create-teacher.dto';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client'; // Import for Decimal
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
+import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import appConfig from 'src/config/app.config';
 
 @Injectable()
 export class InstructorsService {
@@ -250,52 +252,73 @@ export class InstructorsService {
   }
 
   async getTeacherDetails(userId: string) {
-    const teacherDetails = await this.prisma.user.findFirst({
-      where: {
-        id: userId,
-        role_users: {
-          some: { role: { name: { equals: 'TEACHER', mode: 'insensitive' } } },
-        },
-      },
-    });
-
-    const students = await this.prisma.user.findMany({
-      where: {
-        Enrollment: {
-          some: {
-            course: {
-              instructorId: userId,
+    const [teacherDetails, classes, students, modules] = await Promise.all([
+      this.prisma.user.findFirst({
+        where: {
+          id: userId,
+          role_users: {
+            some: {
+              role: { name: { equals: 'TEACHER', mode: 'insensitive' } },
             },
           },
         },
-      },
-    });
-
-    const modules = await this.prisma.courseModule.findMany({
-      where: {
-        course: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone_number: true,
+          avatar: true,
+          experience_level: true,
+          status: true,
+          joined_at: true,
+          created_at: true,
+        },
+      }),
+      this.prisma.course.findMany({
+        where: {
           instructorId: userId,
         },
-      },
-      include: {
-        classes: true,
-      },
-    });
-
-    const classes = await this.prisma.moduleClass.findMany({
-      where: {
-        module: {
+      }),
+      this.prisma.user.findMany({
+        where: {
+          Enrollment: {
+            some: {
+              course: {
+                instructorId: userId,
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.courseModule.findMany({
+        where: {
           course: {
             instructorId: userId,
           },
         },
-      },
-      include: {
-        assignments: true,
-        classAssets: true,
-      },
-    });
+        include: {
+          course: true,
+        },
+      }),
+    ]);
 
-    return { teacherDetails, classes, students, modules };
+    return {
+      success: true,
+      message: 'Teacher details fetched successfully',
+      data: {
+        teacher_details: {
+          ...teacherDetails,
+          avatar: teacherDetails?.avatar
+            ? SazedStorage.url(
+                appConfig().storageUrl.avatar + teacherDetails.avatar,
+              )
+            : null,
+          status: teacherDetails.status == 1 ? 'ACTIVE' : 'INACTIVE',
+        },
+        classes,
+        students,
+        modules,
+      },
+    };
   }
 }
