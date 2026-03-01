@@ -78,7 +78,7 @@ model User {
   communityLikes       CommunityLike[]
   communityComments    CommunityComment[]
   CommunityCommentLike CommunityCommentLike[]
-  communityPoolVotes   CommunityPoolVote[]
+  communityPollVotes   CommunityPollVote[]
 
   // Chat schema relations
   memberships      Membership[]
@@ -567,22 +567,27 @@ model EnrollmentProfile {
 //
 //---------------------------------- Community & Social Models -----------------//
 //
+enum PostType {
+  POST
+  POLL
+}
 
 model CommunityPost {
-  id         String             @id @default(cuid())
-  author_Id  String
-  content    String
-  status     PostStatus         @default(REQUEST)
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
-  media_Url  String?
-  mediaType  MediaType?
-  visibility PostVisibility     @default(PUBLIC)
-  comments   CommunityComment[]
-  likes      CommunityLike[]
-  pool       CommunityPool?
-  author     User               @relation("authoredPosts", fields: [author_Id], references: [id], onDelete: Cascade)
-  shares     CommunityShare[]
+  id           String                @id @default(cuid())
+  author_Id    String
+  content      String
+  status       PostStatus            @default(REQUEST)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  media_Url    String?
+  mediaType    MediaType?
+  post_type    PostType              @default(POST)
+  visibility   PostVisibility        @default(PUBLIC)
+  comments     CommunityComment[]
+  likes        CommunityLike[]
+  poll_options CommunityPollOption[]
+  author       User                  @relation("authoredPosts", fields: [author_Id], references: [id], onDelete: Cascade)
+  shares       CommunityShare[]
 }
 
 model CommunityLike {
@@ -638,29 +643,21 @@ model CommunityShare {
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model CommunityPool {
-  id       String              @id @default(cuid())
-  postId   String              @unique
-  question String
-  options  Json
-  avatar   String?
-  name     String?
-  username String?
-  post     CommunityPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
-  votes    CommunityPoolVote[]
+model CommunityPollOption {
+  id     String              @id @default(cuid())
+  postId String
+  title  String
+  post   CommunityPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  votes  CommunityPollVote[]
 }
 
-model CommunityPoolVote {
-  id        String        @id @default(cuid())
-  poolId    String
+model CommunityPollVote {
+  id        String              @id @default(cuid())
+  createdAt DateTime            @default(now())
+  optionId  String
   userId    String
-  option    String
-  createdAt DateTime      @default(now())
-  avatar    String?
-  name      String?
-  username  String?
-  pool      CommunityPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  option    CommunityPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserReport {

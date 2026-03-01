@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { CommunityService } from './community.service';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 import { CommentPostDto } from './dto/comment-post.dto';
 import { SharePostDto } from './dto/share-post.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
@@ -44,13 +45,7 @@ export class CommunityController {
       return { success: false, message: 'User not authenticated' };
     }
 
-    return this.service.createPost(
-      user.userId,
-      dto.content,
-      dto.mediaType,
-      dto.visibility,
-      file, // pass file to service
-    );
+    return this.service.createPost(user.userId, dto, file);
   }
 
   // @ApiOperation({ summary: 'Create poll' })
@@ -92,19 +87,20 @@ export class CommunityController {
     @Param('postId') postId: string,
     @GetUser() user: any,
     @UploadedFile() file: Express.Multer.File,
-    @Body() dto: CreatePostDto,
+    @Body() dto: UpdatePostDto,
   ) {
     try {
-      return this.service.updatePost(
-        postId,
-        user.userId,
-        dto,
-        dto.mediaType,
-        dto.visibility,
-        file,
-      );
+      return this.service.updatePost(postId, user.userId, dto, file);
     } catch (error) {
       throw new Error('Error updating post');
+    }
+  }
+  @Get('like')
+  getLikes(@Body('postId') postId: string) {
+    try {
+      return this.service.getLikes(postId);
+    } catch (error) {
+      throw new Error('Error fetching likes');
     }
   }
 
@@ -117,12 +113,16 @@ export class CommunityController {
     }
   }
 
-  @Get('like')
-  getLikes(@Body('postId') postId: string) {
+  @Patch('vote/:postId/:optionId')
+  voteOnAPoll(
+    @GetUser() user: any,
+    @Param('postId') postId: string,
+    @Param('optionId') optionId: string,
+  ) {
     try {
-      return this.service.getLikes(postId);
+      return this.service.voteOnAPoll(postId, optionId, user.userId);
     } catch (error) {
-      throw new Error('Error fetching likes');
+      throw new Error('Error voting on poll');
     }
   }
 

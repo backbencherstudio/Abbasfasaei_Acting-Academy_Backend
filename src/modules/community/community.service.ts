@@ -7,25 +7,21 @@ import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { StringHelper } from 'src/common/helper/string.helper';
 import appConfig from 'src/config/app.config';
+import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 
 @Injectable()
 export class CommunityService {
   constructor(private prisma: PrismaService) {}
 
   async createPost(
-    authorId: string,
-    content: string,
-    mediaType?: 'PHOTO' | 'VIDEO',
-    visibility: 'PUBLIC' | 'PRIVATE' | 'FRIENDS' = 'PUBLIC',
+    userId: string,
+    body: CreatePostDto,
     file?: Express.Multer.File,
   ) {
-    if (authorId === null || authorId === undefined || authorId === '') {
-      return { success: false, message: 'Author ID is required' };
-    }
-
     // Determine author's platform role (ADMIN/TEACHER/STUDENT) via role_users
     const author = await this.prisma.user.findUnique({
-      where: { id: authorId },
+      where: { id: userId },
       select: {
         id: true,
         role_users: { select: { role: { select: { name: true } } } },
@@ -36,7 +32,9 @@ export class CommunityService {
       return { success: false, message: 'Author not found' };
     }
 
-    const roles = (author.role_users || []).map((ru) => ru.role?.name).filter(Boolean) as string[];
+    const roles = (author.role_users || [])
+      .map((ru) => ru.role?.name)
+      .filter(Boolean) as string[];
     const hasAdmin = roles.includes('ADMIN');
     const status: 'APPROVED' | 'REQUEST' = hasAdmin ? 'APPROVED' : 'REQUEST';
 
@@ -57,44 +55,43 @@ export class CommunityService {
     // }
 
     // upload file to S3 or MinIO
-    if (file) {
+    if (body.postType === 'POST' && file) {
       const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
 
-      if (mediaType === 'PHOTO') {
+      if (body.mediaType === 'PHOTO') {
         await SazedStorage.put(
           appConfig().storageUrl.communityPhoto + `/${filename}`,
           file.buffer,
         );
 
-        mediaUrl =
-          process.env.AWS_S3_ENDPOINT +
-          '/' +
-          process.env.AWS_S3_BUCKET +
-          appConfig().storageUrl.communityPhoto +
-          `/${filename}`;
-      } else if (mediaType === 'VIDEO') {
+        mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.communityPhoto}/${filename}`;
+      } else if (body.mediaType === 'VIDEO') {
         await SazedStorage.put(
           appConfig().storageUrl.communityVideo + `/${filename}`,
           file.buffer,
         );
 
-        mediaUrl =
-          process.env.AWS_S3_ENDPOINT +
-          '/' +
-          process.env.AWS_S3_BUCKET +
-          appConfig().storageUrl.communityVideo +
-          `/${filename}`;
+        mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.communityVideo}/${filename}`;
       }
     }
 
     return this.prisma.communityPost.create({
       data: {
-        author_Id: authorId,
-        content,
+        author_Id: author.id,
+        content: body.content,
         media_Url: mediaUrl,
-        mediaType,
-        visibility,
+        mediaType: body.mediaType,
+        visibility: body.visibility,
+        post_type: body.postType,
         status, // Admin posts are approved immediately; others go to request queue
+        poll_options:
+          body.postType === 'POLL' && body.pollOptions
+            ? {
+                create: body.pollOptions.map((option) => ({
+                  title: option,
+                })),
+              }
+            : undefined,
       },
       select: {
         id: true,
@@ -109,8 +106,10 @@ export class CommunityService {
         content: true,
         media_Url: true,
         mediaType: true,
+        post_type: true,
         visibility: true,
         status: true,
+        poll_options: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -120,15 +119,12 @@ export class CommunityService {
   async updatePost(
     postId: string,
     userId: string,
-    dto: any,
-    mediaType?: 'PHOTO' | 'VIDEO',
-    visibility: 'PUBLIC' | 'PRIVATE' | 'FRIENDS' = 'PUBLIC',
+    body: UpdatePostDto,
     file?: Express.Multer.File,
   ) {
     try {
-      let mediaUrl: string | undefined = undefined;
       // Determine updater's role to decide publishing status on update
-      const author = await this.prisma.user.findUnique({
+      const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: {
           id: true,
@@ -136,75 +132,93 @@ export class CommunityService {
         },
       });
 
-      const roles = (author?.role_users || [])
+      const roles = (user?.role_users || [])
         .map((ru) => ru.role?.name)
         .filter(Boolean) as string[];
       const hasAdmin = roles.includes('ADMIN');
 
-      if (file) {
-        const oldfile = await this.prisma.communityPost.findUnique({
-          where: { id: postId },
-          select: { media_Url: true },
-        });
-
-        // delete old file from s3 or minio
-        if (oldfile?.media_Url) {
-          const urlParts = oldfile.media_Url.split('/');
-          const key = urlParts.slice(3).join('/'); // Adjust index based on your URL structure
-          await SazedStorage.delete(key);
-        }
-
-        // upload new file to s3 or minio
-        const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
-
-        if (mediaType === 'PHOTO') {
-          await SazedStorage.put(
-            appConfig().storageUrl.communityPhoto + `/${filename}`,
-            file.buffer,
-          );
-
-          mediaUrl =
-            process.env.AWS_S3_ENDPOINT +
-            '/' +
-            process.env.AWS_S3_BUCKET +
-            appConfig().storageUrl.communityPhoto +
-            `/${filename}`;
-        } else if (mediaType === 'VIDEO') {
-          await SazedStorage.put(
-            appConfig().storageUrl.communityVideo + `/${filename}`,
-            file.buffer,
-          );
-
-          mediaUrl =
-            process.env.AWS_S3_ENDPOINT +
-            '/' +
-            process.env.AWS_S3_BUCKET +
-            appConfig().storageUrl.communityVideo +
-            `/${filename}`;
-        }
-      }
-
-      const post = await this.prisma.communityPost.findUnique({
+      const existingPost = await this.prisma.communityPost.findUnique({
         where: { id: postId },
+        include: { poll_options: true },
       });
 
-      if (!post) {
+      if (!existingPost) {
         return { success: false, message: 'Post not found' };
       }
 
-      if (post.author_Id !== userId) {
+      if (existingPost.author_Id !== userId) {
         return { success: false, message: 'Unauthorized' };
       }
-      // update post
+
+      // Prevent post type switching
+      if (
+        body.postType &&
+        body.postType !== (existingPost.post_type as unknown as string)
+      ) {
+        return { success: false, message: 'Cannot change post type' };
+      }
+
+      let mediaUrl = existingPost.media_Url;
+
+      // Only handle media updates for POST type
+      if (existingPost.post_type === 'POST') {
+        if (file) {
+          // Delete old file from storage
+          if (existingPost.media_Url) {
+            try {
+              const urlParts = existingPost.media_Url.split('/');
+              const key = urlParts.slice(3).join('/');
+              await SazedStorage.delete(key);
+            } catch (error) {
+              console.error('Error deleting old media:', error);
+            }
+          }
+
+          // Upload new file
+          const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+          const mediaType = body.mediaType || existingPost.mediaType;
+
+          if (mediaType === 'PHOTO') {
+            await SazedStorage.put(
+              appConfig().storageUrl.communityPhoto + `/${filename}`,
+              file.buffer,
+            );
+            mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.communityPhoto}/${filename}`;
+          } else if (mediaType === 'VIDEO') {
+            await SazedStorage.put(
+              appConfig().storageUrl.communityVideo + `/${filename}`,
+              file.buffer,
+            );
+            mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.communityVideo}/${filename}`;
+          }
+        }
+      }
+
+      // Handle poll options update only if requested for a POLL post
+      let pollOptionsUpdate = undefined;
+      if (existingPost.post_type === 'POLL' && body.pollOptions) {
+        await this.prisma.communityPollOption.deleteMany({
+          where: { postId },
+        });
+        pollOptionsUpdate = {
+          create: body.pollOptions.map((option) => ({
+            title: option,
+          })),
+        };
+      }
+
+      // Update the post with provided fields (partial update)
       await this.prisma.communityPost.update({
         where: { id: postId },
         data: {
-          content: dto.content,
+          content: body.content !== undefined ? body.content : undefined,
           media_Url: mediaUrl,
-          mediaType,
-          visibility,
-          // Non-admin edits must go through moderation again
+          mediaType: body.mediaType !== undefined ? body.mediaType : undefined,
+          visibility:
+            body.visibility !== undefined ? body.visibility : undefined,
+          // Update status to REQUEST unless it's an admin edit
           status: hasAdmin ? 'APPROVED' : 'REQUEST',
+          poll_options: pollOptionsUpdate,
         },
       });
 
@@ -246,6 +260,11 @@ export class CommunityService {
         likes: true,
         comments: true,
         shares: true,
+        poll_options: {
+          include: {
+            votes: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -305,6 +324,42 @@ export class CommunityService {
     }
   }
 
+  async voteOnAPoll(postId: string, optionId: string, userId: string) {
+    const vote = await this.prisma.communityPollVote.findFirst({
+      where: { userId, option: { postId } },
+    });
+
+    try {
+      if (!vote) {
+        await this.prisma.communityPollVote.create({
+          data: { userId, optionId },
+        });
+        return { success: true, message: 'Voted successfully' };
+      }
+
+      if (vote.optionId === optionId) {
+        await this.prisma.communityPollVote.delete({
+          where: { id: vote.id },
+        });
+        return { success: true, message: 'Unvoted successfully' };
+      }
+
+      await this.prisma.communityPollVote.update({
+        where: { id: vote.id },
+        data: { optionId },
+      });
+
+      return { success: true, message: 'Voted successfully' };
+    } catch {
+      return {
+        success: false,
+        message:
+          vote?.optionId === optionId
+            ? 'Error unvoting on poll'
+            : 'Error voting on poll',
+      };
+    }
+  }
   // get like count and users who liked a post
   async getLikes(postId: string) {
     const likes = await this.prisma.communityLike.findMany({

@@ -251,73 +251,123 @@ export class InstructorsService {
     }
   }
 
+  // async getTeacherDetails(userId: string) {
+  //   const [teacherDetails, classes, students, modules] = await Promise.all([
+  //     this.prisma.user.findFirst({
+  //       where: {
+  //         id: userId,
+  //         role_users: {
+  //           some: {
+  //             role: { name: { equals: 'TEACHER', mode: 'insensitive' } },
+  //           },
+  //         },
+  //       },
+  //       select: {
+  //         id: true,
+  //         name: true,
+  //         email: true,
+  //         phone_number: true,
+  //         avatar: true,
+  //         experience_level: true,
+  //         status: true,
+  //         joined_at: true,
+  //         created_at: true,
+  //       },
+  //     }),
+  //     this.prisma.course.findMany({
+  //       where: {
+  //         instructorId: userId,
+  //       },
+  //     }),
+  //     this.prisma.user.findMany({
+  //       where: {
+  //         Enrollment: {
+  //           some: {
+  //             course: {
+  //               instructorId: userId,
+  //             },
+  //           },
+  //         },
+  //       },
+  //     }),
+  //     this.prisma.courseModule.findMany({
+  //       where: {
+  //         course: {
+  //           instructorId: userId,
+  //         },
+  //       },
+  //       include: {
+  //         course: true,
+  //       },
+  //     }),
+  //   ]);
+
+  //   return {
+  //     success: true,
+  //     message: 'Teacher details fetched successfully',
+  //     data: {
+  //       teacher_details: {
+  //         ...teacherDetails,
+  //         avatar: teacherDetails?.avatar
+  //           ? SazedStorage.url(
+  //               appConfig().storageUrl.avatar + teacherDetails.avatar,
+  //             )
+  //           : null,
+  //         status: teacherDetails.status == 1 ? 'ACTIVE' : 'INACTIVE',
+  //       },
+  //       classes,
+  //       students,
+  //       modules,
+  //     },
+  //   };
+  // }
   async getTeacherDetails(userId: string) {
-    const [teacherDetails, classes, students, modules] = await Promise.all([
-      this.prisma.user.findFirst({
-        where: {
-          id: userId,
-          role_users: {
-            some: {
-              role: { name: { equals: 'TEACHER', mode: 'insensitive' } },
-            },
+    const teacherDetails = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        role_users: {
+          some: {
+            role: { name: { equals: 'TEACHER', mode: 'insensitive' } },
           },
         },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone_number: true,
-          avatar: true,
-          experience_level: true,
-          status: true,
-          joined_at: true,
-          created_at: true,
-        },
-      }),
-      this.prisma.course.findMany({
-        where: {
-          instructorId: userId,
-        },
-      }),
-      this.prisma.user.findMany({
-        where: {
-          Enrollment: {
-            some: {
-              course: {
-                instructorId: userId,
-              },
-            },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone_number: true,
+        avatar: true,
+        experience_level: true,
+        status: true,
+        joined_at: true,
+        created_at: true,
+        Course: {
+          select: {
+            id: true,
+            title: true,
+            course_overview: true,
+            fee: true,
+            status: true,
+            start_date: true,
+            seat_capacity: true,
+            created_at: true,
+            updated_at: true,
           },
         },
-      }),
-      this.prisma.courseModule.findMany({
-        where: {
-          course: {
-            instructorId: userId,
-          },
-        },
-        include: {
-          course: true,
-        },
-      }),
-    ]);
+      },
+    });
 
     return {
       success: true,
       message: 'Teacher details fetched successfully',
       data: {
-        teacher_details: {
-          ...teacherDetails,
-          avatar: teacherDetails?.avatar
-            ? SazedStorage.url(
-                appConfig().storageUrl.avatar + teacherDetails.avatar,
-              )
-            : null,
-          status: teacherDetails.status == 1 ? 'ACTIVE' : 'INACTIVE',
-        },
-        classes,
-        students,
-        modules,
+        ...teacherDetails,
+        avatar: teacherDetails?.avatar
+          ? SazedStorage.url(
+              appConfig().storageUrl.avatar + teacherDetails.avatar,
+            )
+          : null,
+        status: teacherDetails.status == 1 ? 'ACTIVE' : 'INACTIVE',
       },
     };
   }
