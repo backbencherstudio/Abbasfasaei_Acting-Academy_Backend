@@ -16,13 +16,6 @@ export class EventsService {
   async getEventById(eventId: string) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      include: {
-        members: {
-          include: {
-            user: true,
-          },
-        },
-      },
     });
     return event;
   }
@@ -54,7 +47,8 @@ export class EventsService {
 
       return {
         success: true,
-        data: { creator, event },
+        message: 'Event created successfully',
+        data: event,
       };
     } catch (error) {
       return {
@@ -77,6 +71,13 @@ export class EventsService {
         where: { id: userId },
       });
 
+      if (!creator) {
+        return {
+          success: false,
+          message: 'User not found',
+        };
+      }
+
       const event = await this.prisma.event.update({
         where: { id: eventId },
         data: {
@@ -87,7 +88,7 @@ export class EventsService {
       return {
         success: true,
         message: 'Event updated successfully',
-        data: { event, creator },
+        data: event,
       };
     } catch (error) {
       return {
