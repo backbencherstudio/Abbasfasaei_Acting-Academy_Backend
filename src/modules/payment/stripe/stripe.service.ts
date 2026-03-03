@@ -146,21 +146,43 @@ export class StripeService {
       },
     );
 
-    // Upsert pending UserPayment
-    await this.prisma.userPayment.upsert({
-      where: { enrollmentId },
-      create: {
-        enrollmentId,
+    // Create new Order, OrderItem, and Transaction for the subscription
+    const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const order = await this.prisma.order.create({
+      data: {
+        order_number: orderNumber,
         user_id: userId,
-        payment_type: 'MONTHLY' as any,
-        payment_status: 'DUE',
-        amount,
+        total_amount: amount,
         currency: currency.toUpperCase(),
+        status: 'PENDING',
+        notes: `Subscription Checkout Enrollment ID: ${enrollmentId}`,
+        items: {
+          create: {
+            item_type: 'COURSE_ENROLLMENT',
+            course_id: enrollment.courseId,
+            unit_price: amount,
+            quantity: 1,
+            total_price: amount,
+          },
+        },
       },
-      update: {
-        payment_type: 'MONTHLY' as any,
+    });
+
+    await this.prisma.transaction.create({
+      data: {
+        transaction_ref: session.id, // Link the session ID
+        order_id: order.id,
+        user_id: userId,
         amount,
         currency: currency.toUpperCase(),
+        status: 'PENDING',
+        gateway: 'STRIPE',
+        payment_method: 'MONTHLY',
+        metadata: {
+          enrollmentId,
+          payment_type: 'MONTHLY',
+          customer_id: customerId,
+        },
       },
     });
 

@@ -111,13 +111,13 @@ model User {
   ActingGoals ActingGoals?
 
   // Events
-  createdEvents    Event[]        @relation("EventCreator")
+  createdEvents    Event[]       @relation("EventCreator")
   eventMemberships EventMember[]
-  eventPayments    EventPayment[]
+  // eventPayments    EventPayment[]
 
   // Payments
-  payment_histories PaymentHistory[]
-  userPayments      UserPayment[]
+  // payment_histories PaymentHistory[]
+  // userPayments      UserPayment[]
 
   // Roles & settings
   role_users    RoleUser[]
@@ -132,6 +132,10 @@ model User {
   userReportsAsReported     UserReport[]   @relation("ReportedUser")
 
   createdQRSessions QRAttendanceSession[]
+
+  // new order system
+  orders       Order[]
+  transactions Transaction[]
 
   @@map("users")
 }
@@ -239,56 +243,60 @@ model Notification {
   @@map("notifications")
 }
 
-model UserPayment {
-  id                String           @id @default(cuid())
-  enrollmentId      String           @unique
-  payment_type      PaymentType?
-  payment_status    PaymentStatus    @default(DUE)
-  payment_method    String?
-  account_holder    String?
-  card_number       String?
-  card_expiry       String?
-  card_cvc          String?
-  provider          String?          @default("STRIPE")
-  customer_id       String?
-  payment_method_id String?
-  card_brand        String?
-  card_last4        String?
-  card_exp_month    Int?
-  card_exp_year     Int?
-  invoice_url       String?
-  invoice_sent      Boolean?         @default(false)
-  amount            Decimal?
-  currency          String?          @default("USD")
-  payment_date      DateTime?        @default(now())
-  transaction_id    String?
-  user_id           String
-  enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  user              User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  payment_histories PaymentHistory[]
+// -------------------------------------------------------------
+// LEGACY PAYMENT MODELS (COMMENTED OUT FOR MIGRATION)
+// -------------------------------------------------------------
 
-  @@map("enrollment_payments")
-}
-
-model PaymentHistory {
-  id             String        @id @default(cuid())
-  created_at     DateTime      @default(now())
-  updated_at     DateTime      @default(now())
-  deleted_at     DateTime?
-  user_id        String
-  description    String?
-  userPaymentId  String?
-  amount         Decimal?
-  currency       String?       @default("USD")
-  payment_date   DateTime?     @default(now())
-  payment_status PaymentStatus @default(DUE)
-  payment_type   PaymentType?
-  transaction_id String?
-  userPayment    UserPayment?  @relation(fields: [userPaymentId], references: [id], onDelete: Cascade)
-  user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@map("payment_histories")
-}
+// model UserPayment {
+//   id                String           @id @default(cuid())
+//   enrollmentId      String           @unique
+//   payment_type      PaymentType?
+//   payment_status    PaymentStatus    @default(DUE)
+//   payment_method    String?
+//   account_holder    String?
+//   card_number       String?
+//   card_expiry       String?
+//   card_cvc          String?
+//   provider          String?          @default("STRIPE")
+//   customer_id       String?
+//   payment_method_id String?
+//   card_brand        String?
+//   card_last4        String?
+//   card_exp_month    Int?
+//   card_exp_year     Int?
+//   invoice_url       String?
+//   invoice_sent      Boolean?         @default(false)
+//   amount            Decimal?
+//   currency          String?          @default("USD")
+//   payment_date      DateTime?        @default(now())
+//   transaction_id    String?
+//   user_id           String
+//   enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+//   user              User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+//   payment_histories PaymentHistory[]
+// 
+//   @@map("enrollment_payments")
+// }
+// 
+// model PaymentHistory {
+//   id             String        @id @default(cuid())
+//   created_at     DateTime      @default(now())
+//   updated_at     DateTime      @default(now())
+//   deleted_at     DateTime?
+//   user_id        String
+//   description    String?
+//   userPaymentId  String?
+//   amount         Decimal?
+//   currency       String?       @default("USD")
+//   payment_date   DateTime?     @default(now())
+//   payment_status PaymentStatus @default(DUE)
+//   payment_type   PaymentType?
+//   transaction_id String?
+//   userPayment    UserPayment?  @relation(fields: [userPaymentId], references: [id], onDelete: Cascade)
+//   user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+// 
+//   @@map("payment_histories")
+// }
 
 model Course {
   id         String   @id @default(cuid())
@@ -310,6 +318,7 @@ model Course {
   instructor            User?          @relation(fields: [instructorId], references: [id], onDelete: Cascade)
   modules               CourseModule[]
   enrollments           Enrollment[]
+  orderItems            OrderItem[]
 }
 
 model CourseModule {
@@ -464,29 +473,29 @@ model AssignmentGrade {
 }
 
 model Enrollment {
-  id                 String             @id @default(cuid())
-  created_at         DateTime           @default(now())
-  updated_at         DateTime           @default(now())
+  id                 String           @id @default(cuid())
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @default(now())
   user_id            String
   full_name          String
   email              String
   phone              String
   address            String
-  date_of_birth      DateTime?          @db.Date
+  date_of_birth      DateTime?        @db.Date
   experience_level   ExperienceLevel
   courseId           String?
   courseModuleId     String?
   actingGoalsId      String?
   contract_docs      Json?
-  status             EnrollmentStatus   @default(PENDING)
-  payment_status     PaymentStatus      @default(DUE)
-  IsPaymentCompleted Boolean            @default(false)
-  payment_type       PaymentType?
+  status             EnrollmentStatus @default(PENDING)
+  // payment_status     PaymentStatus      @default(DUE)
+  IsPaymentCompleted Boolean          @default(false)
+  // payment_type       PaymentType?
   actingGoals        ActingGoals?
-  payment            UserPayment?
-  enrollmentProfile  EnrollmentProfile?
-  course             Course?            @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  user               User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  // payment            UserPayment?
+  // enrollmentProfile  EnrollmentProfile?
+  course             Course?          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user               User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   digital_contract_signing  DigitalContractSigning?
   rules_regulations_signing RulesAndRegulationsSigning?
@@ -539,30 +548,30 @@ model ActingGoals {
   @@map("acting_goals")
 }
 
-model EnrollmentProfile {
-  id                String           @id @default(cuid())
-  enrollmentId      String           @unique
-  avatar            String?
-  personal_info     Json?
-  account_settings  Json?
-  subscription      Json?
-  contract_docs     Json?
-  feedback          Json?
-  push_notification Json?
-  support           Json?
-  address           String
-  created_at        DateTime         @default(now())
-  date_of_birth     DateTime?        @db.Date
-  email             String
-  enrollment_status EnrollmentStatus @default(PENDING)
-  experience_level  ExperienceLevel
-  full_name         String
-  phone             String
-  updated_at        DateTime         @default(now()) @updatedAt
-  enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-
-  @@map("enrollment_profiles")
-}
+// model EnrollmentProfile {
+//   id                String           @id @default(cuid())
+//   enrollmentId      String           @unique
+//   avatar            String?
+//   personal_info     Json?
+//   account_settings  Json?
+//   subscription      Json?
+//   contract_docs     Json?
+//   feedback          Json?
+//   push_notification Json?
+//   support           Json?
+//   address           String
+//   created_at        DateTime         @default(now())
+//   date_of_birth     DateTime?        @db.Date
+//   email             String
+//   enrollment_status EnrollmentStatus @default(PENDING)
+//   experience_level  ExperienceLevel
+//   full_name         String
+//   phone             String
+//   updated_at        DateTime         @default(now()) @updatedAt
+//   enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+// 
+//   @@map("enrollment_profiles")
+// }
 
 //
 //---------------------------------- Community & Social Models -----------------//
@@ -815,24 +824,23 @@ model CallParticipant {
 //
 
 model Event {
-  id                 String         @id @default(cuid())
-  created_at         DateTime       @default(now())
-  updated_at         DateTime       @default(now())
-  deleted_at         DateTime?
-  name               String
-  description        String?
-  overview           String?
-  date               DateTime
-  time               String?
-  location           String
-  amount             Decimal?
-  IsPaymentCompleted Boolean        @default(false)
-  status             EventStatus    @default(UPCOMING)
-  files              Json?
-  created_by         String
-  members            EventMember[]
-  payments           EventPayment[]
-  creator            User           @relation("EventCreator", fields: [created_by], references: [id], onDelete: Cascade)
+  id          String        @id @default(cuid())
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @default(now())
+  deleted_at  DateTime?
+  name        String
+  description String?
+  overview    String?
+  date        DateTime
+  time        String?
+  location    String
+  amount      Decimal?
+  files       Json?
+  created_by  String
+  members     EventMember[]
+  // payments           EventPayment[]
+  creator     User          @relation("EventCreator", fields: [created_by], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
 
   @@map("events")
 }
@@ -843,7 +851,9 @@ model EventMember {
   updated_at DateTime @default(now())
   event_id   String
   user_id    String
+  order_id   String
 
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
   event Event @relation(fields: [event_id], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -851,27 +861,27 @@ model EventMember {
   @@map("event_members")
 }
 
-model EventPayment {
-  id              String             @id @default(cuid())
-  created_at      DateTime           @default(now())
-  updated_at      DateTime           @default(now())
-  event_id        String
-  user_id         String
-  amount          Decimal
-  currency        String?            @default("USD")
-  status          EventPaymentStatus @default(PENDING)
-  transaction_id  String?
-  payment_method  String?
-  payment_date    DateTime?
-  receipt_file    String?
-  invoice_file    String?
-  transaction_ref String?
-  event           Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user            User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@unique([event_id, user_id])
-  @@map("event_payments")
-}
+// model EventPayment {
+//   id              String             @id @default(cuid())
+//   created_at      DateTime           @default(now())
+//   updated_at      DateTime           @default(now())
+//   event_id        String
+//   user_id         String
+//   amount          Decimal
+//   currency        String?            @default("USD")
+//   status          EventPaymentStatus @default(PENDING)
+//   transaction_id  String?
+//   payment_method  String?
+//   payment_date    DateTime?
+//   receipt_file    String?
+//   invoice_file    String?
+//   transaction_ref String?
+//   event           Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
+//   user            User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+// 
+//   @@unique([event_id, user_id])
+//   @@map("event_payments")
+// }
 
 model Faq {
   id         String    @id @default(cuid())
@@ -984,16 +994,16 @@ enum AttendanceStatus {
   ABSENT
 }
 
-enum PaymentType {
-  MONTHLY
-  ONE_TIME
-}
+// enum PaymentType {
+//   MONTHLY
+//   ONE_TIME
+// }
 
-enum PaymentStatus {
-  PAID
-  DUE
-  OVER_DUE
-}
+// enum PaymentStatus {
+//   PAID
+//   DUE
+//   OVER_DUE
+// }
 
 enum ExperienceLevel {
   BEGINNER
@@ -1066,9 +1076,125 @@ enum EventStatus {
   CANCELLED
 }
 
-enum EventPaymentStatus {
+// enum EventPaymentStatus {
+//   PENDING
+//   PAID
+//   FAILED
+//   REFUNDED
+// }
+
+// ==============================================================================
+// 🚀 PROPOSED CENTRALIZED ORDER & PAYMENT ARCHITECTURE (UNCOMMENT TO USE)
+// ==============================================================================
+
+// 1. Enums for the new architecture
+enum OrderStatus {
   PENDING
-  PAID
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum OrderItemType {
+  COURSE_ENROLLMENT
+  EVENT_TICKET
+  // Future items: MERCHANDISE, DIGITAL_PRODUCT, PRIVATE_SESSION, etc.
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
   FAILED
   REFUNDED
 }
+
+enum PaymentGateway {
+  STRIPE
+  PAYPAL
+  SSLCOMMERZ
+  MANUAL_BANK_TRANSFER
+  CASH
+}
+
+// 2. Centralized Order Model
+model Order {
+  id           String      @id @default(cuid())
+  order_number String      @unique // e.g., ORD-2026-XXXX
+  user_id      String
+  total_amount Decimal
+  currency     String      @default("USD")
+  status       OrderStatus @default(PENDING)
+
+  billing_address Json? // Structured billing info
+  notes           String? // Any special instructions
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  items        OrderItem[]
+  transactions Transaction[]
+  eventMembers EventMember[]
+
+  @@index([user_id])
+  @@index([status])
+  @@map("orders")
+}
+
+// 3. Order Item Model (Handles Cart/Multiple Items in one Order)
+model OrderItem {
+  id        String        @id @default(cuid())
+  order_id  String
+  item_type OrderItemType
+
+  // References to the actual products/services
+  course_id String? // If item_type == COURSE_ENROLLMENT
+  event_id  String? // If item_type == EVENT_TICKET
+
+  unit_price  Decimal
+  quantity    Int     @default(1)
+  total_price Decimal // unit_price * quantity
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  course Course? @relation(fields: [course_id], references: [id], onDelete: SetNull)
+  event  Event?  @relation(fields: [event_id], references: [id], onDelete: SetNull)
+
+  @@index([order_id])
+  @@map("order_items")
+}
+
+model Transaction {
+  id              String @id @default(cuid())
+  transaction_ref String @unique // ID returned by Gateway (e.g. Stripe Pi_xxxx)
+  order_id        String
+  user_id         String
+
+  amount   Decimal
+  currency String            @default("USD")
+  status   TransactionStatus @default(PENDING)
+  gateway  PaymentGateway    @default(STRIPE)
+
+  payment_method String?
+  card_last4     String?
+  receipt_url    String?
+  metadata       Json? // To store raw webhook data from payment provider
+
+  payment_date DateTime? @default(now())
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([order_id])
+  @@index([user_id])
+  @@index([transaction_ref])
+  @@map("transactions")
+}
+
+// ==============================================================================

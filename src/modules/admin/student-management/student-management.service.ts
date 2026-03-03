@@ -112,13 +112,7 @@ export class StudentManagementService {
         created_at: true,
         updated_at: true,
         user: { select: { id: true, email: true, role_users: true } },
-        payment: {
-          select: {
-            id: true,
-            payment_type: true,
-            payment_status: true,
-          },
-        },
+        IsPaymentCompleted: true,
         actingGoals: {
           select: {
             id: true,
@@ -194,88 +188,77 @@ export class StudentManagementService {
 
     console.log('enrollment in payment:', enrollment);
 
-    // If a payment already exists for this enrollment, update it; otherwise create a new one
-    const existingPayment = await this.prisma.userPayment.findUnique({
-      where: { enrollmentId: enrollment.id },
-      select: { id: true },
-    });
-
-    const dataToPersist: any = {
-      transaction_id: dto.transaction_id,
-      amount: dto.amount,
-      payment_date: dto.payment_date ? new Date(dto.payment_date) : undefined,
-      payment_type: dto.payment_type,
-      payment_status: dto.payment_status,
-      currency: dto.currency,
-      payment_method: dto.payment_method,
-      account_holder: dto.account_holder,
-      card_number: dto.card_number,
-      card_expiry: dto.card_expiry,
-      card_cvc: dto.card_cvc,
-      invoice_sent: dto.invoice_sent,
-    };
-
-    // Clean undefined to avoid unintended nulling
-    Object.keys(dataToPersist).forEach((k) =>
-      dataToPersist[k] === undefined ? delete dataToPersist[k] : null,
-    );
-
-    let payment;
-    if (existingPayment) {
-      payment = await this.prisma.userPayment.update({
-        where: { id: existingPayment.id },
-        data: dataToPersist,
-        select: {
-          id: true,
-          transaction_id: true,
-          payment_date: true,
-          amount: true,
-          currency: true,
-          payment_status: true,
-          user: { select: { id: true, email: true } },
-          enrollment: { select: { id: true, courseId: true } },
-        },
-      });
-    } else {
-      payment = await this.prisma.userPayment.create({
-        data: {
-          enrollment: { connect: { id: enrollment.id } },
-          user: { connect: { id: enrollment.user.id } },
-          ...dataToPersist,
-        },
-        select: {
-          id: true,
-          transaction_id: true,
-          payment_date: true,
-          amount: true,
-          currency: true,
-          payment_status: true,
-          user: { select: { id: true, email: true } },
-          enrollment: { select: { id: true, courseId: true } },
-        },
-      });
-    }
-
-    console.log('payment:', payment);
-
-    const paymentHistory = await this.prisma.paymentHistory.create({
-      data: {
+    const existingOrder = await this.prisma.order.findFirst({
+      where: {
         user_id: enrollment.user.id,
-        userPaymentId: payment.id,
-        amount: payment.amount,
-        payment_date: payment.payment_date,
-        transaction_id: payment.transaction_id,
-        payment_status: payment.payment_status,
-        description: existingPayment
-          ? 'Manual enrollment payment updated'
-          : 'Manual enrollment payment created',
+        items: { some: { course_id: enrollment.course.id } },
       },
     });
 
+    let orderId = existingOrder?.id;
+    if (!orderId) {
+      const order = await this.prisma.order.create({
+        data: {
+          order_number: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          user_id: enrollment.user.id,
+          total_amount: dto.amount || enrollment.course.fee,
+          currency: dto.currency || 'USD',
+          status:
+            dto.payment_status === 'PAID' || dto.payment_status === 'SUCCESS'
+              ? 'COMPLETED'
+              : 'PENDING',
+          items: {
+            create: {
+              item_type: 'COURSE_ENROLLMENT',
+              course_id: enrollment.course.id,
+              unit_price: enrollment.course.fee || 0,
+              quantity: 1,
+              total_price: enrollment.course.fee || 0,
+            },
+          },
+        },
+      });
+      orderId = order.id;
+    }
+
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        transaction_ref: dto.transaction_id || `MANUAL-${Date.now()}`,
+        order_id: orderId,
+        user_id: enrollment.user.id,
+        amount: dto.amount || 0,
+        currency: dto.currency || 'USD',
+        status:
+          dto.payment_status === 'PAID' || dto.payment_status === 'SUCCESS'
+            ? 'SUCCESS'
+            : 'PENDING',
+        gateway: 'MANUAL_BANK_TRANSFER',
+        payment_method: dto.payment_method,
+        metadata: {
+          payment_type: dto.payment_type,
+          account_holder: dto.account_holder,
+          card_number: dto.card_number,
+          card_expiry: dto.card_expiry,
+          invoice_sent: dto.invoice_sent,
+          description: existingOrder
+            ? 'Manual enrollment payment updated'
+            : 'Manual enrollment payment created',
+        },
+      },
+    });
+
+    // Update the enrollment payment completion if successful
+    if (transaction.status === 'SUCCESS') {
+      await this.prisma.enrollment.update({
+        where: { id: enrollmentId },
+        data: { IsPaymentCompleted: true },
+      });
+    }
+
     return {
       success: true,
-      data: payment,
-      paymentHistory: paymentHistory,
+      data: transaction,
+      paymentHistory: [transaction],
     };
   }
 
@@ -364,15 +347,7 @@ export class StudentManagementService {
           },
         },
         actingGoals: { select: { acting_goals: true } },
-        payment: {
-          select: {
-            id: true,
-            transaction_id: true,
-            amount: true,
-            payment_date: true,
-            payment_status: true,
-          },
-        },
+        IsPaymentCompleted: true,
 
         contract_docs: true,
       },
@@ -412,13 +387,7 @@ export class StudentManagementService {
         created_at: true,
         updated_at: true,
         user: { select: { id: true, email: true } },
-        payment: {
-          select: {
-            id: true,
-            payment_type: true,
-            payment_status: true,
-          },
-        },
+        IsPaymentCompleted: true,
         actingGoalsId: true,
         course: {
           select: {
@@ -457,18 +426,14 @@ export class StudentManagementService {
         date_of_birth: true,
         experience_level: true,
         ActingGoals: { select: { acting_goals: true } },
-        payment_histories: {
+        transactions: {
           select: {
             id: true,
-            userPayment: {
-              select: {
-                id: true,
-                payment_type: true,
-                transaction_id: true,
-                amount: true,
-                payment_date: true,
-              },
-            },
+            payment_method: true,
+            transaction_ref: true,
+            amount: true,
+            payment_date: true,
+            status: true,
           },
         },
       },
@@ -504,12 +469,8 @@ export class StudentManagementService {
       where: { id: enrollmentId },
       data: {
         status: dto.status,
-        payment: {
-          update: {
-            payment_status: dto.payment_status,
-            payment_type: dto.payment_type,
-          },
-        },
+        IsPaymentCompleted:
+          dto.payment_status === 'PAID' || dto.payment_status === 'SUCCESS',
       },
     });
 

@@ -228,20 +228,20 @@ export class FinanceService {
       const previousMonth = this.getPreviousMonthDateRange();
 
       const [currentRevenue, previousRevenue] = await Promise.all([
-        this.prisma.paymentHistory.aggregate({
+        this.prisma.transaction.aggregate({
           _sum: { amount: true },
           where: {
-            payment_status: 'PAID',
+            status: 'SUCCESS',
             payment_date: {
               gte: currentMonth.start,
               lte: currentMonth.end,
             },
           },
         }),
-        this.prisma.paymentHistory.aggregate({
+        this.prisma.transaction.aggregate({
           _sum: { amount: true },
           where: {
-            payment_status: 'PAID',
+            status: 'SUCCESS',
             payment_date: {
               gte: previousMonth.start,
               lte: previousMonth.end,
@@ -343,18 +343,19 @@ export class FinanceService {
     } catch (error) {
       this.logger.error(`Error getting attendance tracking: ${error.message}`);
       return [];
-    }    
+    }
   }
 
   private async getRecentTransactions(limit: number = 6) {
     try {
-        const recentTransactions = await this.prisma.paymentHistory.findMany({
-            take: limit,
-        });
-        return recentTransactions;
+      const recentTransactions = await this.prisma.transaction.findMany({
+        take: limit,
+        orderBy: { payment_date: 'desc' },
+      });
+      return recentTransactions;
     } catch (error) {
-        this.logger.error(`Error getting recent transactions: ${error.message}`);
-        return [];
+      this.logger.error(`Error getting recent transactions: ${error.message}`);
+      return [];
     }
   }
 }

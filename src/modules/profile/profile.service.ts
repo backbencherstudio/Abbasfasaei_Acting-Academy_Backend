@@ -16,53 +16,53 @@ export class ProfileService {
   ) {}
 
   async getCompleteProfile(userId: string) {
-  // Step 1: Check if user exists
-  const user = await this.prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phone_number: true,
-      experience_level: true, 
-    },
-  });
+    // Step 1: Check if user exists
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone_number: true,
+        experience_level: true,
+      },
+    });
 
-  if (!user) {
-    throw new NotFoundException('User not found');
-  }
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
 
-  // Step 2: Count paid payments
-  const paidPaymentCount = await this.prisma.paymentHistory.count({
-    where: {
-      user_id: userId,
-      payment_status: 'PAID',
-    },
-  });
+    // Step 2: Count paid payments
+    const paidPaymentCount = await this.prisma.transaction.count({
+      where: {
+        user_id: userId,
+        status: 'SUCCESS',
+      },
+    });
 
-  const hasPaid = paidPaymentCount > 0;
-  const profileType = hasPaid ? 'active' : 'general';
+    const hasPaid = paidPaymentCount > 0;
+    const profileType = hasPaid ? 'active' : 'general';
 
-  // Base profile response for all users
-  const baseProfile = {
-    profileType,
-    personalInfo: await this.getPersonalInfo(userId),
-    hasActiveSubscription: hasPaid,
-  };
-
-  // Add active user features only if they have paid
-  if (hasPaid) {
-    return {
-      ...baseProfile,
-      // subscriptionPayment: await this.getSubscriptionPayment(userId),
-      // contractDocuments: await this.getContractDocuments(userId),
-      // feedbackCertificates: await this.getFeedbackCertificates(userId),
+    // Base profile response for all users
+    const baseProfile = {
+      profileType,
+      personalInfo: await this.getPersonalInfo(userId),
+      hasActiveSubscription: hasPaid,
     };
-  }
 
-  // Return general profile for users without payments
-  return baseProfile;
-}
+    // Add active user features only if they have paid
+    if (hasPaid) {
+      return {
+        ...baseProfile,
+        // subscriptionPayment: await this.getSubscriptionPayment(userId),
+        // contractDocuments: await this.getContractDocuments(userId),
+        // feedbackCertificates: await this.getFeedbackCertificates(userId),
+      };
+    }
+
+    // Return general profile for users without payments
+    return baseProfile;
+  }
 
   async getPersonalInfo(userId: string) {
     const user = await this.prisma.user.findUnique({
@@ -234,8 +234,6 @@ export class ProfileService {
 
     const response = await this.authService.revokeRefreshToken(userId);
 
-
-
     return { message: 'Account deleted successfully', response };
   }
 
@@ -338,7 +336,7 @@ export class ProfileService {
 
     const response = await this.authService.revokeRefreshToken(userId);
 
-    return { message: 'Logged out successfully', response  };
+    return { message: 'Logged out successfully', response };
   }
 
   // Active User Only Methods

@@ -99,53 +99,41 @@ export class StripeController {
         customerId: body.customerId,
       });
 
-    // Upsert UserPayment record as DUE with reference to PI
-    await this.prisma.userPayment.upsert({
-      where: { enrollmentId },
-      create: {
-        enrollmentId,
+    // Create new Order, OrderItem, and Transaction
+    const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const order = await this.prisma.order.create({
+      data: {
+        order_number: orderNumber,
         user_id: userId,
-        payment_type: payment_type as any,
-        payment_status: 'DUE',
-        amount,
+        total_amount: amount,
         currency: currency.toUpperCase(),
-        transaction_id: payment_intent_id,
-        provider: 'STRIPE',
-        account_holder: body.name,
-        customer_id: customer_id,
-      } as any,
-      update: {
-        payment_type: payment_type as any,
-        amount,
-        currency: currency.toUpperCase(),
-        transaction_id: payment_intent_id,
-        provider: 'STRIPE',
-        account_holder: body.name,
-        customer_id: customer_id,
-      } as any,
-    });
-
-    // Create initial PaymentHistory entry
-    const userPayment = await this.prisma.userPayment.findUnique({
-      where: { enrollmentId },
-      select: { id: true },
-    });
-    if (userPayment) {
-      await this.prisma.paymentHistory.create({
-        data: {
-          user_id: userId,
-          userPaymentId: userPayment.id,
-          amount,
-          currency: currency.toUpperCase(),
-          payment_status: 'DUE',
-          payment_type: payment_type as any,
-          transaction_id: payment_intent_id,
-          description: 'Enrollment payment initiated',
+        status: 'PENDING',
+        notes: `Enrollment ID: ${enrollmentId}`,
+        items: {
+          create: {
+            item_type: 'COURSE_ENROLLMENT',
+            course_id: enrollment.courseId,
+            unit_price: amount,
+            quantity: 1,
+            total_price: amount,
+          },
         },
-      });
-    }
+      },
+    });
 
-    // Transaction record persisted via UserPayment + PaymentHistory; no legacy transaction table used.
+    await this.prisma.transaction.create({
+      data: {
+        transaction_ref: payment_intent_id,
+        order_id: order.id,
+        user_id: userId,
+        amount,
+        currency: currency.toUpperCase(),
+        status: 'PENDING',
+        gateway: 'STRIPE',
+        payment_method: payment_type,
+        metadata: { enrollmentId, payment_type, customer_id },
+      },
+    });
 
     return {
       success: true,
@@ -183,51 +171,45 @@ export class StripeController {
           const card_exp_year = card?.exp_year;
 
           if (enrollmentId && userId) {
-            // Update UserPayment and Enrollment
-            await this.prisma.userPayment.update({
-              where: { enrollmentId },
+            // Update the Transaction status to SUCCESS
+            const updatedTransaction = await this.prisma.transaction.update({
+              where: { transaction_ref: paymentIntent.id },
               data: {
-                payment_status: 'PAID',
+                status: 'SUCCESS',
                 payment_date: new Date(),
-                provider: 'STRIPE',
-                customer_id: paymentIntent.customer ?? undefined,
-                payment_method_id: paymentIntent.payment_method ?? undefined,
-                card_brand,
                 card_last4,
-                card_exp_month,
-                card_exp_year,
-              } as any,
-            });
-
-            await this.prisma.enrollment.update({
-              where: { id: enrollmentId },
-              data: {
-                payment_status: 'PAID',
-                status: 'ACTIVE',
+                metadata: {
+                  ...(typeof paymentIntent.metadata === 'object'
+                    ? paymentIntent.metadata
+                    : {}),
+                  customer_id: paymentIntent.customer ?? undefined,
+                  payment_method_id: paymentIntent.payment_method ?? undefined,
+                  card_brand,
+                  card_exp_month,
+                  card_exp_year,
+                },
               },
             });
 
-            const userPayment = await this.prisma.userPayment.findUnique({
-              where: { enrollmentId },
-              select: { id: true },
-            });
-            if (userPayment) {
-              await this.prisma.paymentHistory.create({
+            // Update the Order status to COMPLETED
+            if (updatedTransaction) {
+              await this.prisma.order.update({
+                where: { id: updatedTransaction.order_id },
                 data: {
-                  user_id: userId,
-                  userPaymentId: userPayment.id,
-                  amount,
-                  currency,
-                  payment_status: 'PAID',
-                  payment_type: undefined,
-                  transaction_id: paymentIntent.id,
-                  description: 'Enrollment payment captured',
+                  status: 'COMPLETED',
                 },
               });
             }
-          }
 
-          // No legacy transaction table: persisted via PaymentHistory
+            // Update Enrollment status
+            await this.prisma.enrollment.update({
+              where: { id: enrollmentId },
+              data: {
+                IsPaymentCompleted: true,
+                status: 'ACTIVE',
+              },
+            });
+          }
           break;
         }
         case 'payment_intent.payment_failed':
@@ -264,37 +246,47 @@ export class StripeController {
           const payment_intent = invoice.payment_intent; // id only
 
           if (enrollmentId && userId) {
-            await this.prisma.userPayment.update({
-              where: { enrollmentId },
+            // Find an existing order for this enrollment or create one
+            const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+            const order = await this.prisma.order.create({
               data: {
-                payment_status: 'PAID',
-                payment_date: new Date(),
-                transaction_id: subscriptionId,
-                provider: 'STRIPE',
-                customer_id: invoice.customer ?? undefined,
-                payment_method_id: invoice.payment_method ?? undefined,
-                invoice_url: invoice.hosted_invoice_url ?? undefined,
-              } as any,
+                order_number: orderNumber,
+                user_id: userId,
+                total_amount: amount || 0,
+                currency: currency || 'USD',
+                status: 'COMPLETED',
+                notes: `Subscription payment for Enrollment ID: ${enrollmentId}`,
+              },
             });
 
-            const up = await this.prisma.userPayment.findUnique({
-              where: { enrollmentId },
-              select: { id: true },
-            });
-            if (up) {
-              await this.prisma.paymentHistory.create({
-                data: {
-                  user_id: userId,
-                  userPaymentId: up.id,
-                  amount,
-                  currency,
-                  payment_status: 'PAID',
-                  payment_type: 'MONTHLY' as any,
-                  transaction_id: subscriptionId,
-                  description: 'Subscription invoice paid',
+            await this.prisma.transaction.create({
+              data: {
+                transaction_ref:
+                  payment_intent || subscriptionId || `inv_${Date.now()}`,
+                order_id: order.id,
+                user_id: userId,
+                amount: amount || 0,
+                currency: currency || 'USD',
+                status: 'SUCCESS',
+                gateway: 'STRIPE',
+                receipt_url: invoice.hosted_invoice_url ?? undefined,
+                payment_date: new Date(),
+                metadata: {
+                  enrollmentId,
+                  subscriptionId,
+                  customer_id: invoice.customer ?? undefined,
+                  payment_method_id: invoice.payment_method ?? undefined,
                 },
-              });
-            }
+              },
+            });
+
+            await this.prisma.enrollment.update({
+              where: { id: enrollmentId },
+              data: {
+                IsPaymentCompleted: true,
+                status: 'ACTIVE',
+              },
+            });
           }
           break;
         }
@@ -307,12 +299,7 @@ export class StripeController {
           const userId = metadata.userId;
           if (!enrollmentId || !userId) break;
           // Reflect status changes; do not mark paid here (we do that on invoice)
-          await this.prisma.userPayment.update({
-            where: { enrollmentId },
-            data: {
-              transaction_id: sub.id,
-            },
-          });
+          // Since we use Transaction models, we will log this in metadata of a transaction if needed or just skip.
           break;
         }
         default:

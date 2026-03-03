@@ -269,20 +269,20 @@ export class DashboardService {
       const previousMonth = this.getPreviousMonthDateRange();
 
       const [currentRevenue, previousRevenue] = await Promise.all([
-        this.prisma.paymentHistory.aggregate({
+        this.prisma.transaction.aggregate({
           _sum: { amount: true },
           where: {
-            payment_status: 'PAID',
+            status: 'SUCCESS',
             payment_date: {
               gte: currentMonth.start,
               lte: currentMonth.end,
             },
           },
         }),
-        this.prisma.paymentHistory.aggregate({
+        this.prisma.transaction.aggregate({
           _sum: { amount: true },
           where: {
-            payment_status: 'PAID',
+            status: 'SUCCESS',
             payment_date: {
               gte: previousMonth.start,
               lte: previousMonth.end,

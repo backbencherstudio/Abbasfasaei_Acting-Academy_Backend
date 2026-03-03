@@ -73,71 +73,39 @@ export class FinanceAndPaymentsService {
       const lastYearEnd = new Date(lastYear, 11, 31, 23, 59, 59);
 
       const [currentYearRevenue, lastYearRevenue] = await Promise.all([
-        // Course payments from current year
-        this.prisma.userPayment.aggregate({
+        // All payments from current year
+        this.prisma.transaction.aggregate({
           where: {
-            payment_status: 'PAID',
+            status: 'SUCCESS',
             payment_date: {
               gte: currentYearStart,
               lte: currentYearEnd,
             },
           },
-          _sum: {
-            amount: true,
-          },
+          _sum: { amount: true },
         }),
-        // Event payments from current year
-        this.prisma.eventPayment.aggregate({
+        // All payments from last year
+        this.prisma.transaction.aggregate({
           where: {
-            status: 'PAID',
-            payment_date: {
-              gte: currentYearStart,
-              lte: currentYearEnd,
-            },
-          },
-          _sum: {
-            amount: true,
-          },
-        }),
-        // Course payments from last year
-        this.prisma.userPayment.aggregate({
-          where: {
-            payment_status: 'PAID',
+            status: 'SUCCESS',
             payment_date: {
               gte: lastYearStart,
               lte: lastYearEnd,
             },
           },
-          _sum: {
-            amount: true,
-          },
-        }),
-        // Event payments from last year
-        this.prisma.eventPayment.aggregate({
-          where: {
-            status: 'PAID',
-            payment_date: {
-              gte: lastYearStart,
-              lte: lastYearEnd,
-            },
-          },
-          _sum: {
-            amount: true,
-          },
+          _sum: { amount: true },
         }),
       ]);
 
-      const currentTotal = 
-        (currentYearRevenue._sum.amount?.toNumber() || 0) +
-        (lastYearRevenue._sum.amount?.toNumber() || 0);
-      
-      const previousTotal = 
-        (currentYearRevenue._sum.amount?.toNumber() || 0) +
-        (lastYearRevenue._sum.amount?.toNumber() || 0);
+      const currentTotal = currentYearRevenue._sum.amount?.toNumber() || 0;
+      const previousTotal = lastYearRevenue._sum.amount?.toNumber() || 0;
 
-      const percentageChange = previousTotal > 0 
-        ? ((currentTotal - previousTotal) / previousTotal) * 100 
-        : currentTotal > 0 ? 100 : 0;
+      const percentageChange =
+        previousTotal > 0
+          ? ((currentTotal - previousTotal) / previousTotal) * 100
+          : currentTotal > 0
+            ? 100
+            : 0;
 
       return {
         current: currentTotal,
@@ -155,40 +123,48 @@ export class FinanceAndPaymentsService {
       const now = new Date();
       const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      const lastMonthEnd = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+      );
 
       const [currentMonthRevenue, lastMonthRevenue] = await Promise.all([
-        this.prisma.userPayment.aggregate({
+        this.prisma.transaction.aggregate({
           where: {
-            payment_status: 'PAID',
+            status: 'SUCCESS',
+            order: { items: { some: { item_type: 'COURSE_ENROLLMENT' } } },
             payment_date: {
               gte: currentMonthStart,
               lte: now,
             },
           },
-          _sum: {
-            amount: true,
-          },
+          _sum: { amount: true },
         }),
-        this.prisma.userPayment.aggregate({
+        this.prisma.transaction.aggregate({
           where: {
-            payment_status: 'PAID',
+            status: 'SUCCESS',
+            order: { items: { some: { item_type: 'COURSE_ENROLLMENT' } } },
             payment_date: {
               gte: lastMonthStart,
               lte: lastMonthEnd,
             },
           },
-          _sum: {
-            amount: true,
-          },
+          _sum: { amount: true },
         }),
       ]);
 
       const current = currentMonthRevenue._sum.amount?.toNumber() || 0;
       const previous = lastMonthRevenue._sum.amount?.toNumber() || 0;
-      const percentageChange = previous > 0 
-        ? ((current - previous) / previous) * 100 
-        : current > 0 ? 100 : 0;
+      const percentageChange =
+        previous > 0
+          ? ((current - previous) / previous) * 100
+          : current > 0
+            ? 100
+            : 0;
 
       return {
         current,
@@ -206,40 +182,48 @@ export class FinanceAndPaymentsService {
       const now = new Date();
       const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      const lastMonthEnd = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+      );
 
       const [currentMonthRevenue, lastMonthRevenue] = await Promise.all([
-        this.prisma.eventPayment.aggregate({
+        this.prisma.transaction.aggregate({
           where: {
-            status: 'PAID',
+            status: 'SUCCESS',
+            order: { items: { some: { item_type: 'EVENT_TICKET' } } },
             payment_date: {
               gte: currentMonthStart,
               lte: now,
             },
           },
-          _sum: {
-            amount: true,
-          },
+          _sum: { amount: true },
         }),
-        this.prisma.eventPayment.aggregate({
+        this.prisma.transaction.aggregate({
           where: {
-            status: 'PAID',
+            status: 'SUCCESS',
+            order: { items: { some: { item_type: 'EVENT_TICKET' } } },
             payment_date: {
               gte: lastMonthStart,
               lte: lastMonthEnd,
             },
           },
-          _sum: {
-            amount: true,
-          },
+          _sum: { amount: true },
         }),
       ]);
 
       const current = currentMonthRevenue._sum.amount?.toNumber() || 0;
       const previous = lastMonthRevenue._sum.amount?.toNumber() || 0;
-      const percentageChange = previous > 0 
-        ? ((current - previous) / previous) * 100 
-        : current > 0 ? 100 : 0;
+      const percentageChange =
+        previous > 0
+          ? ((current - previous) / previous) * 100
+          : current > 0
+            ? 100
+            : 0;
 
       return {
         current,
@@ -257,75 +241,47 @@ export class FinanceAndPaymentsService {
       const now = new Date();
       const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      const lastMonthEnd = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+      );
 
-      const [
-        currentMonthCourseRevenue,
-        currentMonthEventRevenue,
-        lastMonthCourseRevenue,
-        lastMonthEventRevenue,
-      ] = await Promise.all([
-        this.prisma.userPayment.aggregate({
+      const [currentMonthRevenue, lastMonthRevenue] = await Promise.all([
+        this.prisma.transaction.aggregate({
           where: {
-            payment_status: 'PAID',
+            status: 'SUCCESS',
             payment_date: {
               gte: currentMonthStart,
               lte: now,
             },
           },
-          _sum: {
-            amount: true,
-          },
+          _sum: { amount: true },
         }),
-        this.prisma.eventPayment.aggregate({
+        this.prisma.transaction.aggregate({
           where: {
-            status: 'PAID',
-            payment_date: {
-              gte: currentMonthStart,
-              lte: now,
-            },
-          },
-          _sum: {
-            amount: true,
-          },
-        }),
-        this.prisma.userPayment.aggregate({
-          where: {
-            payment_status: 'PAID',
+            status: 'SUCCESS',
             payment_date: {
               gte: lastMonthStart,
               lte: lastMonthEnd,
             },
           },
-          _sum: {
-            amount: true,
-          },
-        }),
-        this.prisma.eventPayment.aggregate({
-          where: {
-            status: 'PAID',
-            payment_date: {
-              gte: lastMonthStart,
-              lte: lastMonthEnd,
-            },
-          },
-          _sum: {
-            amount: true,
-          },
+          _sum: { amount: true },
         }),
       ]);
 
-      const current = 
-        (currentMonthCourseRevenue._sum.amount?.toNumber() || 0) +
-        (currentMonthEventRevenue._sum.amount?.toNumber() || 0);
-      
-      const previous = 
-        (lastMonthCourseRevenue._sum.amount?.toNumber() || 0) +
-        (lastMonthEventRevenue._sum.amount?.toNumber() || 0);
+      const current = currentMonthRevenue._sum.amount?.toNumber() || 0;
+      const previous = lastMonthRevenue._sum.amount?.toNumber() || 0;
 
-      const percentageChange = previous > 0 
-        ? ((current - previous) / previous) * 100 
-        : current > 0 ? 100 : 0;
+      const percentageChange =
+        previous > 0
+          ? ((current - previous) / previous) * 100
+          : current > 0
+            ? 100
+            : 0;
 
       return {
         current,
@@ -340,10 +296,10 @@ export class FinanceAndPaymentsService {
 
   private async getRecentTransactions(): Promise<RecentTransaction[]> {
     try {
-      // Get recent course payments
-      const coursePayments = await this.prisma.userPayment.findMany({
+      // Get recent transactions (both course and events)
+      const transactions = await this.prisma.transaction.findMany({
         where: {
-          payment_status: 'PAID',
+          status: 'SUCCESS',
         },
         include: {
           user: {
@@ -353,11 +309,12 @@ export class FinanceAndPaymentsService {
               name: true,
             },
           },
-          enrollment: {
+          order: {
             include: {
-              course: {
-                select: {
-                  title: true,
+              items: {
+                include: {
+                  course: { select: { title: true } },
+                  event: { select: { name: true } },
                 },
               },
             },
@@ -369,60 +326,29 @@ export class FinanceAndPaymentsService {
         take: 10,
       });
 
-      // Get recent event payments
-      const eventPayments = await this.prisma.eventPayment.findMany({
-        where: {
-          status: 'PAID',
+      // Format transactions
+      const recentTransactions: RecentTransaction[] = transactions.map(
+        (transaction) => {
+          const itemType = transaction.order?.items[0]?.item_type;
+          return {
+            userId: transaction.user.id,
+            username:
+              transaction.user.username || transaction.user.name || 'N/A',
+            transactionId:
+              transaction.transaction_ref || `TRX-${transaction.id}`,
+            amount: transaction.amount?.toNumber() || 0,
+            date: transaction.payment_date || transaction.created_at,
+            paymentType:
+              itemType === 'EVENT_TICKET'
+                ? 'Event Booking'
+                : 'Course Enrollment',
+            paymentPlan: transaction.payment_method || 'One Time',
+            invoiceFile: transaction.receipt_url || undefined,
+          };
         },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              name: true,
-            },
-          },
-          event: {
-            select: {
-              name: true,
-            },
-          },
-        },
-        orderBy: {
-          payment_date: 'desc',
-        },
-        take: 10,
-      });
+      );
 
-      // Combine and format transactions
-      const courseTransactions: RecentTransaction[] = coursePayments.map(payment => ({
-        userId: payment.user.id,
-        username: payment.user.username || payment.user.name || 'N/A',
-        transactionId: payment.transaction_id || `CRS-${payment.id}`,
-        amount: payment.amount?.toNumber() || 0,
-        date: payment.payment_date || new Date(),
-        paymentType: 'Course Enrollment',
-        paymentPlan: payment.payment_type || 'One Time',
-        invoiceFile: undefined, // You can add invoice file logic if available
-      }));
-
-      const eventTransactions: RecentTransaction[] = eventPayments.map(payment => ({
-        userId: payment.user.id,
-        username: payment.user.username || payment.user.name || 'N/A',
-        transactionId: payment.transaction_id || `EVT-${payment.id}`,
-        amount: payment.amount?.toNumber() || 0,
-        date: payment.payment_date || new Date(),
-        paymentType: 'Event Booking',
-        paymentPlan: 'One Time', // Events are typically one-time payments
-        invoiceFile: payment.invoice_file || undefined,
-      }));
-
-      // Combine and sort by date
-      const allTransactions = [...courseTransactions, ...eventTransactions]
-        .sort((a, b) => b.date.getTime() - a.date.getTime())
-        .slice(0, 10); // Get top 10 most recent
-
-      return allTransactions;
+      return recentTransactions;
     } catch (error) {
       console.error('Error in getRecentTransactions:', error);
       return [];
