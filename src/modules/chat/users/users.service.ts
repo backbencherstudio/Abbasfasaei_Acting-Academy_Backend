@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
 import { PrismaService } from 'src/prisma/prisma.service';
 

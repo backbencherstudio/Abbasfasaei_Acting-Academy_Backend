@@ -24,7 +24,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import appConfig from '../../config/app.config';
 import { AuthGuard } from '@nestjs/passport';
-import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import { GetUser } from './decorators/get-user.decorator';
 
 @ApiTags('auth')
@@ -189,9 +189,7 @@ export class AuthController {
 
   @Get('/facebook/redirect')
   @UseGuards(AuthGuard('facebook'))
-  async facebookLoginRedirect(
-    @GetUser() user: any,
-  ) {
+  async facebookLoginRedirect(@GetUser() user: any) {
     try {
       return {
         statusCode: HttpStatus.OK,
@@ -302,7 +300,6 @@ export class AuthController {
     }
   }
 
-  
   // reset password if user forget the password
   @ApiOperation({ summary: 'Reset password' })
   @Post('reset-password')

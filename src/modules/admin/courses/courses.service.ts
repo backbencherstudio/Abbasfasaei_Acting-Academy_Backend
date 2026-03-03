@@ -5,7 +5,7 @@ import { CreateModuleDto } from './dto/create-module.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateModuleDto } from './dto/update-module.dto';
 import { StringHelper } from 'src/common/helper/string.helper';
-import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
 
 @Injectable()

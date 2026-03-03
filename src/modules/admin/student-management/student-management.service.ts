@@ -4,7 +4,7 @@ import { UpdateStudentManagementDto } from './dto/update-student-management.dto'
 import { PrismaService } from 'src/prisma/prisma.service';
 import { id } from 'date-fns/locale';
 import { StringHelper } from 'src/common/helper/string.helper';
-import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
 
 @Injectable()

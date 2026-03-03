@@ -2,7 +2,7 @@ import { Injectable, Post } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { id } from 'date-fns/locale';
-import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { StringHelper } from 'src/common/helper/string.helper';

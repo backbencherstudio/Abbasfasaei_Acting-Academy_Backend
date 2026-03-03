@@ -4,7 +4,7 @@ import { CreateTeacherDto } from './dto/create-teacher.dto';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client'; // Import for Decimal
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
-import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
 
 @Injectable()

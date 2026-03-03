@@ -3,7 +3,7 @@ import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { StringHelper } from 'src/common/helper/string.helper';
-import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
 
 @Injectable()
@@ -60,7 +60,10 @@ export class CourseService {
       // 3) Compute total classes per course
       const totalClassesByCourse: Record<string, number> = {};
       for (const c of myCoursesRaw) {
-        const total = c.modules.reduce((sum, m) => sum + (m.classes?.length || 0), 0);
+        const total = c.modules.reduce(
+          (sum, m) => sum + (m.classes?.length || 0),
+          0,
+        );
         totalClassesByCourse[c.id] = total;
       }
 
@@ -71,7 +74,10 @@ export class CourseService {
           status: 'PRESENT',
           class: { module: { courseId: { in: myCourseIds } } },
         },
-        select: { id: true, class: { select: { module: { select: { courseId: true } } } } },
+        select: {
+          id: true,
+          class: { select: { module: { select: { courseId: true } } } },
+        },
       });
       const attendedByCourse: Record<string, number> = {};
       for (const a of attended) {
@@ -84,7 +90,10 @@ export class CourseService {
         const modulesCount = c.modules.length;
         const totalClasses = totalClassesByCourse[c.id] || 0;
         const attendedCount = attendedByCourse[c.id] || 0;
-        const progress = totalClasses > 0 ? Math.round((attendedCount / totalClasses) * 100) : 0;
+        const progress =
+          totalClasses > 0
+            ? Math.round((attendedCount / totalClasses) * 100)
+            : 0;
         const scheduleLabel = c.class_time
           ? `${c.class_time} lessons`
           : c.duration
@@ -188,11 +197,12 @@ export class CourseService {
               hour12: true,
             })
           : null;
-      const scheduleLabel = dayOfWeek && timeLabel
-        ? `Every ${dayOfWeek} ${timeLabel}`
-        : dayOfWeek
-          ? `Every ${dayOfWeek}`
-          : timeLabel || 'Flexible schedule';
+      const scheduleLabel =
+        dayOfWeek && timeLabel
+          ? `Every ${dayOfWeek} ${timeLabel}`
+          : dayOfWeek
+            ? `Every ${dayOfWeek}`
+            : timeLabel || 'Flexible schedule';
 
       // Modules mapping
       const modules = (course.modules || []).map((m: any) => ({
@@ -202,7 +212,9 @@ export class CourseService {
         classesCount: m?._count?.classes ?? 0,
       }));
       const modulesCount = modules.length;
-      const modulesList = modules.map((m) => m.module_title ?? m.module_name).filter(Boolean);
+      const modulesList = modules
+        .map((m) => m.module_title ?? m.module_name)
+        .filter(Boolean);
 
       // Extract overview text and includes from JSON blobs with safe fallbacks
       const normalizeToText = (j: unknown): string | null => {
@@ -211,7 +223,12 @@ export class CourseService {
         try {
           const obj = j as any;
           // common keys that might hold the paragraph
-          const text = obj?.overview || obj?.summary || obj?.description || obj?.text || null;
+          const text =
+            obj?.overview ||
+            obj?.summary ||
+            obj?.description ||
+            obj?.text ||
+            null;
           return typeof text === 'string' ? text : null;
         } catch {
           return null;
@@ -226,7 +243,8 @@ export class CourseService {
         try {
           const obj = j as any;
           const inc = obj?.includes;
-          if (Array.isArray(inc)) return inc.filter((x) => typeof x === 'string');
+          if (Array.isArray(inc))
+            return inc.filter((x) => typeof x === 'string');
           return [];
         } catch {
           return [];

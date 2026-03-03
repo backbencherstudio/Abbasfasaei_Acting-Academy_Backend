@@ -8,7 +8,7 @@ import { Prisma, MessageKind, ConversationType } from '@prisma/client';
 import { ConversationsService } from '../conversations/conversations.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UsersService } from '../users/users.service';
-import { SazedStorage } from 'src/common/lib/disk/SazedStorage';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
 import { StringHelper } from 'src/common/helper/string.helper';
 
@@ -123,9 +123,8 @@ export class MessagesService {
         conversationId,
         senderId: userId,
         kind: kind ?? 'TEXT',
-        content : content ?? {},
+        content: content ?? {},
         media_Url: mediaUrl,
-        
       },
       select: {
         id: true,
@@ -283,7 +282,9 @@ export class MessagesService {
     // Build temporary table of floors
     const convIds = memberConvIds.map((m) => m.conversationId);
     const floors: Record<string, Date> = {};
-    memberConvIds.forEach((m) => (floors[m.conversationId] = m.clearedAt ?? new Date(0)));
+    memberConvIds.forEach(
+      (m) => (floors[m.conversationId] = m.clearedAt ?? new Date(0)),
+    );
 
     // Raw query limited to membership conversations; apply floor in post-filter (simpler & portable)
     // Build an IN clause safely. Using Prisma.sql join ensures proper parameterization.

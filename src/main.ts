@@ -10,7 +10,7 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 import appConfig from './config/app.config';
 import { CustomExceptionFilter } from './common/exception/custom-exception.filter';
-import { SazedStorage } from './common/lib/disk/SazedStorage';
+import { SazedStorage } from './common/lib/Disk/SazedStorage';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -59,7 +59,6 @@ async function bootstrap() {
     }),
   );
   app.useGlobalFilters(new CustomExceptionFilter());
-  
 
   // Storage setup: choose driver based on env (STORAGE_DRIVER=local|s3)
   const storageDriver = process.env.STORAGE_DRIVER?.toLowerCase() || 'local';
@@ -115,7 +114,10 @@ async function bootstrap() {
       // Do not crash the app; log and proceed so core APIs (auth/login) keep working.
       // Later we can isolate the offending DTO or enum causing the circular dependency.
       // eslint-disable-next-line no-console
-      console.error('[Swagger Init] Skipped due to error:', err?.message || err);
+      console.error(
+        '[Swagger Init] Skipped due to error:',
+        err?.message || err,
+      );
     }
   } else {
     // eslint-disable-next-line no-console
