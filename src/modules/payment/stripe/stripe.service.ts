@@ -686,6 +686,57 @@ export class StripeService {
     });
   }
 
+  async handleInvoicePaymentFailed(invoice: any) {
+    const subscriptionId = invoice.subscription;
+    const metadata =
+      invoice.lines?.data?.[0]?.metadata || invoice.metadata || {};
+    const enrollmentId = metadata.enrollmentId;
+    const userId = metadata.userId;
+    const amount = invoice.amount_due ? invoice.amount_due / 100 : 0;
+    const currency = invoice.currency?.toUpperCase() || 'USD';
+    const payment_intent = invoice.payment_intent;
+
+    if (!enrollmentId || !userId) return;
+
+    // Find the master Payment record for this enrollment
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        user_id: userId,
+        course_id: enrollmentId,
+        payment_type: 'MONTHLY',
+      },
+    });
+
+    if (payment) {
+      // Create a failed Transaction record for this invoice attempt
+      await this.prisma.transaction.create({
+        data: {
+          transaction_ref:
+            payment_intent || invoice.id || `inv_fail_${Date.now()}`,
+          paymentId: payment.id,
+          user_id: userId,
+          amount: amount,
+          currency: currency,
+          status: 'FAILED',
+          gateway: 'STRIPE',
+          payment_date: new Date(),
+          metadata: {
+            enrollmentId,
+            subscriptionId,
+            customer_id: invoice.customer ?? undefined,
+            reason: 'Invoice payment failed',
+          },
+        },
+      });
+
+      // Optionally, you might want to suspend the enrollment here or notify the user
+      // await this.prisma.enrollment.update({
+      //   where: { id: enrollmentId },
+      //   data: { status: 'PAYMENT_FAILED_SUSPENDED' },
+      // });
+    }
+  }
+
   async handleSubscriptionEvents(sub: any) {
     const metadata = sub.metadata || {};
     const enrollmentId = metadata.enrollmentId;

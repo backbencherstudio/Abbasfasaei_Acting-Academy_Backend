@@ -78,6 +78,11 @@ export class StripeController {
             event.data.object,
           );
           break;
+        case 'invoice.payment_failed':
+          await this.stripeService.handleInvoicePaymentFailed(
+            event.data.object,
+          );
+          break;
         case 'customer.subscription.created':
         case 'customer.subscription.updated':
         case 'customer.subscription.deleted':
