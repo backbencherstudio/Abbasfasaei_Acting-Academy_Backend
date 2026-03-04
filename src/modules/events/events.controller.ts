@@ -1,10 +1,7 @@
-import { Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { EventsService } from './events.service';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { GetUser } from '../auth/decorators/get-user.decorator';
-
-
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -18,17 +15,7 @@ export class EventsController {
   }
 
   @Get('/:id')
-  getEventById(
-    @Param('id') id: string
-  ) {
+  getEventById(@Param('id') id: string) {
     return this.eventsService.getEventById(id);
-  }
-
-  @Post('/eventpayment')
-  eventPayment(
-    @GetUser() user: any,
-  ) {
-    return this.eventsService.eventPayment(user);
-
   }
 }
