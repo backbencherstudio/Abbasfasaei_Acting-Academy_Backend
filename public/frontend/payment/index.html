@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stripe Custom Payment UI Test</title>
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f7fafc;
+      color: #333;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 500px;
+    }
+    h2 {
+      text-align: center;
+      color: #2b3036;
+      margin-top: 0;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 16px;
+    }
+    button {
+      background-color: #5469d4;
+      color: white;
+      border: none;
+      padding: 12px 15px;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 100%;
+      font-weight: 600;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      background-color: #4355a5;
+    }
+    button:disabled {
+      background-color: #9ca3af;
+      cursor: not-allowed;
+    }
+    #payment-element-container {
+      margin-top: 25px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      display: none;
+    }
+    #payment-message {
+      color: #414552;
+      font-size: 16px;
+      line-height: 1.2;
+      padding-top: 12px;
+      text-align: center;
+    }
+    #payment-message.error {
+      color: #df1b41;
+    }
+    #payment-message.success {
+      color: #059669;
+      font-weight: bold;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>Stripe Payment Test</h2>
+
+    <div class="form-group">
+      <label for="publishable-key">Stripe Publishable Key</label>
+      <input type="text" id="publishable-key" placeholder="pk_test_...">
+    </div>
+
+    <div class="form-group">
+      <label for="client-secret">Intent Client Secret</label>
+      <input type="text" id="client-secret" placeholder="pi_..._secret_...">
+    </div>
+
+    <button id="load-stripe-btn">Load Payment Form</button>
+
+    <div id="payment-element-container">
+      <form id="payment-form">
+        <div id="payment-element">
+          <!--Stripe.js injects the Payment Element-->
+        </div>
+        <button id="submit" style="margin-top: 20px;">
+          <div class="spinner hidden" id="spinner"></div>
+          <span id="button-text">Pay Now</span>
+        </button>
+        <div id="payment-message" class="hidden"></div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let stripe;
+    let elements;
+
+    document.getElementById('load-stripe-btn').addEventListener('click', async () => {
+      const pubKey = document.getElementById('publishable-key').value.trim();
+      const cliSecret = document.getElementById('client-secret').value.trim();
+
+      if (!pubKey || !cliSecret) {
+        alert('Please provide both Publishable Key and Client Secret.');
+        return;
+      }
+
+      // Initialize Stripe JS
+      stripe = Stripe(pubKey);
+
+      const appearance = { theme: 'stripe' };
+      
+      // Initialize Elements using the client secret from the server (Intent / Subscription)
+      elements = stripe.elements({ appearance, clientSecret: cliSecret });
+
+      // Create and mount the Payment Element
+      const paymentElement = elements.create("payment");
+      paymentElement.mount("#payment-element");
+
+      document.getElementById('payment-element-container').style.display = 'block';
+      document.getElementById('load-stripe-btn').style.display = 'none';
+      document.getElementById('publishable-key').disabled = true;
+      document.getElementById('client-secret').disabled = true;
+    });
+
+    document.getElementById('payment-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      setLoading(true);
+
+      // Confirm the payment
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          // Make sure to change this to your payment completion page
+          return_url: window.location.href + '?payment_intent=success',
+        },
+      });
+
+      // This point will only be reached if there is an immediate error when
+      // confirming the payment. Otherwise, your customer will be redirected to
+      // your `return_url`.
+      if (error) {
+        if (error.type === "card_error" || error.type === "validation_error") {
+          showMessage(error.message, 'error');
+        } else {
+          showMessage("An unexpected error occurred.", 'error');
+        }
+      }
+
+      setLoading(false);
+    });
+
+    // Handle return URL status (if page is refreshed / redirected back)
+    checkStatus();
+
+    async function checkStatus() {
+      const clientSecret = new URLSearchParams(window.location.search).get(
+        "payment_intent_client_secret"
+      );
+
+      if (!clientSecret) {
+        return;
+      }
+
+      // Prompt user for PK to check status if page was refreshed
+      const pk = prompt('Enter Stripe Publishable Key to check payment status:');
+      if (!pk) return;
+      
+      const stripeInstance = Stripe(pk);
+
+      const { paymentIntent } = await stripeInstance.retrievePaymentIntent(clientSecret);
+
+      switch (paymentIntent.status) {
+        case "succeeded":
+          showMessage("Payment succeeded!", "success");
+          break;
+        case "processing":
+          showMessage("Your payment is processing.", "success");
+          break;
+        case "requires_payment_method":
+          showMessage("Your payment was not successful, please try again.", "error");
+          break;
+        default:
+          showMessage("Something went wrong.", "error");
+          break;
+      }
+      
+      document.getElementById('payment-element-container').style.display = 'block';
+      document.getElementById('load-stripe-btn').style.display = 'none';
+      document.getElementById('payment-form').style.display = 'none';
+    }
+
+    function showMessage(messageText, className) {
+      const messageContainer = document.querySelector("#payment-message");
+      messageContainer.classList.remove("hidden", "error", "success");
+      messageContainer.classList.add(className);
+      messageContainer.textContent = messageText;
+    }
+
+    function setLoading(isLoading) {
+      if (isLoading) {
+        document.querySelector("#submit").disabled = true;
+        document.querySelector("#spinner").classList.remove("hidden");
+        document.querySelector("#button-text").classList.add("hidden");
+      } else {
+        document.querySelector("#submit").disabled = false;
+        document.querySelector("#spinner").classList.add("hidden");
+        document.querySelector("#button-text").classList.remove("hidden");
+      }
+    }
+  </script>
+</body>
+</html>

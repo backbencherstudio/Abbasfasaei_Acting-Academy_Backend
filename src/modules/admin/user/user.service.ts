@@ -108,7 +108,7 @@ export class UserService {
           created_at: true,
           updated_at: true,
           avatar: true,
-          billing_id: true,
+          customer_id: true,
         },
       });
 

@@ -239,6 +239,32 @@ export class StripePayment {
   }
 
   /**
+   * Create direct subscription for custom UI using default_incomplete
+   * @param customer
+   * @param price
+   * @returns
+   */
+  static async createSubscription(
+    customer: string,
+    price: string,
+    options?: {
+      trial_period_days?: number;
+      metadata?: Record<string, string>;
+    },
+  ) {
+    const subscription = await Stripe.subscriptions.create({
+      customer: customer,
+      items: [{ price: price }],
+      payment_behavior: 'default_incomplete',
+      payment_settings: { save_default_payment_method: 'on_subscription' },
+      expand: ['latest_invoice.payment_intent'],
+      trial_period_days: options?.trial_period_days ?? 0,
+      metadata: options?.metadata,
+    });
+    return subscription;
+  }
+
+  /**
    * Calculate taxes
    * @param amount
    * @returns

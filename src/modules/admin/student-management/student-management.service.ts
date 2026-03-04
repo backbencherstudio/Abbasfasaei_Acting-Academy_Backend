@@ -188,16 +188,16 @@ export class StudentManagementService {
 
     console.log('enrollment in payment:', enrollment);
 
-    const existingOrder = await this.prisma.order.findFirst({
+    const existingOrder = await this.prisma.payment.findFirst({
       where: {
         user_id: enrollment.user.id,
-        items: { some: { course_id: enrollment.course.id } },
+        course_id: enrollment.course.id,
       },
     });
 
     let orderId = existingOrder?.id;
     if (!orderId) {
-      const order = await this.prisma.order.create({
+      const order = await this.prisma.payment.create({
         data: {
           order_number: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           user_id: enrollment.user.id,
@@ -207,15 +207,9 @@ export class StudentManagementService {
             dto.payment_status === 'PAID' || dto.payment_status === 'SUCCESS'
               ? 'COMPLETED'
               : 'PENDING',
-          items: {
-            create: {
-              item_type: 'COURSE_ENROLLMENT',
-              course_id: enrollment.course.id,
-              unit_price: enrollment.course.fee || 0,
-              quantity: 1,
-              total_price: enrollment.course.fee || 0,
-            },
-          },
+          item_type: 'COURSE_ENROLLMENT',
+          payment_type: dto.payment_type as any,
+          course_id: enrollment.course.id,
         },
       });
       orderId = order.id;
@@ -224,7 +218,7 @@ export class StudentManagementService {
     const transaction = await this.prisma.transaction.create({
       data: {
         transaction_ref: dto.transaction_id || `MANUAL-${Date.now()}`,
-        order_id: orderId,
+        paymentId: orderId,
         user_id: enrollment.user.id,
         amount: dto.amount || 0,
         currency: dto.currency || 'USD',

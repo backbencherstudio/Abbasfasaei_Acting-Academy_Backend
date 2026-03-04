@@ -65,7 +65,7 @@ export class CoursesService {
             // role removed; if needed, include role_users
             avatar: true,
             about: true,
-            billing_id: true,
+            customer_id: true,
           },
         },
         modules: true,

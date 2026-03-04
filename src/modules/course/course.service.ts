@@ -463,9 +463,7 @@ export class CourseService {
 
       // Pull assignments along with their class and module metadata
       const assignments = await this.prisma.assignment.findMany({
-        where: enrollment?.courseModuleId
-          ? { moduleClass: { moduleId: enrollment.courseModuleId } }
-          : { moduleClass: { module: { courseId } } },
+        where: { moduleClass: { module: { courseId } } },
         orderBy: { due_date: 'asc' },
         select: {
           id: true,
@@ -588,9 +586,7 @@ export class CourseService {
 
       // Order modules per course order and group assignments under each module
       const modulesOrder = await this.prisma.courseModule.findMany({
-        where: enrollment?.courseModuleId
-          ? { id: enrollment.courseModuleId }
-          : { courseId },
+        where: { courseId },
         select: {
           id: true,
           module_title: true,

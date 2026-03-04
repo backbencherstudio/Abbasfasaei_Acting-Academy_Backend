@@ -58,7 +58,7 @@ model User {
   gender        String?
   date_of_birth DateTime? @db.Date
 
-  billing_id        String?
+  customer_id       String?
   type              String?   @default("user")
   email_verified_at DateTime?
 
@@ -133,9 +133,8 @@ model User {
 
   createdQRSessions QRAttendanceSession[]
 
-  // new order system
-  orders       Order[]
   transactions Transaction[]
+  payments     Payment[]
 
   @@map("users")
 }
@@ -318,7 +317,7 @@ model Course {
   instructor            User?          @relation(fields: [instructorId], references: [id], onDelete: Cascade)
   modules               CourseModule[]
   enrollments           Enrollment[]
-  orderItems            OrderItem[]
+  payments              Payment[]
 }
 
 model CourseModule {
@@ -472,30 +471,46 @@ model AssignmentGrade {
   @@map("assignment_grades")
 }
 
+enum EnrollmentStep {
+  DIGITAL_SIGNATURE_START
+  COURSE_SELECTION
+  FORM_FILLING
+  RULES_SIGNING
+  CONTRACT_SIGNING
+  PAYMENT
+  COMPLETED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  PENDING
+  ALUMNI
+  RESTRICTED
+}
+
 model Enrollment {
-  id                 String           @id @default(cuid())
-  created_at         DateTime         @default(now())
-  updated_at         DateTime         @default(now())
-  user_id            String
-  full_name          String
-  email              String
-  phone              String
-  address            String
-  date_of_birth      DateTime?        @db.Date
-  experience_level   ExperienceLevel
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user_id          String
+  full_name        String
+  email            String
+  phone            String
+  address          String
+  date_of_birth    DateTime?       @db.Date
+  experience_level ExperienceLevel
+
   courseId           String?
-  courseModuleId     String?
   actingGoalsId      String?
   contract_docs      Json?
   status             EnrollmentStatus @default(PENDING)
-  // payment_status     PaymentStatus      @default(DUE)
   IsPaymentCompleted Boolean          @default(false)
-  // payment_type       PaymentType?
   actingGoals        ActingGoals?
-  // payment            UserPayment?
-  // enrollmentProfile  EnrollmentProfile?
-  course             Course?          @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  user               User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  step               EnrollmentStep   @default(FORM_FILLING)
+
+  course Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   digital_contract_signing  DigitalContractSigning?
   rules_regulations_signing RulesAndRegulationsSigning?
@@ -504,35 +519,37 @@ model Enrollment {
 }
 
 model DigitalContractSigning {
-  id               String             @id @default(cuid())
-  enrollmentId     String             @unique
-  agreed           Boolean            @default(false)
-  enrollment       Enrollment         @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  digitalSignature DigitalSignature[]
+  id               String            @id @default(cuid())
+  enrollmentId     String            @unique
+  agreed           Boolean           @default(false)
+  enrollment       Enrollment        @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  digitalSignature DigitalSignature?
 
   @@map("digital_contract_signings")
 }
 
 model RulesAndRegulationsSigning {
-  id               String             @id @default(cuid())
-  enrollmentId     String             @unique
-  accepted         Boolean            @default(false)
-  enrollment       Enrollment         @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  digitalSignature DigitalSignature[]
+  id               String            @id @default(cuid())
+  enrollmentId     String            @unique
+  accepted         Boolean           @default(false)
+  enrollment       Enrollment        @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  digitalSignature DigitalSignature?
 
   @@map("enrollment_terms_and_conditions")
 }
 
 model DigitalSignature {
-  id                           String                      @id @default(cuid())
-  enrollmentId                 String                      @unique
-  full_name                    String
-  signature                    String
-  signed_at                    DateTime?                   @db.Date
-  digital_contract_signing_id  String?
-  digital_contract_signing     DigitalContractSigning?     @relation(fields: [digital_contract_signing_id], references: [id], onDelete: Cascade)
-  rules_regulations_signing_id String?
-  rules_regulations_signing    RulesAndRegulationsSigning? @relation(fields: [rules_regulations_signing_id], references: [id], onDelete: Cascade)
+  id        String @id @default(cuid())
+  full_name String
+  signature String
+
+  signed_at DateTime? @db.Date
+
+  digital_contract_signing_id  String? @unique
+  rules_regulations_signing_id String? @unique
+
+  digital_contract_signing  DigitalContractSigning?     @relation(fields: [digital_contract_signing_id], references: [id], onDelete: Cascade)
+  rules_regulations_signing RulesAndRegulationsSigning? @relation(fields: [rules_regulations_signing_id], references: [id], onDelete: Cascade)
 
   @@map("digital_signatures")
 }
@@ -824,9 +841,9 @@ model CallParticipant {
 //
 
 model Event {
-  id          String        @id @default(cuid())
-  created_at  DateTime      @default(now())
-  updated_at  DateTime      @default(now())
+  id          String    @id @default(cuid())
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @default(now())
   deleted_at  DateTime?
   name        String
   description String?
@@ -835,12 +852,12 @@ model Event {
   time        String?
   location    String
   amount      Decimal?
-  files       Json?
-  created_by  String
-  members     EventMember[]
+
+  created_by String
+  members    EventMember[]
   // payments           EventPayment[]
-  creator     User          @relation("EventCreator", fields: [created_by], references: [id], onDelete: Cascade)
-  orderItems  OrderItem[]
+  creator    User          @relation("EventCreator", fields: [created_by], references: [id], onDelete: Cascade)
+  payments   Payment[]
 
   @@map("events")
 }
@@ -849,13 +866,16 @@ model EventMember {
   id         String   @id @default(cuid())
   created_at DateTime @default(now())
   updated_at DateTime @default(now())
+
+  ticket_number String @unique
+
   event_id   String
   user_id    String
-  order_id   String
+  payment_id String @unique
 
-  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
-  event Event @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event   Event   @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  payment Payment @relation(fields: [payment_id], references: [id], onDelete: Cascade)
 
   @@unique([event_id, user_id])
   @@map("event_members")
@@ -1011,13 +1031,6 @@ enum ExperienceLevel {
   ADVANCED
 }
 
-enum EnrollmentStatus {
-  ACTIVE
-  PENDING
-  ALUMNI
-  RESTRICTED
-}
-
 enum MediaType {
   PHOTO
   VIDEO
@@ -1094,12 +1107,17 @@ enum OrderStatus {
   COMPLETED
   CANCELLED
   REFUNDED
+  PARTIAL_PAID
 }
 
-enum OrderItemType {
+enum ItemType {
   COURSE_ENROLLMENT
   EVENT_TICKET
-  // Future items: MERCHANDISE, DIGITAL_PRODUCT, PRIVATE_SESSION, etc.
+}
+
+enum PaymentType {
+  MONTHLY
+  ONE_TIME
 }
 
 enum TransactionStatus {
@@ -1111,67 +1129,47 @@ enum TransactionStatus {
 
 enum PaymentGateway {
   STRIPE
-  PAYPAL
-  SSLCOMMERZ
   MANUAL_BANK_TRANSFER
-  CASH
 }
 
-// 2. Centralized Order Model
-model Order {
-  id           String      @id @default(cuid())
-  order_number String      @unique // e.g., ORD-2026-XXXX
-  user_id      String
-  total_amount Decimal
-  currency     String      @default("USD")
-  status       OrderStatus @default(PENDING)
-
-  billing_address Json? // Structured billing info
-  notes           String? // Any special instructions
-
+model Payment {
+  id         String   @id @default(cuid())
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  items        OrderItem[]
+  order_number String      @unique // e.g., ORD-2026-XXXX
+  user_id      String
+  total_amount Decimal
+  paid_amount  Decimal     @default(0)
+  due_amount   Decimal     @default(0)
+  currency     String      @default("USD")
+  status       OrderStatus @default(PENDING)
+
+  item_type              ItemType
+  payment_type           PaymentType
+  installment_amount     Decimal?
+  next_billing_date      DateTime?
+  stripe_subscription_id String?     @unique
+  notes                  String?
+
+  course_id String?
+  event_id  String?
+
+  user   User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  course Course? @relation(fields: [course_id], references: [id], onDelete: SetNull)
+  event  Event?  @relation(fields: [event_id], references: [id], onDelete: SetNull)
+
   transactions Transaction[]
   eventMembers EventMember[]
 
   @@index([user_id])
   @@index([status])
-  @@map("orders")
-}
-
-// 3. Order Item Model (Handles Cart/Multiple Items in one Order)
-model OrderItem {
-  id        String        @id @default(cuid())
-  order_id  String
-  item_type OrderItemType
-
-  // References to the actual products/services
-  course_id String? // If item_type == COURSE_ENROLLMENT
-  event_id  String? // If item_type == EVENT_TICKET
-
-  unit_price  Decimal
-  quantity    Int     @default(1)
-  total_price Decimal // unit_price * quantity
-
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
-
-  course Course? @relation(fields: [course_id], references: [id], onDelete: SetNull)
-  event  Event?  @relation(fields: [event_id], references: [id], onDelete: SetNull)
-
-  @@index([order_id])
-  @@map("order_items")
+  @@map("payments")
 }
 
 model Transaction {
   id              String @id @default(cuid())
-  transaction_ref String @unique // ID returned by Gateway (e.g. Stripe Pi_xxxx)
-  order_id        String
+  transaction_ref String @unique
   user_id         String
 
   amount   Decimal
@@ -1188,10 +1186,10 @@ model Transaction {
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
 
-  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+  paymentId String?
 
-  @@index([order_id])
   @@index([user_id])
   @@index([transaction_ref])
   @@map("transactions")

@@ -9,7 +9,11 @@ import {
   Param,
 } from '@nestjs/common';
 import { EnrollmentService } from './enrollment.service';
-import { EnrollDto } from './dto/enroll.dto';
+import {
+  AcceptRulesOrContractDto,
+  EnrollDto,
+  PInfoDto,
+} from './dto/enroll.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import {
@@ -35,12 +39,26 @@ export class EnrollmentController {
     }
   }
 
+  @Get('current-step/:courseId')
+  async getCurrentStep(@GetUser() user, @Param('courseId') courseId: string) {
+    try {
+      const result = await this.enrollmentService.getCurrentStep(
+        user.userId,
+        courseId,
+      );
+      return result;
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('Error fetching current step');
+    }
+  }
+
   @ApiOperation({ summary: 'Enroll user in a course' })
-  @Post('enroll/:courseId')
+  @Post('pinfo/:courseId')
   async enrollUser(
     @GetUser() user,
     @Param('courseId') courseId: string,
-    @Body() dto: EnrollDto,
+    @Body() dto: PInfoDto,
   ) {
     try {
       const result = await this.enrollmentService.enrollUser(
@@ -56,45 +74,25 @@ export class EnrollmentController {
   }
 
   @ApiOperation({ summary: 'Accept rules and regulations' })
-  @Post('rules-and-regulations-signing/:enrollmentId')
-  async rulesAndRegulationsSigning(
+  @Post('accept-rules/:enrollmentId')
+  async acceptRules(
     @GetUser() user,
     @Param('enrollmentId') enrollmentId: string,
     @Body()
-    dto: Partial<{
-      agreed: boolean;
-      accepted: boolean;
-      signature_full_name: string;
-      full_name: string;
-      signature: string;
-      signature_date: string; // ISO string
-      signed_at: string; // ISO string
-    }>,
+    dto: AcceptRulesOrContractDto,
   ) {
     try {
-      console.log('user:', user);
-      const agreed = dto.agreed ?? dto.accepted ?? false;
-      const signature_full_name = dto.signature_full_name ?? dto.full_name;
-      const signature = dto.signature;
-      const signature_date = dto.signature_date ?? dto.signed_at;
-
-      if (!agreed) {
-        return { success: true, message: 'Rules and regulations unchanged' };
-      }
-      if (!signature_full_name || !signature) {
-        throw new BadRequestException('Missing signature name or signature');
-      }
-      if (!signature_date || isNaN(Date.parse(signature_date))) {
+      if (
+        !dto.digital_signature_date ||
+        isNaN(Date.parse(dto.digital_signature_date))
+      ) {
         throw new BadRequestException('Invalid signature date');
       }
 
-      const result = await this.enrollmentService.rulesAndRegulationsSigning(
+      const result = await this.enrollmentService.acceptRules(
         user.userId,
         enrollmentId,
-        agreed,
-        signature_full_name,
-        signature,
-        signature_date,
+        dto,
       );
       return result;
     } catch (error) {
@@ -104,44 +102,25 @@ export class EnrollmentController {
   }
 
   @ApiOperation({ summary: 'Accept contract terms' })
-  @Post('digital-contract-signing/:enrollmentId')
-  async digitalContractSigning(
+  @Post('accept-contract/:enrollmentId')
+  async acceptContract(
     @GetUser() user,
     @Param('enrollmentId') enrollmentId: string,
     @Body()
-    dto: Partial<{
-      accepted: boolean;
-      agreed: boolean;
-      signature_full_name: string;
-      full_name: string;
-      signature: string;
-      signature_date: string; // ISO string
-      signed_at: string; // ISO string
-    }>,
+    dto: AcceptRulesOrContractDto,
   ) {
     try {
-      const accepted = dto.accepted ?? dto.agreed ?? false;
-      const signature_full_name = dto.signature_full_name ?? dto.full_name;
-      const signature = dto.signature;
-      const signature_date = dto.signature_date ?? dto.signed_at;
-
-      if (!accepted) {
-        return { success: true, message: 'Contract terms unchanged' };
-      }
-      if (!signature_full_name || !signature) {
-        throw new BadRequestException('Missing signature name or signature');
-      }
-      if (!signature_date || isNaN(Date.parse(signature_date))) {
+      if (
+        !dto.digital_signature_date ||
+        isNaN(Date.parse(dto.digital_signature_date))
+      ) {
         throw new BadRequestException('Invalid signature date');
       }
 
-      const result = await this.enrollmentService.digitalContractSigning(
+      const result = await this.enrollmentService.acceptContract(
         user.userId,
         enrollmentId,
-        accepted,
-        signature_full_name,
-        signature,
-        signature_date,
+        dto,
       );
       return result;
     } catch (error) {

@@ -4,14 +4,16 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { EnrollDto } from './dto/enroll.dto';
-import { ExperienceLevel } from '@prisma/client';
+import {
+  AcceptRulesOrContractDto,
+  EnrollDto,
+  PInfoDto,
+} from './dto/enroll.dto';
+import { EnrollmentStep, ExperienceLevel } from '@prisma/client';
 
 @Injectable()
 export class EnrollmentService {
-  constructor(
-    private prisma: PrismaService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   async getAllCourses() {
     try {
@@ -26,7 +28,74 @@ export class EnrollmentService {
     }
   }
 
-  async enrollUser(userId: string, courseId: string, dto: EnrollDto) {
+  async getCurrentStep(userId: string, courseId: string) {
+    try {
+      const enrollment = await this.prisma.enrollment.findFirst({
+        where: { user_id: userId, courseId: courseId },
+        include: {
+          actingGoals: true,
+          digital_contract_signing: {
+            include: {
+              digitalSignature: true,
+            },
+          },
+          rules_regulations_signing: {
+            include: {
+              digitalSignature: true,
+            },
+          },
+        },
+        orderBy: { created_at: 'desc' },
+      });
+
+      let data: any = {
+        enrollment_id: enrollment.id,
+      };
+
+      switch (enrollment.step) {
+        case EnrollmentStep.FORM_FILLING:
+          data.step = enrollment.step;
+          data.full_name = enrollment.full_name;
+          data.email = enrollment.email;
+          data.phone = enrollment.phone;
+          data.address = enrollment.address;
+          data.date_of_birth = enrollment.date_of_birth;
+          data.experience_level = enrollment.experience_level;
+          data.acting_goals = enrollment.actingGoals?.acting_goals;
+          break;
+        case EnrollmentStep.RULES_SIGNING:
+          data.step = enrollment.step;
+          data.accepted = enrollment.rules_regulations_signing.accepted;
+          data.full_name =
+            enrollment.rules_regulations_signing.digitalSignature.full_name;
+          data.digital_signature =
+            enrollment.rules_regulations_signing.digitalSignature.signature;
+          data.digital_signature_date =
+            enrollment.rules_regulations_signing.digitalSignature.signed_at;
+          break;
+        case EnrollmentStep.CONTRACT_SIGNING:
+          data.step = enrollment.step;
+          data.accepted = enrollment.digital_contract_signing.agreed;
+          data.full_name =
+            enrollment.digital_contract_signing.digitalSignature.full_name;
+          data.digital_signature =
+            enrollment.digital_contract_signing.digitalSignature.signature;
+          data.digital_signature_date =
+            enrollment.digital_contract_signing.digitalSignature.signed_at;
+          break;
+        case EnrollmentStep.COMPLETED:
+          data.step = enrollment.step;
+          break;
+      }
+
+      return { success: true, data };
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('Error fetching enrollment');
+    }
+  }
+
+  async enrollUser(userId: string, courseId: string, dto: PInfoDto) {
     try {
       const user = await this.prisma.user.findUnique({
         where: {
@@ -49,13 +118,34 @@ export class EnrollmentService {
       }
 
       const existingEnrollment = await this.prisma.enrollment.findFirst({
-        where: { user_id: user.id, courseId: course.id },
+        where: {
+          user_id: user.id,
+          courseId: course.id,
+          step: EnrollmentStep.COMPLETED,
+        },
       });
 
       if (existingEnrollment) {
         return {
           success: false,
           message: 'User already enrolled in this course',
+        };
+      }
+
+      const existingEnrollmentFormFilling =
+        await this.prisma.enrollment.findFirst({
+          where: {
+            user_id: user.id,
+            courseId: course.id,
+            step: EnrollmentStep.FORM_FILLING,
+          },
+        });
+
+      if (existingEnrollmentFormFilling) {
+        return {
+          success: true,
+          message: 'User already enrolled in this course',
+          data: existingEnrollmentFormFilling,
         };
       }
 
@@ -69,7 +159,8 @@ export class EnrollmentService {
           phone: dto.phone,
           address: dto.address,
           date_of_birth: new Date(dto.date_of_birth),
-          experience_level: dto.experience_level as any as ExperienceLevel,
+          experience_level: dto.experience_level,
+          step: EnrollmentStep.FORM_FILLING,
         },
       });
 
@@ -158,20 +249,21 @@ export class EnrollmentService {
         where: { id: enrollment.id },
       });
 
-      return { success: true, enrollment: enrichedEnrollment ?? enrollment };
+      return {
+        success: true,
+        message: 'User enrolled successfully',
+        enrollment: enrichedEnrollment ?? enrollment,
+      };
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException('Error enrolling user');
     }
   }
 
-  async rulesAndRegulationsSigning(
+  async acceptRules(
     userId: string,
     enrollmentId: string,
-    agreed: boolean,
-    signature_full_name: string,
-    signature: string,
-    signature_date: string,
+    dto: AcceptRulesOrContractDto,
   ) {
     try {
       let enrollment = await this.prisma.enrollment.findFirst({
@@ -193,60 +285,90 @@ export class EnrollmentService {
         return { success: false, message: 'Enrollment not found' };
       }
 
-      const existingRulesTerms =
-        await this.prisma.rulesAndRegulationsSigning.findUnique({
-          where: { enrollmentId: enrollment.id },
-        });
+      const existingRulesTerms = await this.prisma.enrollment.findUnique({
+        where: { id: enrollment.id, rules_regulations_signing: { NOT: null } },
+      });
 
       if (existingRulesTerms) {
-        await this.prisma.rulesAndRegulationsSigning.update({
-          where: { enrollmentId: enrollment.id },
-          data: { accepted: agreed },
+        await this.prisma.enrollment.update({
+          where: { id: enrollment.id },
+          data: {
+            rules_regulations_signing: {
+              update: {
+                accepted: dto.accepted,
+                digitalSignature: {
+                  update: {
+                    full_name: dto.full_name,
+                    signature: dto.digital_signature,
+                    signed_at: dto.digital_signature_date,
+                  },
+                },
+              },
+            },
+          },
         });
       } else {
-        await this.prisma.rulesAndRegulationsSigning.create({
+        // await this.prisma.rulesAndRegulationsSigning.create({
+        //   data: {
+        //     enrollmentId: enrollment.id,
+        //     accepted: dto.accepted,
+        //   },
+        // });
+        await this.prisma.enrollment.update({
+          where: { id: enrollment.id },
           data: {
-            enrollmentId: enrollment.id,
-            accepted: agreed,
+            step: EnrollmentStep.RULES_SIGNING,
+            rules_regulations_signing: {
+              create: {
+                accepted: dto.accepted,
+                digitalSignature: {
+                  create: {
+                    full_name: dto.full_name,
+                    signed_at: dto.digital_signature_date,
+                    signature: dto.digital_signature,
+                  },
+                },
+              },
+            },
           },
         });
       }
 
-      if (!agreed) {
+      if (!dto.accepted) {
         return {
           success: false,
           message: 'Rules and regulations unchanged',
         };
       }
 
-      if (agreed) {
-        const parsedDate = new Date(signature_date);
-        if (isNaN(parsedDate.valueOf())) {
-          throw new BadRequestException('Invalid signature date');
-        }
-        if (!signature_full_name || !signature) {
-          throw new BadRequestException('Missing signature name or signature');
-        }
-        await this.prisma.digitalSignature.upsert({
-          where: { enrollmentId: enrollment.id },
-          update: {
-            full_name: signature_full_name,
-            signature: signature,
-            signed_at: parsedDate,
-          },
-          create: {
-            enrollmentId: enrollment.id,
-            full_name: signature_full_name,
-            signature: signature,
-            signed_at: parsedDate,
-          },
-        });
-      }
+      // if (dto.accepted) {
+      //   const parsedDate = new Date(dto.digital_signature_date);
+      //   if (isNaN(parsedDate.valueOf())) {
+      //     throw new BadRequestException('Invalid signature date');
+      //   }
+      //   if (!dto.full_name || !dto.digital_signature) {
+      //     throw new BadRequestException('Missing signature name or signature');
+      //   }
+      //   await this.prisma.digitalSignature.upsert({
+      //     where: { enrollmentId: enrollment.id },
+      //     update: {
+      //       full_name: dto.full_name,
+      //       signature: dto.digital_signature,
+      //       signed_at: parsedDate,
+      //     },
+      //     create: {
+      //       enrollmentId: enrollment.id,
+      //       full_name: dto.full_name,
+      //       signature: dto.digital_signature,
+      //       signed_at: parsedDate,
+      //     },
+      //   });
+      // }
 
       return {
         success: true,
         enrollmentId: enrollment.id,
-        message: 'Rules and regulations updated',
+        message: 'Rules and regulations signed successfully',
       };
     } catch (error) {
       console.error(error);
@@ -256,13 +378,10 @@ export class EnrollmentService {
     }
   }
 
-  async digitalContractSigning(
+  async acceptContract(
     userId: string,
     enrollmentId: string,
-    accepted: boolean,
-    signature_full_name: string,
-    signature: string,
-    signature_date: string,
+    dto: AcceptRulesOrContractDto,
   ) {
     try {
       let enrollment = await this.prisma.enrollment.findFirst({
@@ -289,47 +408,71 @@ export class EnrollmentService {
         });
 
       if (existingContractTerms) {
-        await this.prisma.digitalContractSigning.update({
-          where: { enrollmentId: enrollment.id },
-          data: { agreed: accepted },
+        await this.prisma.enrollment.update({
+          where: { id: enrollment.id },
+          data: {
+            digital_contract_signing: {
+              update: {
+                agreed: dto.accepted,
+                digitalSignature: {
+                  update: {
+                    full_name: dto.full_name,
+                    signature: dto.digital_signature,
+                    signed_at: dto.digital_signature_date,
+                  },
+                },
+              },
+            },
+          },
         });
       } else {
-        await this.prisma.digitalContractSigning.create({
+        await this.prisma.enrollment.update({
+          where: { id: enrollment.id },
           data: {
-            enrollmentId: enrollment.id,
-            agreed: accepted,
+            digital_contract_signing: {
+              create: {
+                agreed: dto.accepted,
+                digitalSignature: {
+                  create: {
+                    full_name: dto.full_name,
+                    signed_at: dto.digital_signature_date,
+                    signature: dto.digital_signature,
+                  },
+                },
+              },
+            },
           },
         });
       }
 
-      if (accepted) {
-        const parsedDate = new Date(signature_date);
-        if (isNaN(parsedDate.valueOf())) {
-          throw new BadRequestException('Invalid signature date');
-        }
-        if (!signature_full_name || !signature) {
-          throw new BadRequestException('Missing signature name or signature');
-        }
-        await this.prisma.digitalSignature.upsert({
-          where: { enrollmentId: enrollment.id },
-          update: {
-            full_name: signature_full_name,
-            signature: signature,
-            signed_at: parsedDate,
-          },
-          create: {
-            enrollmentId: enrollment.id,
-            full_name: signature_full_name,
-            signature: signature,
-            signed_at: parsedDate,
-          },
-        });
-      }
+      // if (accepted) {
+      //   const parsedDate = new Date(signature_date);
+      //   if (isNaN(parsedDate.valueOf())) {
+      //     throw new BadRequestException('Invalid signature date');
+      //   }
+      //   if (!signature_full_name || !signature) {
+      //     throw new BadRequestException('Missing signature name or signature');
+      //   }
+      //   await this.prisma.digitalSignature.upsert({
+      //     where: { enrollmentId: enrollment.id },
+      //     update: {
+      //       full_name: signature_full_name,
+      //       signature: signature,
+      //       signed_at: parsedDate,
+      //     },
+      //     create: {
+      //       enrollmentId: enrollment.id,
+      //       full_name: signature_full_name,
+      //       signature: signature,
+      //       signed_at: parsedDate,
+      //     },
+      //   });
+      // }
 
       return {
         success: true,
         enrollmentId: enrollment.id,
-        message: 'Contract terms updated',
+        message: 'Contract signed successfully',
       };
     } catch (error) {
       console.error(error);

@@ -136,7 +136,7 @@ export class FinanceAndPaymentsService {
         this.prisma.transaction.aggregate({
           where: {
             status: 'SUCCESS',
-            order: { items: { some: { item_type: 'COURSE_ENROLLMENT' } } },
+            payment: { item_type: 'COURSE_ENROLLMENT' },
             payment_date: {
               gte: currentMonthStart,
               lte: now,
@@ -147,7 +147,7 @@ export class FinanceAndPaymentsService {
         this.prisma.transaction.aggregate({
           where: {
             status: 'SUCCESS',
-            order: { items: { some: { item_type: 'COURSE_ENROLLMENT' } } },
+            payment: { item_type: 'COURSE_ENROLLMENT' },
             payment_date: {
               gte: lastMonthStart,
               lte: lastMonthEnd,
@@ -195,7 +195,7 @@ export class FinanceAndPaymentsService {
         this.prisma.transaction.aggregate({
           where: {
             status: 'SUCCESS',
-            order: { items: { some: { item_type: 'EVENT_TICKET' } } },
+            payment: { item_type: 'EVENT_TICKET' },
             payment_date: {
               gte: currentMonthStart,
               lte: now,
@@ -206,7 +206,7 @@ export class FinanceAndPaymentsService {
         this.prisma.transaction.aggregate({
           where: {
             status: 'SUCCESS',
-            order: { items: { some: { item_type: 'EVENT_TICKET' } } },
+            payment: { item_type: 'EVENT_TICKET' },
             payment_date: {
               gte: lastMonthStart,
               lte: lastMonthEnd,
@@ -309,14 +309,10 @@ export class FinanceAndPaymentsService {
               name: true,
             },
           },
-          order: {
+          payment: {
             include: {
-              items: {
-                include: {
-                  course: { select: { title: true } },
-                  event: { select: { name: true } },
-                },
-              },
+              course: { select: { title: true } },
+              event: { select: { name: true } },
             },
           },
         },
@@ -329,7 +325,7 @@ export class FinanceAndPaymentsService {
       // Format transactions
       const recentTransactions: RecentTransaction[] = transactions.map(
         (transaction) => {
-          const itemType = transaction.order?.items[0]?.item_type;
+          const itemType = transaction.payment?.item_type;
           return {
             userId: transaction.user.id,
             username:
