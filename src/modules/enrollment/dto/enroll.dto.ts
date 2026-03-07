@@ -77,7 +77,9 @@ export class AcceptRulesOrContractDto {
   digital_signature_date: string;
 
   @IsNotEmpty()
-  @Transform(({ value }) => value === 'true')
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value === 'true' : value,
+  )
   @Equals(true)
   @IsBoolean()
   accepted: boolean;

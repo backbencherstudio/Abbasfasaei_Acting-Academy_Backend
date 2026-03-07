@@ -96,19 +96,47 @@
   <div class="container">
     <h2>Stripe Payment Test</h2>
 
-    <div class="form-group">
-      <label for="publishable-key">Stripe Publishable Key</label>
-      <input type="text" id="publishable-key" placeholder="pk_test_...">
+    <!-- Configuration Section -->
+    <div id="config-section" style="background: #fdfdfd; padding: 15px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 25px;">
+      <h3 style="font-size: 16px; margin-top: 0; margin-bottom: 15px; color: #4b5563;">Configuration (Persisted)</h3>
+      <div class="form-group">
+        <label for="publishable-key">Stripe Publishable Key</label>
+        <input type="text" id="publishable-key" placeholder="pk_test_...">
+      </div>
+      <div class="form-group">
+        <label for="jwt-token">JWT Token (Bearer)</label>
+        <input type="text" id="jwt-token" placeholder="eyJhbGciOiJIUzI1NiI...">
+      </div>
+      <button id="save-config-btn" style="background-color: #10b981; margin-top: 5px; padding: 8px;">Save Credentials</button>
     </div>
 
-    <div class="form-group">
-      <label for="client-secret">Intent Client Secret</label>
-      <input type="text" id="client-secret" placeholder="pi_..._secret_...">
+    <!-- Main Payment Section -->
+    <div id="payment-trigger-section">
+      <div class="form-group">
+        <label for="client-secret">Intent Client Secret</label>
+        <input type="text" id="client-secret" placeholder="pi_..._secret_...">
+      </div>
+      <button id="load-stripe-btn">Load Payment Form</button>
     </div>
-
-    <button id="load-stripe-btn">Load Payment Form</button>
 
     <div id="payment-element-container">
+      <div id="test-card-helper" style="background: #f0f9ff; border: 1px solid #bae6fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <h3 style="font-size: 14px; margin-top: 0; margin-bottom: 10px; color: #0369a1;">Test Card Credentials</h3>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+            <span>Number: <strong>4242 4242 4242 4242</strong></span>
+            <button class="small-copy-btn" data-copy="4242424242424242" style="width: auto; padding: 2px 8px; font-size: 11px; background: #0ea5e9;">Copy</button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+            <span>Expiry: <strong>12/26</strong></span>
+            <button class="small-copy-btn" data-copy="1226" style="width: auto; padding: 2px 8px; font-size: 11px; background: #0ea5e9;">Copy</button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+            <span>CVC: <strong>123</strong></span>
+            <button class="small-copy-btn" data-copy="123" style="width: auto; padding: 2px 8px; font-size: 11px; background: #0ea5e9;">Copy</button>
+          </div>
+        </div>
+      </div>
       <form id="payment-form">
         <div id="payment-element">
           <!--Stripe.js injects the Payment Element-->
@@ -120,18 +148,42 @@
         <div id="payment-message" class="hidden"></div>
       </form>
     </div>
+
+    <div id="verification-container" class="hidden" style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+      <h3 style="font-size: 16px; margin-bottom: 10px;">Backend Verification</h3>
+      <button id="verify-btn">Verify Payment on Backend</button>
+      <div id="verification-result" style="margin-top: 15px; font-size: 14px; white-space: pre-wrap; background: #f3f4f6; padding: 10px; border-radius: 4px; display: none;"></div>
+    </div>
   </div>
 
   <script>
     let stripe;
     let elements;
 
+    // Load saved credentials on startup
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedKey = localStorage.getItem('stripe_publishable_key');
+      const savedToken = localStorage.getItem('backend_jwt_token');
+      if (savedKey) document.getElementById('publishable-key').value = savedKey;
+      if (savedToken) document.getElementById('jwt-token').value = savedToken;
+    });
+
+    // Save configuration
+    document.getElementById('save-config-btn').addEventListener('click', () => {
+      const pubKey = document.getElementById('publishable-key').value.trim();
+      const token = document.getElementById('jwt-token').value.trim();
+      
+      localStorage.setItem('stripe_publishable_key', pubKey);
+      localStorage.setItem('backend_jwt_token', token);
+      alert('Credentials saved to localStorage.');
+    });
+
     document.getElementById('load-stripe-btn').addEventListener('click', async () => {
       const pubKey = document.getElementById('publishable-key').value.trim();
       const cliSecret = document.getElementById('client-secret').value.trim();
 
       if (!pubKey || !cliSecret) {
-        alert('Please provide both Publishable Key and Client Secret.');
+        alert('Please provide both Publishable Key (in config) and Client Secret.');
         return;
       }
 
@@ -148,9 +200,28 @@
       paymentElement.mount("#payment-element");
 
       document.getElementById('payment-element-container').style.display = 'block';
-      document.getElementById('load-stripe-btn').style.display = 'none';
+      document.getElementById('payment-trigger-section').style.display = 'none';
+      document.getElementById('config-section').style.opacity = '0.5';
       document.getElementById('publishable-key').disabled = true;
       document.getElementById('client-secret').disabled = true;
+    });
+
+    // Copy helper logic
+    document.querySelectorAll('.small-copy-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const textToCopy = btn.getAttribute('data-copy');
+        navigator.clipboard.writeText(textToCopy);
+        
+        const originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.style.background = '#10b981';
+        
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = '#0ea5e9';
+        }, 1500);
+      });
     });
 
     document.getElementById('payment-form').addEventListener('submit', async (e) => {
@@ -192,8 +263,14 @@
         return;
       }
 
-      // Prompt user for PK to check status if page was refreshed
-      const pk = prompt('Enter Stripe Publishable Key to check payment status:');
+      // Check localStorage for PK first
+      let pk = localStorage.getItem('stripe_publishable_key');
+      
+      if (!pk) {
+        // Prompt user for PK to check status if page was refreshed and not in storage
+        pk = prompt('Enter Stripe Publishable Key to check payment status:');
+      }
+
       if (!pk) return;
       
       const stripeInstance = Stripe(pk);
@@ -218,7 +295,54 @@
       document.getElementById('payment-element-container').style.display = 'block';
       document.getElementById('load-stripe-btn').style.display = 'none';
       document.getElementById('payment-form').style.display = 'none';
+      
+      // Show verification section
+      document.getElementById('verification-container').classList.remove('hidden');
+
+      // Automatically trigger verification if payment succeeded
+      if (paymentIntent.status === "succeeded") {
+        console.log("Payment succeeded, auto-triggering backend verification...");
+        performBackendVerification();
+      }
     }
+
+    async function performBackendVerification() {
+      const reference = new URLSearchParams(window.location.search).get("payment_intent") || 
+                        new URLSearchParams(window.location.search).get("payment_intent_client_secret")?.split('_secret')[0];
+      
+      const token = document.getElementById('jwt-token').value.trim() || localStorage.getItem('backend_jwt_token');
+
+      if (!reference) {
+        alert('No payment reference found in URL.');
+        return;
+      }
+      if (!token) {
+        alert('Please provide your JWT token in Configuration.');
+        return;
+      }
+
+      const resDiv = document.getElementById('verification-result');
+      resDiv.style.display = 'block';
+      resDiv.textContent = 'Verifying with backend (waiting for webhook)...';
+
+      try {
+        // Wait a small bit for webhook if just redirected
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        const response = await fetch(`/payment/stripe/verify/${reference}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const result = await response.json();
+        resDiv.textContent = JSON.stringify(result, null, 2);
+      } catch (err) {
+        resDiv.textContent = 'Error: ' + err.message;
+      }
+    }
+
+    document.getElementById('verify-btn').addEventListener('click', performBackendVerification);
 
     function showMessage(messageText, className) {
       const messageContainer = document.querySelector("#payment-message");

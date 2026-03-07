@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Post,
   Req,
   Headers,
@@ -20,16 +21,13 @@ export class StripeController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Post('create-intent')
   async createIntent(@Req() req: Request, @Body() body: createPaymentIntent) {
-    if (!req.user.id) {
+    if (!req.user.userId) {
       throw new BadRequestException('Unauthorized');
     }
     const result = await this.stripeService.handleCreateIntent(
       req.user.userId,
       body,
     );
-    if (!result.success) {
-      throw new BadRequestException(result.message);
-    }
     return result;
   }
 
@@ -39,7 +37,7 @@ export class StripeController {
     @Req() req: Request,
     @Body() body: createPaymentIntent,
   ) {
-    if (!req.user.id) {
+    if (!req.user.userId) {
       throw new BadRequestException('Unauthorized');
     }
     const result = await this.stripeService.handleCreateIntent(
@@ -49,10 +47,20 @@ export class StripeController {
         payment_type: 'MONTHLY',
       },
     );
-    if (!result.success) {
-      throw new BadRequestException(result.message);
-    }
     return result;
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Get('verify/:reference')
+  async verifyPayment(@Req() req: Request) {
+    const reference = req.params.reference;
+    if (!req.user.userId) {
+      throw new BadRequestException('Unauthorized');
+    }
+    return await this.stripeService.verifyPaymentByReference(
+      reference,
+      req.user.userId,
+    );
   }
 
   @Post('webhook')

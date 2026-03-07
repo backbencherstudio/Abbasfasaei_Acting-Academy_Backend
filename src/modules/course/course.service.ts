@@ -645,6 +645,49 @@ export class CourseService {
     }
   }
 
+  async getAssignmentDetails(assignmentId: string, userId: string) {
+    try {
+      if (!userId) {
+        return {
+          success: false,
+          message: 'User ID is required',
+        };
+      }
+
+      const assignment = await this.prisma.assignment.findUnique({
+        where: { id: assignmentId },
+        include: {
+          moduleClass: {
+            select: {
+              id: true,
+              class_title: true,
+              class_name: true,
+              module: {
+                select: {
+                  id: true,
+                  module_title: true,
+                  module_name: true,
+                  createdAt: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!assignment) {
+        return { success: false, message: 'Assignment not found' };
+      }
+
+      return { success: true, data: assignment };
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException(
+        'Error fetching assignment details',
+      );
+    }
+  }
+
   async submitAssignment(
     assignmentId: string,
     userId: string,

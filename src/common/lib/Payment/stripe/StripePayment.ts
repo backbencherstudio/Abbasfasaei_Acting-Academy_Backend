@@ -159,6 +159,16 @@ export class StripePayment {
     });
   }
 
+  static async retrievePaymentIntent(
+    id: string,
+  ): Promise<stripe.PaymentIntent> {
+    return Stripe.paymentIntents.retrieve(id);
+  }
+
+  static async retrieveInvoice(id: string): Promise<stripe.Invoice> {
+    return Stripe.invoices.retrieve(id);
+  }
+
   /**
    * Create stripe hosted checkout session
    * @param customer

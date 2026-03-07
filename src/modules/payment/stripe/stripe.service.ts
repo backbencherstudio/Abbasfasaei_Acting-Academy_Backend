@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { StripePayment } from '../../../common/lib/Payment/stripe/StripePayment';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { createPaymentIntent } from './dto/create-stripe.dto';
+import { EnrollmentStep, EnrollmentStatus } from '@prisma/client';
 
 @Injectable()
 export class StripeService {
@@ -15,7 +16,7 @@ export class StripeService {
     });
 
     if (!user) {
-      return { success: false, message: 'User not found' };
+      throw new BadRequestException('User not found');
     }
 
     // EVENT Payment
@@ -24,10 +25,9 @@ export class StripeService {
         where: { id: eventId },
       });
       if (!event || !event.amount) {
-        return {
-          success: false,
-          message: 'Invalid event or no ticket price available',
-        };
+        throw new BadRequestException(
+          'Invalid event or no ticket price available',
+        );
       }
 
       const data = await this.createOneTimeEventPaymentIntent({
@@ -48,16 +48,32 @@ export class StripeService {
         where: { id: enrollmentId },
         include: { course: true },
       });
+
       if (!enrollment || enrollment.user_id !== userId) {
-        return { success: false, message: 'Invalid enrollment' };
+        throw new BadRequestException('Invalid enrollment');
+      }
+
+      if (
+        enrollment.status === EnrollmentStatus.ACTIVE ||
+        enrollment.IsPaymentCompleted
+      ) {
+        throw new BadRequestException(
+          'You are already enrolled in this course',
+        );
       }
 
       let amount = Number(enrollment.course?.fee ?? 0);
+      const courseId = enrollment.courseId;
+
+      if (!courseId) {
+        throw new BadRequestException('Enrollment has no course assigned');
+      }
 
       if (payment_type === 'ONE_TIME') {
         const data = await this.createOneTimeEnrollmentPaymentIntent({
           userId,
           enrollmentId,
+          courseId,
           amount,
           currency,
           name: user.name,
@@ -72,15 +88,13 @@ export class StripeService {
         if (ip && typeof ip === 'object' && ip.monthly_amount) {
           amount = Number(ip.monthly_amount);
         } else {
-          return {
-            success: false,
-            message: 'Installment configuration missing.',
-          };
+          throw new BadRequestException('Installment configuration missing.');
         }
 
         const data = await this.createMonthlyEnrollmentSubscription({
           userId,
           enrollmentId,
+          courseId,
           amount,
           currency,
           name: user.name,
@@ -122,19 +136,20 @@ export class StripeService {
   async createOneTimeEnrollmentPaymentIntent(params: {
     userId: string;
     enrollmentId: string;
+    courseId: string;
     amount: number;
     currency: string;
     name?: string;
     email?: string;
     customerId?: string;
   }) {
-    const { userId, enrollmentId, amount, currency } = params;
+    const { userId, enrollmentId, courseId, amount, currency } = params;
 
     // Check for existing pending transaction to resume
     const existingPayment = await this.prisma.payment.findFirst({
       where: {
         user_id: userId,
-        course_id: enrollmentId,
+        course_id: courseId,
         payment_type: 'ONE_TIME',
         status: 'PENDING',
       },
@@ -186,7 +201,7 @@ export class StripeService {
           item_type: 'COURSE_ENROLLMENT',
           payment_type: 'ONE_TIME',
           notes: `One-Time Enrollment ID: ${enrollmentId}`,
-          course_id: enrollmentId,
+          course_id: courseId,
         },
       });
     } else {
@@ -225,19 +240,20 @@ export class StripeService {
   async createMonthlyEnrollmentSubscription(params: {
     userId: string;
     enrollmentId: string;
+    courseId: string;
     amount: number;
     currency: string;
     name?: string;
     email?: string;
     customerId?: string;
   }) {
-    const { userId, enrollmentId, amount, currency } = params;
+    const { userId, enrollmentId, courseId, amount, currency } = params;
 
     // Check for existing pending subscription checkout session
     const existingPayment = await this.prisma.payment.findFirst({
       where: {
         user_id: userId,
-        course_id: enrollmentId,
+        course_id: courseId,
         payment_type: 'MONTHLY',
         status: 'PENDING',
       },
@@ -318,7 +334,7 @@ export class StripeService {
           payment_type: 'MONTHLY',
           stripe_subscription_id: subscription.id,
           notes: `Monthly Enrollment ID: ${enrollmentId}`,
-          course_id: enrollmentId,
+          course_id: courseId,
         },
       });
     } else {
@@ -516,7 +532,8 @@ export class StripeService {
         where: { id: enrollmentId },
         data: {
           IsPaymentCompleted: true,
-          status: 'ACTIVE',
+          status: EnrollmentStatus.ACTIVE,
+          step: EnrollmentStep.COMPLETED,
         },
       });
     }
@@ -573,11 +590,19 @@ export class StripeService {
 
     if (!enrollmentId || !userId) return;
 
+    // Fetch courseId and course details from enrollment
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollmentId },
+      include: { course: true },
+    });
+
+    if (!enrollment?.courseId) return;
+
     // Find the master Payment record for this enrollment
     let payment = await this.prisma.payment.findFirst({
       where: {
         user_id: userId,
-        course_id: enrollmentId,
+        course_id: enrollment.courseId,
         payment_type: 'MONTHLY',
       },
     });
@@ -596,7 +621,7 @@ export class StripeService {
           item_type: 'COURSE_ENROLLMENT',
           payment_type: 'MONTHLY',
           stripe_subscription_id: subscriptionId,
-          course_id: enrollmentId,
+          course_id: enrollment.courseId,
         },
       });
     } else if (!payment.stripe_subscription_id && subscriptionId) {
@@ -633,12 +658,6 @@ export class StripeService {
       0,
       Number(payment.total_amount) - newPaidAmount,
     );
-
-    // Get Course details to verify total fee
-    const enrollment = await this.prisma.enrollment.findUnique({
-      where: { id: enrollmentId },
-      include: { course: true },
-    });
 
     if (enrollment?.course?.fee) {
       const courseFee = Number(enrollment.course.fee);
@@ -681,7 +700,8 @@ export class StripeService {
       where: { id: enrollmentId },
       data: {
         IsPaymentCompleted: true,
-        status: 'ACTIVE',
+        status: EnrollmentStatus.ACTIVE,
+        step: EnrollmentStep.COMPLETED,
       },
     });
   }
@@ -698,11 +718,19 @@ export class StripeService {
 
     if (!enrollmentId || !userId) return;
 
+    // Fetch courseId from enrollment
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollmentId },
+      select: { courseId: true },
+    });
+
+    if (!enrollment?.courseId) return;
+
     // Find the master Payment record for this enrollment
     const payment = await this.prisma.payment.findFirst({
       where: {
         user_id: userId,
-        course_id: enrollmentId,
+        course_id: enrollment.courseId,
         payment_type: 'MONTHLY',
       },
     });
@@ -735,6 +763,73 @@ export class StripeService {
       //   data: { status: 'PAYMENT_FAILED_SUSPENDED' },
       // });
     }
+  }
+
+  async verifyPaymentByReference(reference: string, userId: string) {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { transaction_ref: reference },
+      include: {
+        payment: {
+          include: {
+            course: true,
+            event: true,
+          },
+        },
+      },
+    });
+
+    if (!transaction) {
+      return { success: false, message: 'Transaction not found' };
+    }
+
+    if (transaction.user_id !== userId) {
+      return { success: false, message: 'Unauthorized' };
+    }
+
+    // Real-time check with Stripe API
+    let stripeStatus = 'UNKNOWN';
+    try {
+      if (reference.startsWith('pi_')) {
+        const pi = await StripePayment.retrievePaymentIntent(reference);
+        stripeStatus = pi.status.toUpperCase();
+      } else if (reference.startsWith('in_') || reference.startsWith('inv_')) {
+        // Stripe invoices start with 'in_', but our internal refs might start with 'inv_'
+        const stripeRef = reference.startsWith('inv_')
+          ? reference.replace('inv_', 'in_') // This is a guess, let's assume standard Stripe refs
+          : reference;
+
+        if (stripeRef.startsWith('in_')) {
+          const invoice = await StripePayment.retrieveInvoice(stripeRef);
+          stripeStatus = invoice.status?.toUpperCase() || 'UNKNOWN';
+        }
+      }
+    } catch (err) {
+      console.error('Stripe API retrieval failed during verify:', err.message);
+      stripeStatus = 'STRIPE_API_ERROR';
+    }
+
+    return {
+      success: true,
+      data: {
+        transaction: {
+          reference: transaction.transaction_ref,
+          status: transaction.status,
+          stripe_status: stripeStatus, // Real-time status from Stripe
+          amount: transaction.amount,
+          currency: transaction.currency,
+          date: transaction.payment_date,
+        },
+        payment: transaction.payment
+          ? {
+              status: transaction.payment.status,
+              item_type: transaction.payment.item_type,
+              order_number: transaction.payment.order_number,
+              course: transaction.payment.course?.title,
+              event: transaction.payment.event?.name,
+            }
+          : null,
+      },
+    };
   }
 
   async handleSubscriptionEvents(sub: any) {

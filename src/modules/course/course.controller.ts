@@ -120,6 +120,25 @@ export class CourseController {
     }
   }
 
+  @Get('assignments/details/:assignmentId')
+  async getAssignmentDetails(
+    @Param('assignmentId') assignmentId: string,
+    @GetUser() user,
+  ) {
+    try {
+      const result = await this.courseService.getAssignmentDetails(
+        assignmentId,
+        user.userId,
+      );
+      return result;
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException(
+        'Error fetching assignment details',
+      );
+    }
+  }
+
   @ApiOperation({ summary: 'Get my Assignments for a course' })
   @Get('assignments/:courseId')
   async getAssignmentsForCourse(

@@ -9,7 +9,11 @@ import {
   EnrollDto,
   PInfoDto,
 } from './dto/enroll.dto';
-import { EnrollmentStep, ExperienceLevel } from '@prisma/client';
+import {
+  EnrollmentStatus,
+  EnrollmentStep,
+  ExperienceLevel,
+} from '@prisma/client';
 
 @Injectable()
 export class EnrollmentService {
@@ -285,14 +289,16 @@ export class EnrollmentService {
         return { success: false, message: 'Enrollment not found' };
       }
 
-      const existingRulesTerms = await this.prisma.enrollment.findUnique({
-        where: { id: enrollment.id, rules_regulations_signing: { NOT: null } },
-      });
+      const existingRulesTerms =
+        await this.prisma.rulesAndRegulationsSigning.findUnique({
+          where: { enrollmentId: enrollment.id },
+        });
 
       if (existingRulesTerms) {
         await this.prisma.enrollment.update({
           where: { id: enrollment.id },
           data: {
+            step: EnrollmentStep.RULES_SIGNING,
             rules_regulations_signing: {
               update: {
                 accepted: dto.accepted,
@@ -411,6 +417,7 @@ export class EnrollmentService {
         await this.prisma.enrollment.update({
           where: { id: enrollment.id },
           data: {
+            step: EnrollmentStep.CONTRACT_SIGNING,
             digital_contract_signing: {
               update: {
                 agreed: dto.accepted,
@@ -429,6 +436,7 @@ export class EnrollmentService {
         await this.prisma.enrollment.update({
           where: { id: enrollment.id },
           data: {
+            step: EnrollmentStep.CONTRACT_SIGNING,
             digital_contract_signing: {
               create: {
                 agreed: dto.accepted,
@@ -485,20 +493,42 @@ export class EnrollmentService {
   async myCourses(userId: string) {
     try {
       if (!userId) {
-        return { success: false, message: 'User ID is required' };
+        throw new BadRequestException('User ID is required');
       }
-
       const enrollments = await this.prisma.enrollment.findMany({
-        where: { user_id: userId },
-        include: {
-          course: true,
-          actingGoals: true,
-          digital_contract_signing: true,
-          rules_regulations_signing: true,
+        where: {
+          user_id: userId,
+          IsPaymentCompleted: true,
+          status: EnrollmentStatus.ACTIVE,
+        },
+        select: {
+          id: true,
+          courseId: true,
+          course: {
+            select: {
+              id: true,
+              title: true,
+              course_overview: true,
+              _count: {
+                select: {
+                  modules: true,
+                },
+              },
+            },
+          },
         },
       });
 
-      return { success: true, enrollments };
+      const responseData = enrollments.map((enrollment) => {
+        return {
+          course_id: enrollment.course.id,
+          course_title: enrollment.course.title,
+          course_overview: enrollment.course.course_overview,
+          course_modules: enrollment.course._count.modules,
+        };
+      });
+
+      return { success: true, enrollments: responseData };
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException('Error fetching enrolled courses');
