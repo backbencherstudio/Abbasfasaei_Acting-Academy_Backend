@@ -503,7 +503,7 @@ model Enrollment {
 
   courseId           String?
   actingGoalsId      String?
-  contract_docs      Json?
+  enrolled_documents Json?
   status             EnrollmentStatus @default(PENDING)
   IsPaymentCompleted Boolean          @default(false)
   actingGoals        ActingGoals?

@@ -20,9 +20,14 @@ import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { EnrollDto } from 'src/modules/enrollment/dto/enroll.dto';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import {
+  FileFieldsInterceptor,
+  FileInterceptor,
+  FilesInterceptor,
+} from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { PaymentDto } from './dto/paymentDto.dto';
+import { CombinedEnrollmentDto } from './dto/combined-enrollment.dto';
 
 @ApiBearerAuth()
 @ApiTags('Student Management')
@@ -34,54 +39,30 @@ export class StudentManagementController {
     private readonly studentManagementService: StudentManagementService,
   ) {}
 
-  @ApiTags('Create Enrollment')
-  @Post('enroll')
-  async manualEnrollment(
-    @GetUser() user: any,
-    @Body() createStudentManagementDto: EnrollDto,
-  ) {
-    return this.studentManagementService.manualEnrollment(
-      user.userId,
-      createStudentManagementDto,
-    );
-  }
-
-  @ApiTags('Manual Enrollment Payment')
-  @Post(':enrollmentId/payment')
-  async manualEnrollmentPayment(
-    @Param('enrollmentId') enrollmentId: string,
-    @Body() paymentDto: PaymentDto,
-  ) {
-    return this.studentManagementService.manualEnrollmentPayment(
-      enrollmentId,
-      paymentDto,
-    );
-  }
-
-  @ApiTags('Manual Enrollment Contract Document')
-  @Post(':enrollmentId/contract')
+  @ApiTags('Manual Enrollment Combined')
+  @Post('manual-enrollment')
   @UseInterceptors(
-    FilesInterceptor('media', 5, {
-      storage: memoryStorage(),
-    }),
+    FileFieldsInterceptor(
+      [
+        { name: 'rules_signing', maxCount: 1 },
+        { name: 'contract_signing', maxCount: 1 },
+      ],
+      { storage: memoryStorage() },
+    ),
   )
-  async manualEnrollmentContractDoc(
-    @Param('enrollmentId') enrollmentId: string,
-    @UploadedFiles() files: Express.Multer.File[],
+  async manualEnrollmentCombined(
+    @GetUser() user: any,
+    @Body() dto: CombinedEnrollmentDto,
+    @UploadedFiles()
+    files: {
+      rules_signing?: Express.Multer.File[];
+      contract_signing?: Express.Multer.File[];
+    },
   ) {
-    return this.studentManagementService.manualEnrollmentContractDocs(
-      enrollmentId,
+    return this.studentManagementService.combinedEnrollment(
+      user.userId,
+      dto,
       files,
-    );
-  }
-
-  @ApiTags('Preview Enrollment Contract Document')
-  @Get(':enrollmentId/preview-contract')
-  async getEnrollmentPreviewContractDoc(
-    @Param('enrollmentId') enrollmentId: string,
-  ) {
-    return this.studentManagementService.getEnrollmentPreviewContractDoc(
-      enrollmentId,
     );
   }
 

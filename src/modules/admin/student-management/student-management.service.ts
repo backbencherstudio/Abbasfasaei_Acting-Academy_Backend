@@ -39,7 +39,7 @@ export class StudentManagementService {
         where: { id: courseId },
         select: { id: true, title: true },
       });
-      courseId = course.id;
+      courseId = course?.id;
     }
 
     if (!course) {
@@ -162,6 +162,35 @@ export class StudentManagementService {
     };
   }
 
+  async combinedEnrollment(
+    userId: string,
+    dto: any,
+    files: {
+      rules_signing?: Express.Multer.File[];
+      contract_signing?: Express.Multer.File[];
+    },
+  ) {
+    const enrollmentResponse = await this.manualEnrollment(userId, dto);
+    if (!enrollmentResponse.success) {
+      return enrollmentResponse;
+    }
+
+    const enrollmentId = enrollmentResponse.data.id;
+
+    // Handle Payment
+    if (dto.transaction_id || dto.amount) {
+      await this.manualEnrollmentPayment(enrollmentId, dto);
+    }
+
+    // Handle Files
+    if (files && (files.rules_signing || files.contract_signing)) {
+      await this.manualEnrollmentContractDocs(enrollmentId, files);
+    }
+
+    // Return current enriched data (equivalent to preview)
+    return this.getEnrollmentPreviewContractDoc(enrollmentId);
+  }
+
   async manualEnrollmentPayment(enrollmentId: string, dto: any) {
     if (!enrollmentId) {
       return {
@@ -228,6 +257,7 @@ export class StudentManagementService {
             : 'PENDING',
         gateway: 'MANUAL_BANK_TRANSFER',
         payment_method: dto.payment_method,
+        payment_date: dto.payment_date ? new Date(dto.payment_date) : undefined,
         metadata: {
           payment_type: dto.payment_type,
           account_holder: dto.account_holder,
@@ -258,22 +288,17 @@ export class StudentManagementService {
 
   async manualEnrollmentContractDocs(
     enrollmentId: string,
-    files: Express.Multer.File[],
-    // mediaType: 'FILE' | 'IMAGE' | 'VIDEO',
+    files: {
+      rules_signing?: Express.Multer.File[];
+      contract_signing?: Express.Multer.File[];
+    },
   ) {
-    let mediaUrls: string[] = [];
-
     if (!enrollmentId) {
       return { success: false, message: 'enrollment not found' };
     }
 
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { id: enrollmentId },
-      select: {
-        id: true,
-        user: { select: { id: true, email: true } },
-        course: { select: { id: true, title: true, fee: true } },
-      },
     });
 
     if (!enrollment) {
@@ -283,33 +308,40 @@ export class StudentManagementService {
       };
     }
 
-    if (files && files.length > 0) {
-      for (const file of files) {
-        const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+    const updateData: any = {};
 
-        await SazedStorage.put(
-          appConfig().storageUrl.attachment + `/${filename}`,
-          file.buffer,
-        );
+    const uploadFile = async (file: Express.Multer.File) => {
+      const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+      await SazedStorage.put(
+        appConfig().storageUrl.attachment + `/${filename}`,
+        file.buffer,
+      );
+      return (
+        process.env.AWS_S3_ENDPOINT +
+        '/' +
+        process.env.AWS_S3_BUCKET +
+        appConfig().storageUrl.attachment +
+        `/${filename}`
+      );
+    };
 
-        mediaUrls.push(
-          process.env.AWS_S3_ENDPOINT +
-            '/' +
-            process.env.AWS_S3_BUCKET +
-            appConfig().storageUrl.attachment +
-            `/${filename}`,
-        );
-      }
+    if (files.rules_signing && files.rules_signing.length > 0) {
+      updateData.rules_signing = await uploadFile(files.rules_signing[0]);
+    }
 
+    if (files.contract_signing && files.contract_signing.length > 0) {
+      updateData.contract_signing = await uploadFile(files.contract_signing[0]);
+    }
+
+    if (Object.keys(updateData).length > 0) {
       const updatedEnrollment = await this.prisma.enrollment.update({
         where: { id: enrollment.id },
-        data: {
-          contract_docs: mediaUrls,
-        },
+        data: updateData,
       });
-
       return { success: true, data: updatedEnrollment };
     }
+
+    return { success: false, message: 'No files provided' };
   }
 
   async getEnrollmentPreviewContractDoc(enrollmentId: string) {
