@@ -1,22 +1,11 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  Query,
-  Req,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
-import { ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
-
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('attendance')
 export class AttendanceController {
   constructor(private attendanceService: AttendanceService) {}
@@ -25,7 +14,8 @@ export class AttendanceController {
   @Post('generate-qr/:classId')
   async generateQR(@GetUser() user: any, @Param('classId') classId: string) {
     try {
-      const teacherId = user.userId;
+      const teacherId = user?.userId;
+      console.log(teacherId);
 
       const qrData = await this.attendanceService.generateClassQR(
         classId,
@@ -54,7 +44,7 @@ export class AttendanceController {
     body: any,
   ) {
     try {
-      const token = body.token
+      const token = body.token;
       const attendance = await this.attendanceService.qrscanner(
         token,
         user.userId,

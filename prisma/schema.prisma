@@ -1096,11 +1096,6 @@ enum EventStatus {
 //   REFUNDED
 // }
 
-// ==============================================================================
-// 🚀 PROPOSED CENTRALIZED ORDER & PAYMENT ARCHITECTURE (UNCOMMENT TO USE)
-// ==============================================================================
-
-// 1. Enums for the new architecture
 enum OrderStatus {
   PENDING
   PROCESSING

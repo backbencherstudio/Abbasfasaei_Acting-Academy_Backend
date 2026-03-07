@@ -396,18 +396,28 @@ export class DashboardService {
           },
           module: {
             include: {
-              course: { select: { title: true } },
+              course: {
+                select: {
+                  title: true,
+                  enrollments: {
+                    where: {
+                      status: 'ACTIVE',
+                    },
+                  },
+                },
+              },
             },
           },
         },
         orderBy: { start_date: 'desc' },
-        take: 5,
+        take: 6,
       });
 
       return recentClasses.map((cls) => ({
         classTitle: cls.class_title,
         course: cls.module.course.title,
         totalStudents: cls.attendances.length,
+        totalEnrollments: cls.module.course.enrollments.length,
         date: cls.start_date,
       }));
     } catch (error) {

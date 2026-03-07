@@ -1,8 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CreateAttendenceDto } from './dto/create-attendence.dto';
-import { UpdateAttendenceDto } from './dto/update-attendence.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-
 
 @Injectable()
 export class AttendanceService {
@@ -32,6 +29,10 @@ export class AttendanceService {
       where: whereClause,
     });
 
-    return filteredAttendance;
+    return {
+      success: true,
+      message: 'Attendance fetched successfully',
+      data: filteredAttendance,
+    };
   }
 }

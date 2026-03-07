@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { CommunityManagementService } from './community-management.service';
 import { CreateCommunityManagementDto } from './dto/create-community-management.dto';
@@ -18,6 +19,7 @@ import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { PostStatus } from '@prisma/client';
+import { GetPostsQueryDto } from './dto/query-community-management.dto';
 
 @ApiBearerAuth()
 @ApiTags('Community Management')
@@ -36,14 +38,20 @@ export class CommunityManagementController {
 
   @ApiOperation({ summary: 'Get all community posts' })
   @Get('posts')
-  async getAllPosts(@GetUser() user: any) {
-    return this.communityManagementService.getAllPosts(user.userId);
+  async getAllPosts(@GetUser() user: any, @Query() query: GetPostsQueryDto) {
+    return this.communityManagementService.getAllPosts(user.userId, query);
   }
 
   @ApiOperation({ summary: 'Get all requested posts' })
   @Get('requested-posts')
-  async getAllRequestedPost(@GetUser() user: any) {
-    return this.communityManagementService.getAllRequestedPost(user.userId);
+  async getAllRequestedPost(
+    @GetUser() user: any,
+    @Query() query: GetPostsQueryDto,
+  ) {
+    return this.communityManagementService.getAllRequestedPost(
+      user.userId,
+      query,
+    );
   }
 
   @ApiOperation({ summary: 'Get a community management by ID' })
@@ -52,23 +60,23 @@ export class CommunityManagementController {
     return this.communityManagementService.getPostById(user.userId, id);
   }
 
-  @ApiOperation({ summary: 'Get all posts by status' })
-  @Get('posts/status/:status')
-  async getAllPostsByStatus(
-    @Param('status') status: PostStatus,
-    @GetUser() user: any,
-  ) {
-    return this.communityManagementService.getAllPostsByStatus(
-      user.userId,
-      status,
-    );
-  }
+  // @ApiOperation({ summary: 'Get all posts by status' })
+  // @Get('posts/status/:status')
+  // async getAllPostsByStatus(
+  //   @Param('status') status: PostStatus,
+  //   @GetUser() user: any,
+  // ) {
+  //   return this.communityManagementService.getAllPostsByStatus(
+  //     user.userId,
+  //     status,
+  //   );
+  // }
 
-  @ApiOperation({ summary: 'Get all posts by role' })
-  @Get('posts/role/:role')
-  async getAllPostsByRole(@Param('role') role: string, @GetUser() user: any) {
-    return this.communityManagementService.getAllPostsByRole(user.userId, role);
-  }
+  // @ApiOperation({ summary: 'Get all posts by role' })
+  // @Get('posts/role/:role')
+  // async getAllPostsByRole(@Param('role') role: string, @GetUser() user: any) {
+  //   return this.communityManagementService.getAllPostsByRole(user.userId, role);
+  // }
 
   @ApiOperation({ summary: 'Approve a post' })
   @Patch('approve-post/:id')
