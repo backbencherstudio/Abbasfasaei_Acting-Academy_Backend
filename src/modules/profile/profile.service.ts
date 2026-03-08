@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from '../auth/auth.service';
+import appConfig from 'src/config/app.config';
 
 @Injectable()
 export class ProfileService {
@@ -14,6 +15,40 @@ export class ProfileService {
     private prisma: PrismaService,
     private readonly authService: AuthService,
   ) {}
+
+  private getFileUrl(filename: string): string {
+    if (!filename) return null;
+    if (filename.startsWith('http')) return filename; // Legacy support
+    return (
+      process.env.AWS_S3_ENDPOINT +
+      '/' +
+      process.env.AWS_S3_BUCKET +
+      appConfig().storageUrl.attachment +
+      `/${filename}`
+    );
+  }
+
+  private formatEnrollment(enrollment: any) {
+    if (!enrollment) return enrollment;
+    if (enrollment.enrolled_documents) {
+      const docs = enrollment.enrolled_documents;
+      if (typeof docs === 'object') {
+        const formattedDocs = { ...docs };
+        if (formattedDocs.rules_signing) {
+          formattedDocs.rules_signing = this.getFileUrl(
+            formattedDocs.rules_signing,
+          );
+        }
+        if (formattedDocs.contract_signing) {
+          formattedDocs.contract_signing = this.getFileUrl(
+            formattedDocs.contract_signing,
+          );
+        }
+        enrollment.enrolled_documents = formattedDocs;
+      }
+    }
+    return enrollment;
+  }
 
   async getCompleteProfile(userId: string) {
     // Step 1: Check if user exists
@@ -54,9 +89,9 @@ export class ProfileService {
     if (hasPaid) {
       return {
         ...baseProfile,
-        // subscriptionPayment: await this.getSubscriptionPayment(userId),
-        // contractDocuments: await this.getContractDocuments(userId),
-        // feedbackCertificates: await this.getFeedbackCertificates(userId),
+        subscriptionPayment: await this.getSubscriptionPayment(userId),
+        contractDocuments: await this.getContractDocuments(userId),
+        feedbackCertificates: await this.getFeedbackCertificates(userId),
       };
     }
 
@@ -340,117 +375,117 @@ export class ProfileService {
   }
 
   // Active User Only Methods
-  // async getSubscriptionPayment(userId: string) {
-  //   const payments = await this.prisma.paymentHistory.findMany({
-  //     where: { user_id: userId },
-  //     include: {
-  //       userPayment: {
-  //         include: {
-  //           enrollment: {
-  //             include: {
-  //               course: true,
-  //             },
-  //           },
-  //         },
-  //       },
-  //     },
-  //     orderBy: { payment_date: 'desc' },
-  //   });
+  async getSubscriptionPayment(userId: string) {
+    const payments = await this.prisma.transaction.findMany({
+      where: { user_id: userId },
+      include: {
+        payment: {
+          include: {
+            course: true,
+          },
+        },
+      },
+      orderBy: { payment_date: 'desc' },
+    });
 
-  //   const enrollments = await this.prisma.enrollment.findMany({
-  //     where: { user_id: userId },
-  //     include: {
-  //       course: true,
-  //       payment: true,
-  //     },
-  //   });
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: { user_id: userId },
+      include: {
+        course: {
+          select: {
+            title: true,
+          },
+        },
+      },
+    });
 
-  //   return {
-  //     paymentHistory: payments.map((payment) => ({
-  //       id: payment.id,
-  //       amount: payment.amount,
-  //       currency: payment.currency,
-  //       paymentDate: payment.payment_date,
-  //       status: payment.payment_status,
-  //       type: payment.payment_type,
-  //       course: payment.userPayment?.enrollment?.course?.title,
-  //     })),
-  //     currentSubscriptions: enrollments.map((enrollment) => ({
-  //       course: enrollment.course?.title,
-  //       status: enrollment.status,
-  //       paymentStatus: enrollment.payment_status,
-  //       startDate: enrollment.created_at,
-  //     })),
-  //   };
-  // }
+    return {
+      paymentHistory: payments.map((payment) => ({
+        id: payment.id,
+        amount: payment.amount,
+        currency: payment.currency,
+        paymentDate: payment.payment_date,
+        status: payment.status,
+        course: payment.payment?.course?.title,
+      })),
+      currentSubscriptions: enrollments.map((enrollment) => ({
+        course: enrollment.course?.title,
+        status: enrollment.status,
+        IsPaymentCompleted: enrollment.IsPaymentCompleted,
+        startDate: enrollment.created_at,
+      })),
+    };
+  }
 
-  // async getContractDocuments(userId: string) {
-  //   const enrollments = await this.prisma.enrollment.findMany({
-  //     where: { user_id: userId },
-  //     include: {
-  //       course: true,
-  //       digital_contract_signing: {
-  //         include: {
-  //           digitalSignature: true,
-  //         },
-  //       },
-  //       rules_regulations_signing: {
-  //         include: {
-  //           digitalSignature: true,
-  //         },
-  //       },
-  //       enrolled_documents: true,
-  //     },
-  //   });
+  async getContractDocuments(userId: string) {
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: { user_id: userId },
+      include: {
+        course: true,
+        digital_contract_signing: {
+          include: {
+            digitalSignature: true,
+          },
+        },
+        rules_regulations_signing: {
+          include: {
+            digitalSignature: true,
+          },
+        },
+      },
+    });
 
-  //   return enrollments.map((enrollment) => ({
-  //     course: enrollment.course?.title,
-  //     enrolled_documents: enrollment.enrolled_documents,
-  //     digitalContract: enrollment.digital_contract_signing,
-  //     rulesRegulations: enrollment.rules_regulations_signing,
-  //   }));
-  // }
+    return enrollments.map((enrollment) => {
+      const formatted = this.formatEnrollment(enrollment);
+      return {
+        course: formatted.course?.title,
+        enrolled_documents: formatted.enrolled_documents,
+        digitalContract: formatted.digital_contract_signing,
+        rulesRegulations: formatted.rules_regulations_signing,
+      };
+    });
+  }
 
-  // async getFeedbackCertificates(userId: string) {
-  //   const assignments = await this.prisma.assignmentGrade.findMany({
-  //     where: { studentId: userId },
-  //     include: {
-  //       assignment: {
-  //         include: {
-  //           moduleClass: {
-  //             include: {
-  //               module: {
-  //                 include: {
-  //                   course: true,
-  //                 },
-  //               },
-  //             },
-  //           },
-  //         },
-  //       },
-  //     },
-  //   });
+  async getFeedbackCertificates(userId: string) {
+    const assignments = await this.prisma.assignmentGrade.findMany({
+      where: { studentId: userId },
+      include: {
+        assignment: {
+          include: {
+            moduleClass: {
+              include: {
+                module: {
+                  include: {
+                    course: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
 
-  //   const enrollments = await this.prisma.enrollment.findMany({
-  //     where: { user_id: userId, status: 'ACTIVE' },
-  //     include: {
-  //       course: true,
-  //     },
-  //   });
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: { user_id: userId, status: 'ACTIVE' },
+      include: {
+        course: true,
+      },
+    });
 
-  //   return {
-  //     feedback: assignments.map((assignment) => ({
-  //       course: assignment.assignment.moduleClass.module.course.title,
-  //       assignment: assignment.assignment.title,
-  //       grade: assignment.grade,
-  //       feedback: assignment.feedback,
-  //       gradedAt: assignment.gradedAt,
-  //     })),
-  //     certificates: enrollments.map((enrollment) => ({
-  //       course: enrollment.course.title,
-  //       completionStatus: enrollment.status,
-  //       certificateUrl: null, // You might want to add certificate URLs to your schema
-  //     })),
-  //   };
-  // }
+    return {
+      feedback: assignments.map((assignment) => ({
+        course: assignment.assignment.moduleClass.module.course.title,
+        assignment: assignment.assignment.title,
+        grade: assignment.grade,
+        feedback: assignment.feedback,
+        gradedAt: assignment.gradedAt,
+      })),
+      certificates: enrollments.map((enrollment) => ({
+        course: enrollment.course?.title,
+        completionStatus: enrollment.status,
+        certificateUrl: null, // You might want to add certificate URLs to your schema
+      })),
+    };
+  }
 }

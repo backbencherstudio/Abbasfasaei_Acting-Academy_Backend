@@ -8,7 +8,35 @@ import appConfig from 'src/config/app.config';
 export class StudentManagementService {
   constructor(private prisma: PrismaService) {}
 
-  async manualEnrollment(userId: string, dto: any) {
+  private getFileUrl(filename: string): string {
+    if (!filename) return null;
+    if (filename.startsWith('http')) return filename; // Legacy support
+    return SazedStorage.url(appConfig().storageUrl.attachment + `/${filename}`);
+  }
+
+  private formatEnrollment(enrollment: any) {
+    if (!enrollment) return enrollment;
+    if (enrollment.enrolled_documents) {
+      const docs = enrollment.enrolled_documents;
+      if (typeof docs === 'object') {
+        const formattedDocs = { ...docs };
+        if (formattedDocs.rules_signing) {
+          formattedDocs.rules_signing = this.getFileUrl(
+            formattedDocs.rules_signing,
+          );
+        }
+        if (formattedDocs.contract_signing) {
+          formattedDocs.contract_signing = this.getFileUrl(
+            formattedDocs.contract_signing,
+          );
+        }
+        enrollment.enrolled_documents = formattedDocs;
+      }
+    }
+    return enrollment;
+  }
+
+  async manualEnrollment(userId: string, dto: any, tx: any = this.prisma) {
     if (!userId) {
       return {
         success: false,
@@ -16,7 +44,7 @@ export class StudentManagementService {
       };
     }
 
-    const user = await this.prisma.user.findUnique({
+    const user = await tx.user.findUnique({
       where: { email: dto.email },
       select: { id: true },
     });
@@ -32,7 +60,7 @@ export class StudentManagementService {
     let course;
 
     if (courseId) {
-      course = await this.prisma.course.findUnique({
+      course = await tx.course.findUnique({
         where: { id: courseId },
         select: { id: true, title: true },
       });
@@ -44,7 +72,7 @@ export class StudentManagementService {
     }
 
     // Check if the user is already enrolled
-    const existingEnrollment = await this.prisma.enrollment.findFirst({
+    const existingEnrollment = await tx.enrollment.findFirst({
       where: { email: dto.email, courseId: courseId },
     });
 
@@ -56,7 +84,7 @@ export class StudentManagementService {
     }
 
     // Create a new enrollment (without nested ActingGoals to avoid relation violations)
-    const createdEnrollment = await this.prisma.enrollment.create({
+    const createdEnrollment = await tx.enrollment.create({
       data: {
         user_id: user.id,
         courseId: courseId,
@@ -71,13 +99,13 @@ export class StudentManagementService {
     });
 
     // Upsert ActingGoals and link to the newly created enrollment
-    const existingGoals = await this.prisma.actingGoals.findUnique({
+    const existingGoals = await tx.actingGoals.findUnique({
       where: { userId: user.id },
       select: { id: true, enrollmentId: true },
     });
 
     if (existingGoals) {
-      await this.prisma.actingGoals.update({
+      await tx.actingGoals.update({
         where: { id: existingGoals.id },
         data: {
           acting_goals: dto.acting_goals,
@@ -85,7 +113,7 @@ export class StudentManagementService {
         },
       });
     } else {
-      await this.prisma.actingGoals.create({
+      await tx.actingGoals.create({
         data: {
           acting_goals: dto.acting_goals,
           user: { connect: { id: user.id } },
@@ -95,7 +123,7 @@ export class StudentManagementService {
     }
 
     // Re-fetch enriched enrollment payload
-    const enrollment = await this.prisma.enrollment.findUnique({
+    const enrollment = await tx.enrollment.findUnique({
       where: { id: createdEnrollment.id },
       select: {
         id: true,
@@ -155,7 +183,7 @@ export class StudentManagementService {
 
     return {
       success: true,
-      data: enrollment,
+      data: this.formatEnrollment(enrollment),
     };
   }
 
@@ -167,28 +195,77 @@ export class StudentManagementService {
       contract_signing?: Express.Multer.File[];
     },
   ) {
-    const enrollmentResponse = await this.manualEnrollment(userId, dto);
-    if (!enrollmentResponse.success) {
-      return enrollmentResponse;
+    // 1. Validate file presence (mandatory)
+    if (!files?.rules_signing || files.rules_signing.length === 0) {
+      return { success: false, message: 'rules_signing file is required' };
+    }
+    if (!files?.contract_signing || files.contract_signing.length === 0) {
+      return { success: false, message: 'contract_signing file is required' };
     }
 
-    const enrollmentId = enrollmentResponse.data.id;
+    let uploadedUrls: any = {};
+    if (files) {
+      const uploadFile = async (file: Express.Multer.File) => {
+        const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+        await SazedStorage.put(
+          appConfig().storageUrl.attachment + `/${filename}`,
+          file.buffer,
+        );
+        return filename;
+      };
 
-    // Handle Payment
-    if (dto.transaction_id || dto.amount) {
-      await this.manualEnrollmentPayment(enrollmentId, dto);
+      if (files.rules_signing && files.rules_signing.length > 0) {
+        uploadedUrls.rules_signing = await uploadFile(files.rules_signing[0]);
+      }
+
+      if (files.contract_signing && files.contract_signing.length > 0) {
+        uploadedUrls.contract_signing = await uploadFile(
+          files.contract_signing[0],
+        );
+      }
     }
 
-    // Handle Files
-    if (files && (files.rules_signing || files.contract_signing)) {
-      await this.manualEnrollmentContractDocs(enrollmentId, files);
-    }
+    // 2. Wrap database operations in a transaction
+    const enrollmentResult = await this.prisma.$transaction(async (tx) => {
+      const enrollmentResponse = await this.manualEnrollment(userId, dto, tx);
+      if (!enrollmentResponse.success) {
+        throw new Error(enrollmentResponse.message || 'Enrollment failed');
+      }
 
-    // Return current enriched data (equivalent to preview)
-    return this.getEnrollmentPreviewContractDoc(enrollmentId);
+      const enrollmentId = enrollmentResponse.data.id;
+
+      // Handle Payment
+      if (dto.transaction_id || dto.amount) {
+        const paymentResponse = await this.manualEnrollmentPayment(
+          enrollmentId,
+          dto,
+          tx,
+        );
+        if (!paymentResponse.success) {
+          throw new Error(paymentResponse.message || 'Payment failed');
+        }
+      }
+
+      // Save File URLs to database
+      if (Object.keys(uploadedUrls).length > 0) {
+        await tx.enrollment.update({
+          where: { id: enrollmentId },
+          data: { enrolled_documents: uploadedUrls },
+        });
+      }
+
+      return enrollmentId;
+    });
+
+    // Return current enriched data
+    return this.getEnrollmentPreviewContractDoc(enrollmentResult);
   }
 
-  async manualEnrollmentPayment(enrollmentId: string, dto: any) {
+  async manualEnrollmentPayment(
+    enrollmentId: string,
+    dto: any,
+    tx: any = this.prisma,
+  ) {
     if (!enrollmentId) {
       return {
         success: false,
@@ -196,7 +273,7 @@ export class StudentManagementService {
       };
     }
 
-    const enrollment = await this.prisma.enrollment.findUnique({
+    const enrollment = await tx.enrollment.findUnique({
       where: { id: enrollmentId },
       select: {
         id: true,
@@ -214,7 +291,7 @@ export class StudentManagementService {
 
     console.log('enrollment in payment:', enrollment);
 
-    const existingPayment = await this.prisma.payment.findFirst({
+    const existingPayment = await tx.payment.findFirst({
       where: {
         user_id: enrollment.user.id,
         course_id: enrollment.course.id,
@@ -223,7 +300,7 @@ export class StudentManagementService {
 
     let paymentId = existingPayment?.id;
     if (!paymentId) {
-      const payment = await this.prisma.payment.create({
+      const payment = await tx.payment.create({
         data: {
           order_number: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           user_id: enrollment.user.id,
@@ -234,14 +311,14 @@ export class StudentManagementService {
               ? 'COMPLETED'
               : 'PENDING',
           item_type: 'COURSE_ENROLLMENT',
-          payment_type: dto.payment_type as any,
+          payment_type: (dto.payment_type as any) || 'ONE_TIME',
           course_id: enrollment.course.id,
         },
       });
       paymentId = payment.id;
     }
 
-    const transaction = await this.prisma.transaction.create({
+    const transaction = await tx.transaction.create({
       data: {
         transaction_ref: dto.transaction_id || `MANUAL-${Date.now()}`,
         paymentId: paymentId,
@@ -256,7 +333,7 @@ export class StudentManagementService {
         payment_method: dto.payment_method,
         payment_date: dto.payment_date ? new Date(dto.payment_date) : undefined,
         metadata: {
-          payment_type: dto.payment_type,
+          payment_type: dto.payment_type || 'ONE_TIME',
           account_holder: dto.account_holder,
           card_number: dto.card_number,
           card_expiry: dto.card_expiry,
@@ -270,7 +347,7 @@ export class StudentManagementService {
 
     // Update the enrollment payment completion if successful
     if (transaction.status === 'SUCCESS') {
-      await this.prisma.enrollment.update({
+      await tx.enrollment.update({
         where: { id: enrollmentId },
         data: { IsPaymentCompleted: true },
       });
@@ -289,6 +366,7 @@ export class StudentManagementService {
       rules_signing?: Express.Multer.File[];
       contract_signing?: Express.Multer.File[];
     },
+    tx: any = this.prisma,
   ) {
     if (!enrollmentId) {
       return { success: false, message: 'enrollment not found' };
@@ -314,13 +392,7 @@ export class StudentManagementService {
         appConfig().storageUrl.attachment + `/${filename}`,
         file.buffer,
       );
-      return (
-        process.env.AWS_S3_ENDPOINT +
-        '/' +
-        process.env.AWS_S3_BUCKET +
-        appConfig().storageUrl.attachment +
-        `/${filename}`
-      );
+      return filename;
     };
 
     if (files.rules_signing && files.rules_signing.length > 0) {
@@ -340,7 +412,10 @@ export class StudentManagementService {
         where: { id: enrollment.id },
         data: { enrolled_documents: uploadedUrls },
       });
-      return { success: true, data: updatedEnrollment };
+      return {
+        success: true,
+        data: this.formatEnrollment(updatedEnrollment),
+      };
     }
 
     return { success: false, message: 'No files provided' };
@@ -389,7 +464,7 @@ export class StudentManagementService {
 
     return {
       success: true,
-      data: enrollment,
+      data: this.formatEnrollment(enrollment),
     };
   }
 
@@ -433,7 +508,7 @@ export class StudentManagementService {
 
     return {
       success: true,
-      data: students,
+      data: students.map((s) => this.formatEnrollment(s)),
     };
   }
 

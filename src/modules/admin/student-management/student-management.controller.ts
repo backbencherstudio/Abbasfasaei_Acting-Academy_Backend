@@ -50,11 +50,18 @@ export class StudentManagementController {
       contract_signing?: Express.Multer.File[];
     },
   ) {
-    return this.studentManagementService.combinedEnrollment(
-      user.userId,
-      dto,
-      files,
-    );
+    try {
+      return await this.studentManagementService.combinedEnrollment(
+        user.userId,
+        dto,
+        files,
+      );
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || 'An error occurred during enrollment',
+      };
+    }
   }
 
   @ApiTags('Get Student By ID')

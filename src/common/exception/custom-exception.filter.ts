@@ -14,7 +14,6 @@ export class CustomExceptionFilter implements ExceptionFilter {
     // Return custom error response format
     response.status(status).json({
       success: false,
-      // message: exception.message || 'An error occurred',
       message: (exception.getResponse() as any).message || exception.message,
       error: (exception.getResponse() as any).error || exception.getResponse(),
     });
