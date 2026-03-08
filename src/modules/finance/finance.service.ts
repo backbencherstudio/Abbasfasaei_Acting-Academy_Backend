@@ -1,5 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CreateFinanceDto } from './dto/create-finance.dto';
+import { UpdateFinanceDto } from './dto/update-finance.dto';
 
 @Injectable()
 export class FinanceService {
@@ -356,6 +363,120 @@ export class FinanceService {
     } catch (error) {
       this.logger.error(`Error getting recent transactions: ${error.message}`);
       return [];
+    }
+  }
+
+  async register(body: CreateFinanceDto) {
+    try {
+      // Ensure Finance role exists or create it
+      let financeRole = await this.prisma.role.findFirst({
+        where: { name: { equals: 'FINANCE', mode: 'insensitive' } },
+        select: { id: true, name: true },
+      });
+      if (!financeRole) {
+        financeRole = await this.prisma.role.create({
+          data: { name: 'FINANCE', title: 'Finance' },
+          select: { id: true, name: true },
+        });
+      }
+
+      const user = await this.prisma.user.findFirst({
+        where: { email: body.email },
+      });
+
+      if (user) {
+        throw new BadRequestException('Finance already exists');
+      }
+
+      const finance = await this.prisma.user.create({
+        data: {
+          name: body.full_name,
+          email: body.email,
+          phone_number: body.phone,
+          experience_level: body.experienceLevel,
+          joined_at: body.joined_at,
+          type: 'finance',
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone_number: true,
+          experience_level: true,
+          joined_at: true,
+          type: true,
+        },
+      });
+
+      await this.prisma.roleUser.create({
+        data: {
+          user_id: finance.id,
+          role_id: financeRole.id,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Finance registered successfully',
+        data: finance,
+      };
+    } catch (error) {
+      this.logger.error(`Error registering payment: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async update(body: UpdateFinanceDto) {
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: { email: body.email },
+      });
+
+      if (!user) {
+        throw new BadRequestException('Finance not found');
+      }
+
+      const data: any = {};
+      if (body.full_name) {
+        data.name = body.full_name;
+      }
+      if (body.email) {
+        data.email = body.email;
+      }
+      if (body.phone) {
+        data.phone_number = body.phone;
+      }
+      if (body.experienceLevel) {
+        data.experience_level = body.experienceLevel;
+      }
+      if (body.joined_at) {
+        data.joined_at = body.joined_at;
+      }
+      const finance = await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          ...data,
+          type: 'finance',
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone_number: true,
+          experience_level: true,
+          joined_at: true,
+          type: true,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Finance updated successfully',
+        data: finance,
+      };
+    } catch (error) {
+      this.logger.error(`Error updating payment: ${error.message}`);
+      throw error;
     }
   }
 }
