@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { AuthService } from '../auth/auth.service';
 import appConfig from 'src/config/app.config';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 
 @Injectable()
 export class ProfileService {
@@ -19,13 +20,7 @@ export class ProfileService {
   private getFileUrl(filename: string): string {
     if (!filename) return null;
     if (filename.startsWith('http')) return filename; // Legacy support
-    return (
-      process.env.AWS_S3_ENDPOINT +
-      '/' +
-      process.env.AWS_S3_BUCKET +
-      appConfig().storageUrl.attachment +
-      `/${filename}`
-    );
+    return SazedStorage.url(appConfig().storageUrl.attachment + '/' + filename);
   }
 
   private formatEnrollment(enrollment: any) {
