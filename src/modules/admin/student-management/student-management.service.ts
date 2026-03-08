@@ -1,8 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CreateStudentManagementDto } from './dto/create-student-management.dto';
-import { UpdateStudentManagementDto } from './dto/update-student-management.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { id } from 'date-fns/locale';
 import { StringHelper } from 'src/common/helper/string.helper';
 import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
@@ -126,7 +123,7 @@ export class StudentManagementService {
             course_overview: true,
           },
         },
-        contract_docs: true,
+        enrolled_documents: true,
       },
     });
 
@@ -217,21 +214,21 @@ export class StudentManagementService {
 
     console.log('enrollment in payment:', enrollment);
 
-    const existingOrder = await this.prisma.payment.findFirst({
+    const existingPayment = await this.prisma.payment.findFirst({
       where: {
         user_id: enrollment.user.id,
         course_id: enrollment.course.id,
       },
     });
 
-    let orderId = existingOrder?.id;
-    if (!orderId) {
-      const order = await this.prisma.payment.create({
+    let paymentId = existingPayment?.id;
+    if (!paymentId) {
+      const payment = await this.prisma.payment.create({
         data: {
           order_number: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           user_id: enrollment.user.id,
           total_amount: dto.amount || enrollment.course.fee,
-          currency: dto.currency || 'USD',
+          currency: dto.currency || 'usd',
           status:
             dto.payment_status === 'PAID' || dto.payment_status === 'SUCCESS'
               ? 'COMPLETED'
@@ -241,13 +238,13 @@ export class StudentManagementService {
           course_id: enrollment.course.id,
         },
       });
-      orderId = order.id;
+      paymentId = payment.id;
     }
 
     const transaction = await this.prisma.transaction.create({
       data: {
         transaction_ref: dto.transaction_id || `MANUAL-${Date.now()}`,
-        paymentId: orderId,
+        paymentId: paymentId,
         user_id: enrollment.user.id,
         amount: dto.amount || 0,
         currency: dto.currency || 'USD',
@@ -264,7 +261,7 @@ export class StudentManagementService {
           card_number: dto.card_number,
           card_expiry: dto.card_expiry,
           invoice_sent: dto.invoice_sent,
-          description: existingOrder
+          description: existingPayment
             ? 'Manual enrollment payment updated'
             : 'Manual enrollment payment created',
         },
@@ -308,7 +305,8 @@ export class StudentManagementService {
       };
     }
 
-    const updateData: any = {};
+    const uploadedUrls: any = (enrollment.enrolled_documents as any) || {};
+    let hasNewFiles = false;
 
     const uploadFile = async (file: Express.Multer.File) => {
       const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
@@ -326,17 +324,21 @@ export class StudentManagementService {
     };
 
     if (files.rules_signing && files.rules_signing.length > 0) {
-      updateData.rules_signing = await uploadFile(files.rules_signing[0]);
+      uploadedUrls.rules_signing = await uploadFile(files.rules_signing[0]);
+      hasNewFiles = true;
     }
 
     if (files.contract_signing && files.contract_signing.length > 0) {
-      updateData.contract_signing = await uploadFile(files.contract_signing[0]);
+      uploadedUrls.contract_signing = await uploadFile(
+        files.contract_signing[0],
+      );
+      hasNewFiles = true;
     }
 
-    if (Object.keys(updateData).length > 0) {
+    if (hasNewFiles) {
       const updatedEnrollment = await this.prisma.enrollment.update({
         where: { id: enrollment.id },
-        data: updateData,
+        data: { enrolled_documents: uploadedUrls },
       });
       return { success: true, data: updatedEnrollment };
     }
@@ -374,8 +376,7 @@ export class StudentManagementService {
         },
         actingGoals: { select: { acting_goals: true } },
         IsPaymentCompleted: true,
-
-        contract_docs: true,
+        enrolled_documents: true,
       },
     });
 

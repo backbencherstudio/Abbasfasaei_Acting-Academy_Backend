@@ -399,13 +399,13 @@ export class ProfileService {
   //           digitalSignature: true,
   //         },
   //       },
-  //       contract_docs: true,
+  //       enrolled_documents: true,
   //     },
   //   });
 
   //   return enrollments.map((enrollment) => ({
   //     course: enrollment.course?.title,
-  //     contractDocs: enrollment.contract_docs,
+  //     enrolled_documents: enrollment.enrolled_documents,
   //     digitalContract: enrollment.digital_contract_signing,
   //     rulesRegulations: enrollment.rules_regulations_signing,
   //   }));
