@@ -502,7 +502,6 @@ model Enrollment {
   experience_level ExperienceLevel
 
   courseId           String?
-  actingGoalsId      String?
   enrolled_documents Json?
   status             EnrollmentStatus @default(PENDING)
   IsPaymentCompleted Boolean          @default(false)
@@ -1124,7 +1123,7 @@ enum TransactionStatus {
 
 enum PaymentGateway {
   STRIPE
-  MANUAL_BANK_TRANSFER
+  STRIPE_MANUAL_ENTRY
 }
 
 model Payment {

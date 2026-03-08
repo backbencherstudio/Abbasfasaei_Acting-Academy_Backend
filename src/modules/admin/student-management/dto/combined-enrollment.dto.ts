@@ -63,7 +63,7 @@ export class CombinedEnrollmentDto {
   //   no need
   @IsOptional()
   @IsString()
-  payment_status?: string;
+  payment_status?: string = 'PAID';
 
   @IsOptional()
   @IsString()

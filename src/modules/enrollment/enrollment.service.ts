@@ -4,16 +4,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import {
-  AcceptRulesOrContractDto,
-  EnrollDto,
-  PInfoDto,
-} from './dto/enroll.dto';
-import {
-  EnrollmentStatus,
-  EnrollmentStep,
-  ExperienceLevel,
-} from '@prisma/client';
+import { AcceptRulesOrContractDto, PInfoDto } from './dto/enroll.dto';
+import { EnrollmentStatus, EnrollmentStep } from '@prisma/client';
 
 @Injectable()
 export class EnrollmentService {
@@ -207,14 +199,6 @@ export class EnrollmentService {
               },
             });
             actingGoalsIdValue = createdGoals.id;
-          }
-
-          // Optionally store actingGoalsId on enrollment for quick reference
-          if (actingGoalsIdValue) {
-            await this.prisma.enrollment.update({
-              where: { id: enrollment.id },
-              data: { actingGoalsId: actingGoalsIdValue },
-            });
           }
         }
       } catch (e) {

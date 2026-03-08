@@ -3,6 +3,12 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { StringHelper } from 'src/common/helper/string.helper';
 import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
+import {
+  EnrollmentStatus,
+  EnrollmentStep,
+  PaymentGateway,
+} from '@prisma/client';
+import { CombinedEnrollmentDto } from './dto/combined-enrollment.dto';
 
 @Injectable()
 export class StudentManagementService {
@@ -36,7 +42,11 @@ export class StudentManagementService {
     return enrollment;
   }
 
-  async manualEnrollment(userId: string, dto: any, tx: any = this.prisma) {
+  async manualEnrollment(
+    userId: string,
+    dto: CombinedEnrollmentDto,
+    tx: any = this.prisma,
+  ) {
     if (!userId) {
       return {
         success: false,
@@ -189,7 +199,7 @@ export class StudentManagementService {
 
   async combinedEnrollment(
     userId: string,
-    dto: any,
+    dto: CombinedEnrollmentDto,
     files: {
       rules_signing?: Express.Multer.File[];
       contract_signing?: Express.Multer.File[];
@@ -263,7 +273,7 @@ export class StudentManagementService {
 
   async manualEnrollmentPayment(
     enrollmentId: string,
-    dto: any,
+    dto: CombinedEnrollmentDto,
     tx: any = this.prisma,
   ) {
     if (!enrollmentId) {
@@ -288,8 +298,6 @@ export class StudentManagementService {
         message: 'Enrollment not found',
       };
     }
-
-    console.log('enrollment in payment:', enrollment);
 
     const existingPayment = await tx.payment.findFirst({
       where: {
@@ -329,7 +337,7 @@ export class StudentManagementService {
           dto.payment_status === 'PAID' || dto.payment_status === 'SUCCESS'
             ? 'SUCCESS'
             : 'PENDING',
-        gateway: 'MANUAL_BANK_TRANSFER',
+        gateway: PaymentGateway.STRIPE_MANUAL_ENTRY,
         payment_method: dto.payment_method,
         payment_date: dto.payment_date ? new Date(dto.payment_date) : undefined,
         metadata: {
@@ -349,7 +357,11 @@ export class StudentManagementService {
     if (transaction.status === 'SUCCESS') {
       await tx.enrollment.update({
         where: { id: enrollmentId },
-        data: { IsPaymentCompleted: true },
+        data: {
+          IsPaymentCompleted: true,
+          status: EnrollmentStatus.ACTIVE,
+          step: EnrollmentStep.COMPLETED,
+        },
       });
     }
 
@@ -490,7 +502,6 @@ export class StudentManagementService {
         updated_at: true,
         user: { select: { id: true, email: true } },
         IsPaymentCompleted: true,
-        actingGoalsId: true,
         course: {
           select: {
             id: true,
