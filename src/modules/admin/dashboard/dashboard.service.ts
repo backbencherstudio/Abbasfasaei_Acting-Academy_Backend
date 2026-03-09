@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import appConfig from 'src/config/app.config';
 
 @Injectable()
 export class DashboardService {
@@ -24,6 +26,12 @@ export class DashboardService {
         userRole === 'TEACHER'
       ) {
         return this.getTeacherDashboard(userId);
+      } else if (
+        userRole === 'finance' ||
+        userRole === 'Finance' ||
+        userRole === 'FINANCE'
+      ) {
+        return this.getFinanceDashboard();
       } else {
         return { message: 'Student dashboard data', role: userRole };
       }
@@ -172,6 +180,40 @@ export class DashboardService {
       this.logger.error(
         `Error getting teacher dashboard for ${teacherId}: ${error.message}`,
       );
+      throw error;
+    }
+  }
+
+  // FINANCE DASHBOARD FUNCTIONS
+  private async getFinanceDashboard() {
+    try {
+      const [
+        totalStudents,
+        totalOngoingCourses,
+        monthlyRevenue,
+        totalTeachers,
+        recentEnrollments,
+        getRecentTransactions,
+      ] = await Promise.all([
+        this.getTotalStudents(),
+        this.getTotalOngoingCourses(),
+        this.getMonthlyRevenue(),
+        this.getTotalTeachers(),
+        this.getRecentEnrollments(4),
+        this.getRecentTransactions(),
+      ]);
+
+      return {
+        role: 'admin',
+        totalStudents,
+        totalOngoingCourses,
+        monthlyRevenue,
+        totalTeachers,
+        recentEnrollments,
+        getRecentTransactions,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting admin dashboard: ${error.message}`);
       throw error;
     }
   }
@@ -338,17 +380,26 @@ export class DashboardService {
 
   private async getRecentEnrollments(limit: number = 4) {
     try {
-      return await this.prisma.enrollment.findMany({
-        where: {
-          status: { not: 'PENDING' },
-        },
+      const enrollments = await this.prisma.enrollment.findMany({
         include: {
-          course: { select: { title: true } },
-          user: { select: { name: true, email: true } },
+          course: true,
+          user: true,
         },
         orderBy: { created_at: 'desc' },
         take: limit,
       });
+      return enrollments.map((enroll) => ({
+        id: enroll.id,
+        userName: enroll?.user?.name,
+        avatar: enroll?.user?.avatar
+          ? SazedStorage.url(
+              appConfig().storageUrl.avatar + '/' + enroll.user.avatar,
+            )
+          : null,
+        courseName: enroll.course.title,
+        status: enroll.step === 'COMPLETED' ? 'Enrolled' : 'Pending',
+        updatedAt: enroll.updated_at,
+      }));
     } catch (error) {
       this.logger.error(`Error getting recent enrollments: ${error.message}`);
       return [];
@@ -541,6 +592,29 @@ export class DashboardService {
       this.logger.error(
         `Error getting teacher attendance tracking for ${teacherId}: ${error.message}`,
       );
+      return [];
+    }
+  }
+
+  private async getRecentTransactions(limit: number = 6) {
+    try {
+      const recentTransactions = await this.prisma.transaction.findMany({
+        include: {
+          user: true,
+        },
+        take: limit,
+        orderBy: { payment_date: 'desc' },
+      });
+      return recentTransactions.map((trans) => ({
+        id: trans.id,
+        userId: trans.user.id || trans.user_id,
+        userName: trans.user.name || trans.user.username || 'N/A',
+        amount: trans.amount,
+        paymentDate: trans.payment_date || trans.created_at,
+        paymentStatus: trans.status,
+      }));
+    } catch (error) {
+      this.logger.error(`Error getting recent transactions: ${error.message}`);
       return [];
     }
   }

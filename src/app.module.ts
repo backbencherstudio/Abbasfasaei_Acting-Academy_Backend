@@ -35,7 +35,6 @@ import { HomeModule } from './modules/home/home.module';
 import { RtcModule } from './modules/chat/rtc/rtc.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
-import { FinanceModule } from './modules/finance/finance.module';
 import { FinanceandpaymentsModule } from './modules/financeandpayments/financeandpayments.module';
 @Module({
   imports: [
@@ -92,8 +91,8 @@ import { FinanceandpaymentsModule } from './modules/financeandpayments/financean
     ConversationsModule,
     MessagesModule,
     UploadsModule,
-  // PresenceModule,
-  PaymentModule,
+    // PresenceModule,
+    PaymentModule,
     CommunityModule,
     EnrollmentModule,
     CoursesModule,
@@ -104,7 +103,6 @@ import { FinanceandpaymentsModule } from './modules/financeandpayments/financean
     RtcModule,
     AttendanceModule,
     DashboardModule,
-    FinanceModule,
     FinanceandpaymentsModule,
   ],
   controllers: [AppController],

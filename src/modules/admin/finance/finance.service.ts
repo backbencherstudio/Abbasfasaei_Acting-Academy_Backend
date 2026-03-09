@@ -9,32 +9,33 @@ import { CreateFinanceDto } from './dto/create-finance.dto';
 import { UpdateFinanceDto } from './dto/update-finance.dto';
 import { TransactionsQueryDto } from './dto/query-finance.dto';
 import { PaymentType } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class FinanceService {
   private logger = new Logger(FinanceService.name);
   constructor(private prisma: PrismaService) {}
 
-  async getDashboardData(userId: string) {
-    try {
-      const userRole = await this.getUserRole(userId);
+  // async getDashboardData(userId: string) {
+  //   try {
+  //     const userRole = await this.getUserRole(userId);
 
-      if (
-        userRole === 'finance' ||
-        userRole === 'Finance' ||
-        userRole === 'FINANCE'
-      ) {
-        return this.getFinanceDashboard();
-      } else {
-        return { message: 'Restricted', role: userRole };
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error getting dashboard data for user ${userId}: ${error.message}`,
-      );
-      throw error;
-    }
-  }
+  //     if (
+  //       userRole === 'finance' ||
+  //       userRole === 'Finance' ||
+  //       userRole === 'FINANCE'
+  //     ) {
+  //       return this.getFinanceDashboard();
+  //     } else {
+  //       return { message: 'Restricted', role: userRole };
+  //     }
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Error getting dashboard data for user ${userId}: ${error.message}`,
+  //     );
+  //     throw error;
+  //   }
+  // }
 
   // Role detection
   async getUserRole(userId: string) {
@@ -54,319 +55,271 @@ export class FinanceService {
   }
 
   // Date range helpers
-  private getCurrentMonthDateRange() {
-    try {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const end = new Date(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        0,
-        23,
-        59,
-        59,
-        999,
-      );
-      return { start, end };
-    } catch (error) {
-      this.logger.error(
-        `Error getting current month date range: ${error.message}`,
-      );
-      throw error;
-    }
-  }
+  // private getCurrentMonthDateRange() {
+  //   try {
+  //     const now = new Date();
+  //     const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  //     const end = new Date(
+  //       now.getFullYear(),
+  //       now.getMonth() + 1,
+  //       0,
+  //       23,
+  //       59,
+  //       59,
+  //       999,
+  //     );
+  //     return { start, end };
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Error getting current month date range: ${error.message}`,
+  //     );
+  //     throw error;
+  //   }
+  // }
 
-  private getPreviousMonthDateRange() {
-    try {
-      const now = new Date();
-      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const previousMonthEnd = new Date(currentMonthStart.getTime() - 1);
-      const previousMonthStart = new Date(
-        previousMonthEnd.getFullYear(),
-        previousMonthEnd.getMonth(),
-        1,
-      );
-      return { start: previousMonthStart, end: previousMonthEnd };
-    } catch (error) {
-      this.logger.error(
-        `Error getting previous month date range: ${error.message}`,
-      );
-      throw error;
-    }
-  }
+  // private getPreviousMonthDateRange() {
+  //   try {
+  //     const now = new Date();
+  //     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  //     const previousMonthEnd = new Date(currentMonthStart.getTime() - 1);
+  //     const previousMonthStart = new Date(
+  //       previousMonthEnd.getFullYear(),
+  //       previousMonthEnd.getMonth(),
+  //       1,
+  //     );
+  //     return { start: previousMonthStart, end: previousMonthEnd };
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Error getting previous month date range: ${error.message}`,
+  //     );
+  //     throw error;
+  //   }
+  // }
 
-  private calculatePercentageChange(current: number, previous: number): number {
-    try {
-      if (previous === 0) return current > 0 ? 100 : 0;
-      return ((current - previous) / previous) * 100;
-    } catch (error) {
-      this.logger.error(
-        `Error calculating percentage change: ${error.message}`,
-      );
-      return 0;
-    }
-  }
+  // private calculatePercentageChange(current: number, previous: number): number {
+  //   try {
+  //     if (previous === 0) return current > 0 ? 100 : 0;
+  //     return ((current - previous) / previous) * 100;
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Error calculating percentage change: ${error.message}`,
+  //     );
+  //     return 0;
+  //   }
+  // }
 
   // Finacne DASHBOARD FUNCTIONS
-  private async getFinanceDashboard() {
-    try {
-      const [
-        totalStudents,
-        totalOngoingCourses,
-        monthlyRevenue,
-        totalTeachers,
-        recentEnrollments,
-        getRecentTransactions,
-        attendanceTracking,
-      ] = await Promise.all([
-        this.getTotalStudents(),
-        this.getTotalOngoingCourses(),
-        this.getMonthlyRevenue(),
-        this.getTotalTeachers(),
-        this.getRecentEnrollments(4),
-        this.getRecentTransactions(),
-        this.getAttendanceTracking(),
-      ]);
-
-      return {
-        role: 'admin',
-        totalStudents,
-        totalOngoingCourses,
-        monthlyRevenue,
-        totalTeachers,
-        recentEnrollments,
-        getRecentTransactions,
-        attendanceTracking,
-      };
-    } catch (error) {
-      this.logger.error(`Error getting admin dashboard: ${error.message}`);
-      throw error;
-    }
-  }
 
   // INDEPENDENT FUNCTIONS FOR ADMIN
-  private async getTotalStudents() {
-    try {
-      const currentMonth = this.getCurrentMonthDateRange();
-      const previousMonth = this.getPreviousMonthDateRange();
+  // private async getTotalStudents() {
+  //   try {
+  //     const currentMonth = this.getCurrentMonthDateRange();
+  //     const previousMonth = this.getPreviousMonthDateRange();
 
-      const [current, previous] = await Promise.all([
-        this.prisma.user.count({
-          where: {
-            type: 'student',
-            created_at: { lte: currentMonth.end },
-          },
-        }),
-        this.prisma.user.count({
-          where: {
-            type: 'student',
-            created_at: { lte: previousMonth.end },
-          },
-        }),
-      ]);
+  //     const [current, previous] = await Promise.all([
+  //       this.prisma.user.count({
+  //         where: {
+  //           type: 'student',
+  //           created_at: { lte: currentMonth.end },
+  //         },
+  //       }),
+  //       this.prisma.user.count({
+  //         where: {
+  //           type: 'student',
+  //           created_at: { lte: previousMonth.end },
+  //         },
+  //       }),
+  //     ]);
 
-      return {
-        current,
-        previous,
-        percentageChange: this.calculatePercentageChange(current, previous),
-      };
-    } catch (error) {
-      this.logger.error(`Error getting total students: ${error.message}`);
-      return { current: 0, previous: 0, percentageChange: 0 };
-    }
-  }
+  //     return {
+  //       current,
+  //       previous,
+  //       percentageChange: this.calculatePercentageChange(current, previous),
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(`Error getting total students: ${error.message}`);
+  //     return { current: 0, previous: 0, percentageChange: 0 };
+  //   }
+  // }
 
-  private async getTotalOngoingCourses() {
-    try {
-      const currentMonth = this.getCurrentMonthDateRange();
-      const previousMonth = this.getPreviousMonthDateRange();
+  // private async getTotalOngoingCourses() {
+  //   try {
+  //     const currentMonth = this.getCurrentMonthDateRange();
+  //     const previousMonth = this.getPreviousMonthDateRange();
 
-      const [current, previous] = await Promise.all([
-        this.prisma.course.count({
-          where: {
-            status: 'ACTIVE',
-            modules: {
-              some: {
-                classes: {
-                  some: {
-                    start_date: {
-                      lte: currentMonth.end,
-                      gte: currentMonth.start,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        }),
-        this.prisma.course.count({
-          where: {
-            status: 'ACTIVE',
-            modules: {
-              some: {
-                classes: {
-                  some: {
-                    start_date: {
-                      lte: previousMonth.end,
-                      gte: previousMonth.start,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        }),
-      ]);
+  //     const [current, previous] = await Promise.all([
+  //       this.prisma.course.count({
+  //         where: {
+  //           status: 'ACTIVE',
+  //           modules: {
+  //             some: {
+  //               classes: {
+  //                 some: {
+  //                   start_date: {
+  //                     lte: currentMonth.end,
+  //                     gte: currentMonth.start,
+  //                   },
+  //                 },
+  //               },
+  //             },
+  //           },
+  //         },
+  //       }),
+  //       this.prisma.course.count({
+  //         where: {
+  //           status: 'ACTIVE',
+  //           modules: {
+  //             some: {
+  //               classes: {
+  //                 some: {
+  //                   start_date: {
+  //                     lte: previousMonth.end,
+  //                     gte: previousMonth.start,
+  //                   },
+  //                 },
+  //               },
+  //             },
+  //           },
+  //         },
+  //       }),
+  //     ]);
 
-      return {
-        current,
-        previous,
-        percentageChange: this.calculatePercentageChange(current, previous),
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error getting total ongoing courses: ${error.message}`,
-      );
-      return { current: 0, previous: 0, percentageChange: 0 };
-    }
-  }
+  //     return {
+  //       current,
+  //       previous,
+  //       percentageChange: this.calculatePercentageChange(current, previous),
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Error getting total ongoing courses: ${error.message}`,
+  //     );
+  //     return { current: 0, previous: 0, percentageChange: 0 };
+  //   }
+  // }
 
-  private async getMonthlyRevenue() {
-    try {
-      const currentMonth = this.getCurrentMonthDateRange();
-      const previousMonth = this.getPreviousMonthDateRange();
+  // private async getMonthlyRevenue() {
+  //   try {
+  //     const currentMonth = this.getCurrentMonthDateRange();
+  //     const previousMonth = this.getPreviousMonthDateRange();
 
-      const [currentRevenue, previousRevenue] = await Promise.all([
-        this.prisma.transaction.aggregate({
-          _sum: { amount: true },
-          where: {
-            status: 'SUCCESS',
-            payment_date: {
-              gte: currentMonth.start,
-              lte: currentMonth.end,
-            },
-          },
-        }),
-        this.prisma.transaction.aggregate({
-          _sum: { amount: true },
-          where: {
-            status: 'SUCCESS',
-            payment_date: {
-              gte: previousMonth.start,
-              lte: previousMonth.end,
-            },
-          },
-        }),
-      ]);
+  //     const [currentRevenue, previousRevenue] = await Promise.all([
+  //       this.prisma.transaction.aggregate({
+  //         _sum: { amount: true },
+  //         where: {
+  //           status: 'SUCCESS',
+  //           payment_date: {
+  //             gte: currentMonth.start,
+  //             lte: currentMonth.end,
+  //           },
+  //         },
+  //       }),
+  //       this.prisma.transaction.aggregate({
+  //         _sum: { amount: true },
+  //         where: {
+  //           status: 'SUCCESS',
+  //           payment_date: {
+  //             gte: previousMonth.start,
+  //             lte: previousMonth.end,
+  //           },
+  //         },
+  //       }),
+  //     ]);
 
-      const current = Number(currentRevenue._sum.amount) || 0;
-      const previous = Number(previousRevenue._sum.amount) || 0;
+  //     const current = Number(currentRevenue._sum.amount) || 0;
+  //     const previous = Number(previousRevenue._sum.amount) || 0;
 
-      return {
-        current,
-        previous,
-        percentageChange: this.calculatePercentageChange(current, previous),
-      };
-    } catch (error) {
-      this.logger.error(`Error getting monthly revenue: ${error.message}`);
-      return { current: 0, previous: 0, percentageChange: 0 };
-    }
-  }
+  //     return {
+  //       current,
+  //       previous,
+  //       percentageChange: this.calculatePercentageChange(current, previous),
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(`Error getting monthly revenue: ${error.message}`);
+  //     return { current: 0, previous: 0, percentageChange: 0 };
+  //   }
+  // }
 
-  private async getTotalTeachers() {
-    try {
-      const currentMonth = this.getCurrentMonthDateRange();
-      const previousMonth = this.getPreviousMonthDateRange();
+  // private async getTotalTeachers() {
+  //   try {
+  //     const currentMonth = this.getCurrentMonthDateRange();
+  //     const previousMonth = this.getPreviousMonthDateRange();
 
-      const [current, previous] = await Promise.all([
-        this.prisma.user.count({
-          where: {
-            type: 'teacher',
-            created_at: { lte: currentMonth.end },
-          },
-        }),
-        this.prisma.user.count({
-          where: {
-            type: 'teacher',
-            created_at: { lte: previousMonth.end },
-          },
-        }),
-      ]);
+  //     const [current, previous] = await Promise.all([
+  //       this.prisma.user.count({
+  //         where: {
+  //           type: 'teacher',
+  //           created_at: { lte: currentMonth.end },
+  //         },
+  //       }),
+  //       this.prisma.user.count({
+  //         where: {
+  //           type: 'teacher',
+  //           created_at: { lte: previousMonth.end },
+  //         },
+  //       }),
+  //     ]);
 
-      return {
-        current,
-        previous,
-        percentageChange: this.calculatePercentageChange(current, previous),
-      };
-    } catch (error) {
-      this.logger.error(`Error getting total teachers: ${error.message}`);
-      return { current: 0, previous: 0, percentageChange: 0 };
-    }
-  }
+  //     return {
+  //       current,
+  //       previous,
+  //       percentageChange: this.calculatePercentageChange(current, previous),
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(`Error getting total teachers: ${error.message}`);
+  //     return { current: 0, previous: 0, percentageChange: 0 };
+  //   }
+  // }
 
-  private async getRecentEnrollments(limit: number = 4) {
-    try {
-      return await this.prisma.enrollment.findMany({
-        where: {
-          status: { not: 'PENDING' },
-        },
-        include: {
-          course: { select: { title: true } },
-          user: { select: { name: true, email: true } },
-        },
-        orderBy: { created_at: 'desc' },
-        take: limit,
-      });
-    } catch (error) {
-      this.logger.error(`Error getting recent enrollments: ${error.message}`);
-      return [];
-    }
-  }
+  // private async getRecentEnrollments(limit: number = 4) {
+  //   try {
+  //     return await this.prisma.enrollment.findMany({
+  //       where: {
+  //         status: { not: 'PENDING' },
+  //       },
+  //       include: {
+  //         course: { select: { title: true } },
+  //         user: { select: { name: true, email: true } },
+  //       },
+  //       orderBy: { created_at: 'desc' },
+  //       take: limit,
+  //     });
+  //   } catch (error) {
+  //     this.logger.error(`Error getting recent enrollments: ${error.message}`);
+  //     return [];
+  //   }
+  // }
 
-  private async getAttendanceTracking() {
-    try {
-      const recentClasses = await this.prisma.moduleClass.findMany({
-        where: {
-          start_date: { lte: new Date() },
-        },
-        include: {
-          attendances: {
-            where: { status: 'PRESENT' },
-          },
-          module: {
-            include: {
-              course: { select: { title: true } },
-            },
-          },
-        },
-        orderBy: { start_date: 'desc' },
-        take: 5,
-      });
+  // private async getAttendanceTracking() {
+  //   try {
+  //     const recentClasses = await this.prisma.moduleClass.findMany({
+  //       where: {
+  //         start_date: { lte: new Date() },
+  //       },
+  //       include: {
+  //         attendances: {
+  //           where: { status: 'PRESENT' },
+  //         },
+  //         module: {
+  //           include: {
+  //             course: { select: { title: true } },
+  //           },
+  //         },
+  //       },
+  //       orderBy: { start_date: 'desc' },
+  //       take: 5,
+  //     });
 
-      return recentClasses.map((cls) => ({
-        classTitle: cls.class_title,
-        course: cls.module.course.title,
-        totalStudents: cls.attendances.length,
-        date: cls.start_date,
-      }));
-    } catch (error) {
-      this.logger.error(`Error getting attendance tracking: ${error.message}`);
-      return [];
-    }
-  }
-
-  private async getRecentTransactions(limit: number = 6) {
-    try {
-      const recentTransactions = await this.prisma.transaction.findMany({
-        take: limit,
-        orderBy: { payment_date: 'desc' },
-      });
-      return recentTransactions;
-    } catch (error) {
-      this.logger.error(`Error getting recent transactions: ${error.message}`);
-      return [];
-    }
-  }
+  //     return recentClasses.map((cls) => ({
+  //       classTitle: cls.class_title,
+  //       course: cls.module.course.title,
+  //       totalStudents: cls.attendances.length,
+  //       date: cls.start_date,
+  //     }));
+  //   } catch (error) {
+  //     this.logger.error(`Error getting attendance tracking: ${error.message}`);
+  //     return [];
+  //   }
+  // }
 
   async register(body: CreateFinanceDto) {
     try {
@@ -390,14 +343,20 @@ export class FinanceService {
         throw new BadRequestException('Finance already exists');
       }
 
+      const hashedPassword = await bcrypt.hash(
+        body.password || 'finance123',
+        10,
+      );
+
       const finance = await this.prisma.user.create({
         data: {
-          name: body.full_name,
+          name: body.name,
           email: body.email,
           phone_number: body.phone,
           experience_level: body.experienceLevel,
           joined_at: body.joined_at,
           type: 'finance',
+          password: hashedPassword,
         },
         select: {
           id: true,
@@ -439,8 +398,8 @@ export class FinanceService {
       }
 
       const data: any = {};
-      if (body.full_name) {
-        data.name = body.full_name;
+      if (body.name) {
+        data.name = body.name;
       }
       if (body.email) {
         data.email = body.email;
@@ -504,7 +463,7 @@ export class FinanceService {
   }
 
   async getAllTransactions(query: TransactionsQueryDto) {
-    const { search, page, limit, payment_type } = query;
+    const { search, page, limit, payment_type, date } = query;
 
     const transactions = await this.prisma.transaction.findMany({
       where: {
@@ -550,6 +509,14 @@ export class FinanceService {
         payment_type !== PaymentType.ONE_TIME
           ? {}
           : { payment_type }),
+        ...(date
+          ? {
+              payment_date: {
+                gte: new Date(new Date(date).setHours(0, 0, 0, 0)),
+                lte: new Date(new Date(date).setHours(23, 59, 59, 999)),
+              },
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -580,7 +547,7 @@ export class FinanceService {
       take: Number(limit),
     });
 
-    const total = this.prisma.transaction.count({
+    const total = await this.prisma.transaction.count({
       where: {
         OR: [
           {
@@ -624,28 +591,42 @@ export class FinanceService {
         payment_type !== PaymentType.ONE_TIME
           ? {}
           : { payment_type }),
+        ...(date
+          ? {
+              payment_date: {
+                gte: new Date(new Date(date).setHours(0, 0, 0, 0)),
+                lte: new Date(new Date(date).setHours(23, 59, 59, 999)),
+              },
+            }
+          : {}),
       },
     });
 
-    // Format transactions
-    const recentTransactions = transactions.map((transaction) => ({
-      userId: transaction.user.id,
-      username: transaction.user.name || transaction.user.username || 'N/A',
-      transactionId: transaction.transaction_ref || `TRX-${transaction.id}`,
-      amount: transaction.amount?.toNumber() || 0,
-      date: transaction.payment_date || transaction.created_at,
-      paymentType:
-        transaction.payment.item_type === 'EVENT_TICKET'
-          ? 'Event Booking'
-          : 'Course Enrollment',
-      paymentPlan:
-        transaction.payment_type == 'MONTHLY'
-          ? 'Monthly Instalment'
-          : 'One Time',
-      invoiceFile: transaction.receipt_url || undefined,
-    }));
-
-    return { success: true, data: recentTransactions };
+    return {
+      success: true,
+      data: transactions.map((transaction) => ({
+        userId: transaction.user.id,
+        username: transaction.user.name || transaction.user.username || 'N/A',
+        transactionId: transaction.transaction_ref || `TRX-${transaction.id}`,
+        amount: transaction.amount?.toNumber() || 0,
+        date: transaction.payment_date || transaction.created_at,
+        paymentType:
+          transaction.payment.item_type === 'EVENT_TICKET'
+            ? 'Event Booking'
+            : 'Course Enrollment',
+        paymentPlan:
+          transaction.payment_type == 'MONTHLY'
+            ? 'Monthly Instalment'
+            : 'One Time',
+        invoiceFile: transaction.receipt_url || undefined,
+      })),
+      meta_data: {
+        page,
+        limit,
+        total,
+        search,
+      },
+    };
   }
 
   private async getTotalRevenueThisYear() {

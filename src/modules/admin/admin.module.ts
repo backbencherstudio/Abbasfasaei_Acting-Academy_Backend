@@ -11,9 +11,7 @@ import { CommunityManagementModule } from './community-management/community-mana
 import { AttendenceModule } from './attendance/attendence.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { HomeModule } from './home/home.module';
-
-
-
+import { FinanceModule } from './finance/finance.module';
 
 @Module({
   imports: [
@@ -30,6 +28,7 @@ import { HomeModule } from './home/home.module';
     HomeModule,
     CommunityManagementModule,
     AttendenceModule,
+    FinanceModule,
   ],
 })
 export class AdminModule {}

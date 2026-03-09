@@ -1,5 +1,11 @@
 import { Transform } from 'class-transformer';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+  IsDate,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 enum PaymentType {
   all = 'ALL',
@@ -23,5 +29,10 @@ export class TransactionsQueryDto {
   limit?: number;
 
   @IsOptional()
+  @IsEnum(PaymentType)
   payment_type?: PaymentType;
+
+  @IsOptional()
+  @IsDate()
+  date: Date;
 }

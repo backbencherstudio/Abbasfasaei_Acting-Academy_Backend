@@ -6,7 +6,7 @@ export class CreateFinanceDto {
   @ApiProperty()
   @IsNotEmpty()
   @IsString()
-  full_name: string;
+  name: string;
 
   @ApiProperty()
   @IsNotEmpty()
@@ -27,4 +27,8 @@ export class CreateFinanceDto {
   @IsString()
   @ApiProperty({ example: '2026-02-28T12:45:05+06:00', required: false })
   joined_at?: string;
+
+  @IsNotEmpty()
+  @IsString()
+  password: string;
 }
