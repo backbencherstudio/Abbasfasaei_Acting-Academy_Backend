@@ -17,13 +17,11 @@ import { CommentPostDto } from './dto/comment-post.dto';
 import { SharePostDto } from './dto/share-post.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
-import { de } from 'date-fns/locale';
 import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { ApiOperation } from '@nestjs/swagger';
 
 @Controller('community')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -62,6 +60,14 @@ export class CommunityController {
   getFeed(@GetUser() user: any) {
     try {
       return this.service.getFeed(user.userId);
+    } catch (error) {
+      throw new Error('Error fetching feed');
+    }
+  }
+  @Get('my-posts')
+  geMyPosts(@GetUser() user: any) {
+    try {
+      return this.service.getFeed(user.userId, true);
     } catch (error) {
       throw new Error('Error fetching feed');
     }

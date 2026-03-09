@@ -1,10 +1,6 @@
-import { Injectable, Post } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { id } from 'date-fns/locale';
 import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
-import { mkdirSync, writeFileSync } from 'fs';
-import { join } from 'path';
 import { StringHelper } from 'src/common/helper/string.helper';
 import appConfig from 'src/config/app.config';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -238,16 +234,22 @@ export class CommunityService {
   //   "visibility": "PUBLIC"
   // }
 
-  async getFeed(userId: string) {
+  async getFeed(userId: string, onlyMyPost?: boolean) {
+    let where: any = {
+      OR: [
+        // Always show the author's own posts (any status)
+        { author_Id: userId },
+        // Show approved public posts from others
+        { status: 'APPROVED', visibility: 'PUBLIC' },
+      ],
+    };
+    if (onlyMyPost) {
+      where = {
+        author_Id: userId,
+      };
+    }
     const posts = await this.prisma.communityPost.findMany({
-      where: {
-        OR: [
-          // Always show the author's own posts (any status)
-          { author_Id: userId },
-          // Show approved public posts from others
-          { status: 'APPROVED', visibility: 'PUBLIC' },
-        ],
-      },
+      where,
       include: {
         author: {
           select: {
@@ -583,7 +585,7 @@ export class CommunityService {
 
   async getMyProfile(userId: string) {
     try {
-      return await this.prisma.user.findUnique({
+      const profile = await this.prisma.user.findUnique({
         where: { id: userId },
         select: {
           id: true,
@@ -594,11 +596,13 @@ export class CommunityService {
           about: true,
         },
       });
-    } catch (error) {
       return {
-        success: false,
-        message: error.message || 'Error fetching user profile',
+        success: true,
+        message: 'Profile fetch successfully',
+        data: profile,
       };
+    } catch (error) {
+      throw new Error('Error fetching user profile');
     }
   }
 
