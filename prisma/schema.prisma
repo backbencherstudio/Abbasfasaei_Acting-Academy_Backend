@@ -1172,6 +1172,7 @@ model Transaction {
   gateway  PaymentGateway    @default(STRIPE)
 
   payment_method String?
+  payment_type   PaymentType @default(ONE_TIME)
   card_last4     String?
   receipt_url    String?
   metadata       Json? // To store raw webhook data from payment provider

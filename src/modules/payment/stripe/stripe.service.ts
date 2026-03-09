@@ -220,7 +220,7 @@ export class StripeService {
         currency: currency.toUpperCase(),
         status: 'PENDING',
         gateway: 'STRIPE',
-        payment_method: 'ONE_TIME',
+        payment_method: 'card',
         metadata: {
           enrollmentId,
           payment_type: 'ONE_TIME',
@@ -353,7 +353,7 @@ export class StripeService {
         currency: currency.toUpperCase(),
         status: 'PENDING',
         gateway: 'STRIPE',
-        payment_method: 'MONTHLY',
+        payment_method: 'card',
         metadata: {
           enrollmentId,
           payment_type: 'MONTHLY',
@@ -450,7 +450,7 @@ export class StripeService {
         currency: currency.toUpperCase(),
         status: 'PENDING',
         gateway: 'STRIPE',
-        payment_method: 'ONE_TIME',
+        payment_method: 'card',
         metadata: {
           eventId,
           payment_type: 'ONE_TIME',

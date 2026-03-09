@@ -338,7 +338,7 @@ export class StudentManagementService {
             ? 'SUCCESS'
             : 'PENDING',
         gateway: PaymentGateway.STRIPE_MANUAL_ENTRY,
-        payment_method: dto.payment_method,
+        payment_method: dto.payment_method || 'card',
         payment_date: dto.payment_date ? new Date(dto.payment_date) : undefined,
         metadata: {
           payment_type: dto.payment_type || 'ONE_TIME',

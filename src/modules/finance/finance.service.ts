@@ -7,6 +7,8 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateFinanceDto } from './dto/create-finance.dto';
 import { UpdateFinanceDto } from './dto/update-finance.dto';
+import { TransactionsQueryDto } from './dto/query-finance.dto';
+import { PaymentType } from '@prisma/client';
 
 @Injectable()
 export class FinanceService {
@@ -477,6 +479,407 @@ export class FinanceService {
     } catch (error) {
       this.logger.error(`Error updating payment: ${error.message}`);
       throw error;
+    }
+  }
+
+  async getStats() {
+    const [
+      totalRevenueThisYear,
+      courseRevenue,
+      eventsRevenue,
+      currentMonthRevenue,
+    ] = await Promise.all([
+      this.getTotalRevenueThisYear(),
+      this.getCourseRevenue(),
+      this.getEventsRevenue(),
+      this.getCurrentMonthRevenue(),
+    ]);
+
+    return {
+      totalRevenueThisYear,
+      courseRevenue,
+      eventsRevenue,
+      currentMonthRevenue,
+    };
+  }
+
+  async getAllTransactions(query: TransactionsQueryDto) {
+    const { search, page, limit, payment_type } = query;
+
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        OR: [
+          {
+            transaction_ref: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            payment_method: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            currency: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            paymentId: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            user: {
+              name: {
+                contains: search,
+                mode: 'insensitive',
+              },
+              email: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+          },
+        ],
+        ...(payment_type !== PaymentType.MONTHLY &&
+        payment_type !== PaymentType.ONE_TIME
+          ? {}
+          : { payment_type }),
+      },
+      select: {
+        id: true,
+        transaction_ref: true,
+        payment_type: true,
+        amount: true,
+        payment_date: true,
+        receipt_url: true,
+        created_at: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+        payment: {
+          select: {
+            item_type: true,
+          },
+        },
+      },
+      orderBy: {
+        payment_date: 'desc',
+      },
+
+      skip: (Number(page) - 1) * Number(limit),
+      take: Number(limit),
+    });
+
+    const total = this.prisma.transaction.count({
+      where: {
+        OR: [
+          {
+            transaction_ref: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            payment_method: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            currency: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            paymentId: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            user: {
+              name: {
+                contains: search,
+                mode: 'insensitive',
+              },
+              email: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+          },
+        ],
+        ...(payment_type !== PaymentType.MONTHLY &&
+        payment_type !== PaymentType.ONE_TIME
+          ? {}
+          : { payment_type }),
+      },
+    });
+
+    // Format transactions
+    const recentTransactions = transactions.map((transaction) => ({
+      userId: transaction.user.id,
+      username: transaction.user.name || transaction.user.username || 'N/A',
+      transactionId: transaction.transaction_ref || `TRX-${transaction.id}`,
+      amount: transaction.amount?.toNumber() || 0,
+      date: transaction.payment_date || transaction.created_at,
+      paymentType:
+        transaction.payment.item_type === 'EVENT_TICKET'
+          ? 'Event Booking'
+          : 'Course Enrollment',
+      paymentPlan:
+        transaction.payment_type == 'MONTHLY'
+          ? 'Monthly Instalment'
+          : 'One Time',
+      invoiceFile: transaction.receipt_url || undefined,
+    }));
+
+    return { success: true, data: recentTransactions };
+  }
+
+  private async getTotalRevenueThisYear() {
+    try {
+      const currentYear = new Date().getFullYear();
+      const lastYear = currentYear - 1;
+
+      // Current year revenue (from January 1st of current year to now)
+      const currentYearStart = new Date(currentYear, 0, 1); // January 1st
+      const currentYearEnd = new Date();
+
+      // Last year revenue (entire last year)
+      const lastYearStart = new Date(lastYear, 0, 1);
+      const lastYearEnd = new Date(lastYear, 11, 31, 23, 59, 59);
+
+      const [currentYearRevenue, lastYearRevenue] = await Promise.all([
+        // All payments from current year
+        this.prisma.transaction.aggregate({
+          where: {
+            status: 'SUCCESS',
+            payment_date: {
+              gte: currentYearStart,
+              lte: currentYearEnd,
+            },
+          },
+          _sum: { amount: true },
+        }),
+        // All payments from last year
+        this.prisma.transaction.aggregate({
+          where: {
+            status: 'SUCCESS',
+            payment_date: {
+              gte: lastYearStart,
+              lte: lastYearEnd,
+            },
+          },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      const currentTotal = currentYearRevenue._sum.amount?.toNumber() || 0;
+      const previousTotal = lastYearRevenue._sum.amount?.toNumber() || 0;
+
+      const percentageChange =
+        previousTotal > 0
+          ? ((currentTotal - previousTotal) / previousTotal) * 100
+          : currentTotal > 0
+            ? 100
+            : 0;
+
+      return {
+        current: currentTotal,
+        previous: previousTotal,
+        percentageChange: Number(percentageChange.toFixed(2)),
+      };
+    } catch (error) {
+      console.error('Error in getTotalRevenueThisYear:', error);
+      return { current: 0, previous: 0, percentageChange: 0 };
+    }
+  }
+
+  private async getCourseRevenue() {
+    try {
+      const now = new Date();
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+      );
+
+      const [currentMonthRevenue, lastMonthRevenue] = await Promise.all([
+        this.prisma.transaction.aggregate({
+          where: {
+            status: 'SUCCESS',
+            payment: { item_type: 'COURSE_ENROLLMENT' },
+            payment_date: {
+              gte: currentMonthStart,
+              lte: now,
+            },
+          },
+          _sum: { amount: true },
+        }),
+        this.prisma.transaction.aggregate({
+          where: {
+            status: 'SUCCESS',
+            payment: { item_type: 'COURSE_ENROLLMENT' },
+            payment_date: {
+              gte: lastMonthStart,
+              lte: lastMonthEnd,
+            },
+          },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      const current = currentMonthRevenue._sum.amount?.toNumber() || 0;
+      const previous = lastMonthRevenue._sum.amount?.toNumber() || 0;
+      const percentageChange =
+        previous > 0
+          ? ((current - previous) / previous) * 100
+          : current > 0
+            ? 100
+            : 0;
+
+      return {
+        current,
+        previous,
+        percentageChange: Number(percentageChange.toFixed(2)),
+      };
+    } catch (error) {
+      console.error('Error in getCourseRevenue:', error);
+      return { current: 0, previous: 0, percentageChange: 0 };
+    }
+  }
+
+  private async getEventsRevenue() {
+    try {
+      const now = new Date();
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+      );
+
+      const [currentMonthRevenue, lastMonthRevenue] = await Promise.all([
+        this.prisma.transaction.aggregate({
+          where: {
+            status: 'SUCCESS',
+            payment: { item_type: 'EVENT_TICKET' },
+            payment_date: {
+              gte: currentMonthStart,
+              lte: now,
+            },
+          },
+          _sum: { amount: true },
+        }),
+        this.prisma.transaction.aggregate({
+          where: {
+            status: 'SUCCESS',
+            payment: { item_type: 'EVENT_TICKET' },
+            payment_date: {
+              gte: lastMonthStart,
+              lte: lastMonthEnd,
+            },
+          },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      const current = currentMonthRevenue._sum.amount?.toNumber() || 0;
+      const previous = lastMonthRevenue._sum.amount?.toNumber() || 0;
+      const percentageChange =
+        previous > 0
+          ? ((current - previous) / previous) * 100
+          : current > 0
+            ? 100
+            : 0;
+
+      return {
+        current,
+        previous,
+        percentageChange: Number(percentageChange.toFixed(2)),
+      };
+    } catch (error) {
+      console.error('Error in getEventsRevenue:', error);
+      return { current: 0, previous: 0, percentageChange: 0 };
+    }
+  }
+
+  private async getCurrentMonthRevenue() {
+    try {
+      const now = new Date();
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+      );
+
+      const [currentMonthRevenue, lastMonthRevenue] = await Promise.all([
+        this.prisma.transaction.aggregate({
+          where: {
+            status: 'SUCCESS',
+            payment_date: {
+              gte: currentMonthStart,
+              lte: now,
+            },
+          },
+          _sum: { amount: true },
+        }),
+        this.prisma.transaction.aggregate({
+          where: {
+            status: 'SUCCESS',
+            payment_date: {
+              gte: lastMonthStart,
+              lte: lastMonthEnd,
+            },
+          },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      const current = currentMonthRevenue._sum.amount?.toNumber() || 0;
+      const previous = lastMonthRevenue._sum.amount?.toNumber() || 0;
+
+      const percentageChange =
+        previous > 0
+          ? ((current - previous) / previous) * 100
+          : current > 0
+            ? 100
+            : 0;
+
+      return {
+        current,
+        previous,
+        percentageChange: Number(percentageChange.toFixed(2)),
+      };
+    } catch (error) {
+      console.error('Error in getCurrentMonthRevenue:', error);
+      return { current: 0, previous: 0, percentageChange: 0 };
     }
   }
 }

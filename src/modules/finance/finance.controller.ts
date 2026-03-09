@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import { ApiResponse } from '@nestjs/swagger';
 import { GetUser } from '../auth/decorators/get-user.decorator';
@@ -8,6 +8,7 @@ import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import { CreateFinanceDto } from './dto/create-finance.dto';
 import { UpdateFinanceDto } from './dto/update-finance.dto';
+import { TransactionsQueryDto } from './dto/query-finance.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('finance')
@@ -23,14 +24,24 @@ export class FinanceController {
   @Roles(Role.ADMIN)
   @Post('register')
   @ApiResponse({ description: 'Register finance' })
-  async register(@Body() paymentData: CreateFinanceDto) {
-    return this.finance.register(paymentData);
+  async register(@Body() body: CreateFinanceDto) {
+    return this.finance.register(body);
   }
 
   @Roles(Role.ADMIN)
   @Post('update')
   @ApiResponse({ description: 'Update finance' })
-  async update(@Body() paymentData: UpdateFinanceDto) {
-    return this.finance.update(paymentData);
+  async update(@Body() body: UpdateFinanceDto) {
+    return this.finance.update(body);
+  }
+
+  @Get('stats')
+  async getStats() {
+    return this.finance.getStats();
+  }
+
+  @Get('transactions')
+  async getAllTransactions(@Query() query: TransactionsQueryDto) {
+    return this.finance.getAllTransactions(query);
   }
 }
