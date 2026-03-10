@@ -43,9 +43,13 @@ export class SazedStorage {
    * @param value
    * @returns
    */
-  public static async put(key: string, value: any): Promise<any> {
+  public static async put(
+    key: string,
+    value: any,
+    options?: { contentType?: string; contentDisposition?: string },
+  ): Promise<any> {
     const disk = this.storageDisk();
-    return await disk.put(key, value);
+    return await disk.put(key, value, options);
   }
 
   /**

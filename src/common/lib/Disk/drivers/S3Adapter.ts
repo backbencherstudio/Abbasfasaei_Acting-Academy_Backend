@@ -85,12 +85,17 @@ export class S3Adapter implements IStorage {
   async put(
     key: string,
     value: Buffer | Uint8Array | string,
+    options?: { contentType?: string; contentDisposition?: string },
   ): Promise<AWS.S3.ManagedUpload.SendData> {
     try {
       const params = {
         Bucket: this._config.connection.awsBucket,
         Key: key,
         Body: value,
+        ...(options?.contentType ? { ContentType: options.contentType } : {}),
+        ...(options?.contentDisposition
+          ? { ContentDisposition: options.contentDisposition }
+          : {}),
       };
       const upload = await this.s3.upload(params).promise();
       return upload;

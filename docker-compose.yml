@@ -1,65 +1,43 @@
-services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: backend
-    container_name: backend
-    ports:
-      - "4000:4000"
-    environment:
-      CHOKIDAR_USEPOLLING: "true"             # Required for hot-reloading on Windows
-      CHOKIDAR_INTERVAL: "1000"               # 1 second polling interval
-      NODE_ENV: development
-      # host.docker.internal is the host machine's IP address
-      # DATABASE_URL: postgresql://postgres:root@host.docker.internal/backend
-      # DATABASE_URL: postgresql://postgres:root@postgres/backend
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      TURN_SERVER: turn:turnserver:3478
-      TURN_USERNAME: webrtc
-      TURN_PASSWORD: strongpassword
-      LIVEKIT_URL: ws://localhost:7880  # Browser-accessible mapped port
-      LIVEKIT_API_KEY: devkey
-      LIVEKIT_API_SECRET: devsecret
-    volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-    depends_on:
-      - postgres
-      - redis
-    command: yarn start:dev-swc
+name: backend-common-infra
 
-  postgres:
-    image: postgres:latest
-    container_name: postgres
+services:
+  minio:
+    image: minio/minio
+    container_name: minio-server
     ports:
-      - "5432:5432"
+      - "9000:9000"
+      - "9001:9001"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: root
-      POSTGRES_DB: backend
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+
+  minio-client:
+    image: minio/mc:latest
+    container_name: minio-client
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      tail -f /dev/null"
 
   redis:
     image: redis:latest
-    container_name: redis
+    container_name: redis-server
     ports:
       - "6379:6379"
 
   turnserver:
     image: coturn/coturn
-    container_name: turnserver
+    container_name: turn-server
     restart: always
     ports:
       - "3478:3478/udp"
       - "3478:3478/tcp"
-      - "5349:5349/tcp" # TLS support
-      # Narrow relay port window to avoid Windows ephemeral port exclusions
-      - "55000-55050:55000-55050/udp" # TURN relay ports (50 ports)
+      - "5349:5349/tcp"
+      - "55000-55050:55000-55050/udp"
     volumes:
-      # Expect a single config file (create dockerfiles/coturn/turnserver.conf if missing)
       - ./dockerfiles/coturn/turnserver.conf:/etc/turnserver.conf:ro
     environment:
       - TURN_USERNAME=webrtc
@@ -67,27 +45,19 @@ services:
 
   livekit:
     image: livekit/livekit-server:latest
-    container_name: livekit
+    container_name: livekit-server
     depends_on:
       - turnserver
     ports:
-      - "7880:7880/tcp"   # HTTP / WebSocket (signal + REST)
-      - "7881:7881/tcp"   # Fallback / additional transport
-      - "7881:7881/udp"   # Primary UDP port (if used)
-      - "55100-55150:55100-55150/udp" # Ephemeral UDP media range (matches --udp-port flag)
+      - "7880:7880/tcp"
+      - "7881:7881/tcp"
+      - "7881:7881/udp"
+      - "55100-55150:55100-55150/udp"
     environment:
       LIVEKIT_LOG_LEVEL: info
-      # LiveKit expects the format "key: secret" with a space after the colon
-      LIVEKIT_KEYS: "devkey: devsecret"
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-devsecret}"
     command: >
       --dev
       --bind 0.0.0.0
       --node-ip 127.0.0.1
       --udp-port 55100-55150
-    # Optionally mount a config file if you prefer a YAML instead of flags
-    # volumes:
-    #   - ./livekit/livekit.yaml:/livekit.yaml
-    # command: --config /livekit.yaml
-
-volumes:
-  postgres_data:

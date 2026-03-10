@@ -52,6 +52,34 @@ export class RealtimeGateway
     }
   }
 
+  emitCallIncoming(
+    conversationId: string,
+    fromUserId: string,
+    kind: 'AUDIO' | 'VIDEO',
+    toUserIds: string[],
+  ) {
+    const payload = {
+      conversationId,
+      fromUserId,
+      kind,
+      at: new Date().toISOString(),
+    };
+    toUserIds.forEach((uid) => {
+      this.io.to(`user:${uid}`).emit('call:incoming', payload);
+    });
+  }
+
+  emitCallEnded(conversationId: string, byUserId: string, toUserIds: string[]) {
+    const payload = {
+      conversationId,
+      byUserId,
+      at: new Date().toISOString(),
+    };
+    toUserIds.forEach((uid) => {
+      this.io.to(`user:${uid}`).emit('call:ended', payload);
+    });
+  }
+
   // Handle incoming connection
   async handleConnection(socket: Socket) {
     try {

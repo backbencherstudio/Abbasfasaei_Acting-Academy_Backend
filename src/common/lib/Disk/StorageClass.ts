@@ -39,8 +39,12 @@ export class StorageClass {
    * @param value
    * @returns
    */
-  public async put(key: string, value: any) {
-    return await this.adapter.put(key, value);
+  public async put(
+    key: string,
+    value: any,
+    options?: { contentType?: string; contentDisposition?: string },
+  ) {
+    return await this.adapter.put(key, value, options);
   }
 
   /**

@@ -1,5 +1,6 @@
 import { IsEnum, IsObject, IsOptional, IsString } from 'class-validator';
 import { MessageKind } from '@prisma/client';
+import { Transform } from 'class-transformer';
 
 export class SendMessageDto {
   @IsEnum(MessageKind)
@@ -8,7 +9,19 @@ export class SendMessageDto {
 
   @IsObject()
   @IsOptional()
-  content?: Record<string, any>; // <-- Make sure @IsOptional() is present
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value === 'object') return value;
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
+  content?: Record<string, any>;
 
   @IsOptional()
   @IsString()
