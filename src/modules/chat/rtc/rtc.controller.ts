@@ -1,24 +1,16 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { RtcService } from './rtc.service';
-import { CreateTokenDto } from './dto/create-token.dto';
 import { CallKind } from '@prisma/client';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 @Controller('rtc')
 export class RtcController {
-  constructor(private readonly rtcService: RtcService) {}
-
-  // Generic token (legacy) - kept for backward compatibility if needed
-  @Post('token')
-  @UseGuards(JwtAuthGuard)
-  async createToken(@GetUser() user: any, @Body() body: CreateTokenDto) {
-    const data = await this.rtcService.createToken({
-      ...body,
-      userId: user.userId,
-    });
-    return { success: true, data };
-  }
+  constructor(
+    private readonly rtcService: RtcService,
+    private readonly realtimeGateway: RealtimeGateway,
+  ) {}
 
   // Start a call explicitly (group or dm)
   @Post('conversations/:id/start')
@@ -28,11 +20,22 @@ export class RtcController {
     @Param('id') conversationId: string,
     @Body() body: { kind?: CallKind },
   ) {
+    const kind = body.kind || 'VIDEO';
     const resp = await this.rtcService.startCall(
       conversationId,
       user.userId,
-      body.kind || 'VIDEO',
+      kind,
     );
+
+    const memberIds = await this.rtcService.getConversationMemberIds(conversationId);
+    const recipients = memberIds.filter((id) => id !== user.userId);
+    this.realtimeGateway.emitCallIncoming(
+      conversationId,
+      user.userId,
+      kind,
+      recipients,
+    );
+
     return resp;
   }
 
@@ -52,43 +55,17 @@ export class RtcController {
     return resp;
   }
 
-  // mute microphone
-  @Post('conversations/:id/mute')
-  @UseGuards(JwtAuthGuard)
-  async muteUser(@GetUser() user: any, @Param('id') conversationId: string) {
-    const resp = await this.rtcService.muteUser(conversationId, user.userId);
-    return resp;
-  }
-
-  // Unmute microphone
-  @Post('conversations/:id/unmute')
-  @UseGuards(JwtAuthGuard)
-  async unmuteUser(@GetUser() user: any, @Param('id') conversationId: string) {
-    const resp = await this.rtcService.unmuteUser(conversationId, user.userId);
-    return resp;
-  }
-
-  // camera off
-  @Post('conversations/:id/camera-off')
-  @UseGuards(JwtAuthGuard)
-  async cameraOff(@GetUser() user: any, @Param('id') conversationId: string) {
-    const resp = await this.rtcService.cameraOff(conversationId, user.userId);
-    return resp;
-  }
-
-  // camera on
-  @Post('conversations/:id/camera-on')
-  @UseGuards(JwtAuthGuard)
-  async cameraOn(@GetUser() user: any, @Param('id') conversationId: string) {
-    const resp = await this.rtcService.cameraOn(conversationId, user.userId);
-    return resp;
-  }
 
   // End call (any member for now)
   @Post('conversations/:id/end')
   @UseGuards(JwtAuthGuard)
   async endCall(@GetUser() user: any, @Param('id') conversationId: string) {
     const resp = await this.rtcService.endCall(conversationId, user.userId);
+
+    const memberIds = await this.rtcService.getConversationMemberIds(conversationId);
+    const recipients = memberIds.filter((id) => id !== user.userId);
+    this.realtimeGateway.emitCallEnded(conversationId, user.userId, recipients);
+
     return resp;
   }
 

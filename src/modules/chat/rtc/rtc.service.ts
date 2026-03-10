@@ -4,7 +4,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { AccessToken } from 'livekit-server-sdk';
-import { CreateTokenDto } from './dto/create-token.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ConversationsService } from '../conversations/conversations.service';
 import { CallKind } from '@prisma/client';
@@ -43,57 +42,40 @@ export class RtcService {
     return null;
   }
 
-  buildRoomName(dto: CreateTokenDto): string {
-    if (dto.roomName) {
-      if (!this.roomRegex.test(dto.roomName)) {
-        throw new BadRequestException('Invalid room name');
-      }
-      return dto.roomName;
+  private async createLivekitToken(
+    userId: string,
+    roomName: string,
+    opts?: { displayName?: string; audioOnly?: boolean },
+  ): Promise<LivekitTokenResponse> {
+    const error = this.validateEnv();
+    if (error) throw new BadRequestException(error);
+
+    if (!userId) throw new BadRequestException('userId is required');
+    if (!roomName || !this.roomRegex.test(roomName)) {
+      throw new BadRequestException('Invalid room name');
     }
-    // fallback disallowed for conversation calls: require explicit conversation room naming
-    throw new BadRequestException('roomName required');
-  }
 
-  async createToken(dto: CreateTokenDto): Promise<LivekitTokenResponse> {
-    try {
-      const error = this.validateEnv();
+    const at = new AccessToken(this.apiKey!, this.apiSecret!, {
+      identity: userId,
+      name: opts?.displayName || userId,
+      ttl: this.tokenTtlSeconds,
+    });
 
-      if (error) {
-        throw new Error(error);
-      }
+    at.addGrant({
+      room: roomName,
+      roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    });
 
-      console.log('userId in createToken:', dto.userId);
-
-      if (!dto.userId) {
-        throw new Error('userId is required');
-      }
-
-      const roomName = this.buildRoomName(dto);
-      const at = new AccessToken(this.apiKey!, this.apiSecret!, {
-        identity: dto.userId,
-        name: dto.displayName || dto.userId,
-        ttl: this.tokenTtlSeconds,
-      });
-
-      at.addGrant({
-        room: roomName,
-        roomJoin: true,
-        canPublish: true,
-        canSubscribe: true,
-        canPublishData: true,
-      });
-
-      const jwt = await at.toJwt();
-      return {
-        token: jwt,
-        roomName,
-        url: this.publicUrl!,
-        audioOnlySuggested: !!dto.audioOnly,
-      };
-    } catch (error) {
-      console.error('Error creating token:', error);
-      throw new Error('Failed to create token');
-    }
+    const jwt = await at.toJwt();
+    return {
+      token: jwt,
+      roomName,
+      url: this.publicUrl!,
+      audioOnlySuggested: !!opts?.audioOnly,
+    };
   }
 
   // ---- Call session lifecycle ----
@@ -176,61 +158,6 @@ export class RtcService {
     return { ok: true };
   }
 
-  async muteUser(conversationId: string, userId: string) {
-    await this.convs.ensureMember(conversationId, userId);
-    const session = await this.prisma.callSession.findFirst({
-      where: { conversationId, endedAt: null },
-      select: { id: true },
-    });
-    if (!session) return { ok: true, alreadyEnded: true };
-    await this.prisma.callParticipant.updateMany({
-      where: { callId: session.id, userId },
-      data: { microphone: 'off' },
-    });
-    return { ok: true };
-  }
-
-  async unmuteUser(conversationId: string, userId: string) {
-    await this.convs.ensureMember(conversationId, userId);
-    const session = await this.prisma.callSession.findFirst({
-      where: { conversationId, endedAt: null },
-      select: { id: true },
-    });
-    if (!session) return { ok: true, alreadyEnded: true };
-    await this.prisma.callParticipant.updateMany({
-      where: { callId: session.id, userId },
-      data: { microphone: 'on' },
-    });
-    return { ok: true };
-  }
-
-  async cameraOff(conversationId: string, userId: string) {
-    await this.convs.ensureMember(conversationId, userId);
-    const session = await this.prisma.callSession.findFirst({
-      where: { conversationId, endedAt: null },
-      select: { id: true },
-    });
-    if (!session) return { ok: true, alreadyEnded: true };
-    await this.prisma.callParticipant.updateMany({
-      where: { callId: session.id, userId },
-      data: { camera: 'off' },
-    });
-    return { ok: true };
-  }
-
-  async cameraOn(conversationId: string, userId: string) {
-    await this.convs.ensureMember(conversationId, userId);
-    const session = await this.prisma.callSession.findFirst({
-      where: { conversationId, endedAt: null },
-      select: { id: true },
-    });
-    if (!session) return { ok: true, alreadyEnded: true };
-    await this.prisma.callParticipant.updateMany({
-      where: { callId: session.id, userId },
-      data: { camera: 'on' },
-    });
-    return { ok: true };
-  }
 
   async endCall(conversationId: string, userId: string) {
     await this.convs.ensureMember(conversationId, userId);
@@ -278,7 +205,7 @@ export class RtcService {
     });
     if (!conv) throw new BadRequestException('Conversation not found');
     const roomName = this.buildConversationRoomName(conv);
-    return this.createToken({ userId, roomName });
+    return this.createLivekitToken(userId, roomName);
   }
 
   health() {
@@ -290,5 +217,13 @@ export class RtcService {
       apiKeyPresent: !!this.apiKey,
       tokenTtlSeconds: this.tokenTtlSeconds,
     };
+  }
+
+  async getConversationMemberIds(conversationId: string): Promise<string[]> {
+    const members = await this.prisma.membership.findMany({
+      where: { conversationId },
+      select: { userId: true },
+    });
+    return members.map((m) => m.userId);
   }
 }

@@ -42,7 +42,11 @@ export class UsersService {
       name: u.name ?? 'Unknown',
       username: u.username ?? null,
       avatar_url: u.avatar
-        ? SazedStorage.url(appConfig().storageUrl.avatar + u.avatar)
+        ? /^https?:\/\//i.test(String(u.avatar))
+          ? String(u.avatar)
+          : SazedStorage.url(
+              `${appConfig().storageUrl.avatar.replace(/^\/+/, '').replace(/\/+$/, '')}/${String(u.avatar).replace(/^\/+/, '')}`,
+            )
         : null,
     }));
 

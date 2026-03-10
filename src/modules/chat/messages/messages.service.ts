@@ -56,6 +56,7 @@ export class MessagesService {
         createdAt: true,
         senderId: true,
         conversationId: true,
+        media_Url: true,
       },
     });
 
@@ -82,19 +83,20 @@ export class MessagesService {
     if (!conv) throw new Error('Conversation not found');
 
     if (file) {
-      const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+      const safeOriginalName = (file.originalname || 'file')
+        .trim()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-zA-Z0-9._-]/g, '');
+      const filename = `${StringHelper.randomString(10)}_${safeOriginalName}`;
+      const attachmentPrefix = appConfig().storageUrl.attachment.replace(/^\/+/, '');
+      const objectKey = `${attachmentPrefix}/${filename}`;
 
-      await SazedStorage.put(
-        appConfig().storageUrl.attachment + `/${filename}`,
-        file.buffer,
-      );
+      await SazedStorage.put(objectKey, file.buffer, {
+        contentType: file.mimetype,
+        contentDisposition: 'inline',
+      });
 
-      mediaUrl =
-        process.env.AWS_S3_ENDPOINT +
-        '/' +
-        process.env.AWS_S3_BUCKET +
-        appConfig().storageUrl.attachment +
-        `/${filename}`;
+      mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}/${objectKey}`;
     }
 
     // For Direct Messages (DM), respect block list

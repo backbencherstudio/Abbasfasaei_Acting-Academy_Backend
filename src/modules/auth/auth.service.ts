@@ -26,6 +26,16 @@ export class AuthService {
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
+  private avatarObjectKey(fileName: string): string {
+    const prefix = appConfig().storageUrl.avatar.replace(/^\/+/, '').replace(/\/+$/, '');
+    const name = String(fileName || 'avatar')
+      .trim()
+      .replace(/^\/+/, '')
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9._-]/g, '');
+    return `${prefix}/${name}`;
+  }
+
   async me(userId: string) {
     try {
       const user = await this.prisma.user.findFirst({
@@ -61,9 +71,10 @@ export class AuthService {
       if (user.avatar) {
         // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
         const isAbsolute = /^https?:\/\//i.test(user.avatar);
+        const normalizedAvatar = String(user.avatar).replace(/^\/+/, '');
         user['avatar_url'] = isAbsolute
           ? user.avatar
-          : SazedStorage.url(appConfig().storageUrl.avatar + user.avatar);
+          : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
       }
 
       // Derive roles and single user_role
@@ -130,20 +141,20 @@ export class AuthService {
       }
 
       if (image) {
-        const fileName = `${StringHelper.randomString()}${image.originalname}`;
+        const safeOriginal = (image.originalname || 'avatar')
+          .trim()
+          .replace(/\s+/g, '_')
+          .replace(/[^a-zA-Z0-9._-]/g, '');
+        const fileName = `${StringHelper.randomString()}_${safeOriginal}`;
+        const objectKey = this.avatarObjectKey(fileName);
         try {
           // Attempt upload first to avoid deleting old before success
-          await SazedStorage.put(
-            appConfig().storageUrl.avatar + fileName,
-            image.buffer,
-          );
+          await SazedStorage.put(objectKey, image.buffer, {
+            contentType: image.mimetype,
+            contentDisposition: 'inline',
+          });
 
-          const mediaUrl =
-            process.env.AWS_S3_ENDPOINT +
-            '/' +
-            process.env.AWS_S3_BUCKET +
-            appConfig().storageUrl.avatar +
-            `/${fileName}`;
+          const mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}/${objectKey}`;
 
           // delete old image from storage only after successful upload
           const oldImage = await this.prisma.user.findFirst({
