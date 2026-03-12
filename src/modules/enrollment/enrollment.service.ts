@@ -50,37 +50,16 @@ export class EnrollmentService {
 
       switch (enrollment.step) {
         case EnrollmentStep.FORM_FILLING:
-          data.step = enrollment.step;
-          data.full_name = enrollment.full_name;
-          data.email = enrollment.email;
-          data.phone = enrollment.phone;
-          data.address = enrollment.address;
-          data.date_of_birth = enrollment.date_of_birth;
-          data.experience_level = enrollment.experience_level;
-          data.acting_goals = enrollment.actingGoals?.acting_goals;
+          data.step = EnrollmentStep.RULES_SIGNING;
           break;
         case EnrollmentStep.RULES_SIGNING:
-          data.step = enrollment.step;
-          data.accepted = enrollment.rules_regulations_signing.accepted;
-          data.full_name =
-            enrollment.rules_regulations_signing.digitalSignature.full_name;
-          data.digital_signature =
-            enrollment.rules_regulations_signing.digitalSignature.signature;
-          data.digital_signature_date =
-            enrollment.rules_regulations_signing.digitalSignature.signed_at;
+          data.step = EnrollmentStep.CONTRACT_SIGNING;
           break;
         case EnrollmentStep.CONTRACT_SIGNING:
-          data.step = enrollment.step;
-          data.accepted = enrollment.digital_contract_signing.agreed;
-          data.full_name =
-            enrollment.digital_contract_signing.digitalSignature.full_name;
-          data.digital_signature =
-            enrollment.digital_contract_signing.digitalSignature.signature;
-          data.digital_signature_date =
-            enrollment.digital_contract_signing.digitalSignature.signed_at;
+          data.step = EnrollmentStep.COMPLETED;
           break;
         case EnrollmentStep.COMPLETED:
-          data.step = enrollment.step;
+          data.step = EnrollmentStep.COMPLETED;
           break;
       }
 
