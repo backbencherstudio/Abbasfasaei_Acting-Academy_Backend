@@ -45,10 +45,10 @@ export class EnrollmentService {
       });
 
       let data: any = {
-        enrollment_id: enrollment.id,
+        enrollment_id: enrollment?.id,
       };
 
-      switch (enrollment.step) {
+      switch (enrollment?.step) {
         case EnrollmentStep.FORM_FILLING:
           data.step = EnrollmentStep.RULES_SIGNING;
           break;
@@ -56,10 +56,16 @@ export class EnrollmentService {
           data.step = EnrollmentStep.CONTRACT_SIGNING;
           break;
         case EnrollmentStep.CONTRACT_SIGNING:
+          data.step = EnrollmentStep.PAYMENT;
+          break;
+        case EnrollmentStep.PAYMENT:
           data.step = EnrollmentStep.COMPLETED;
           break;
         case EnrollmentStep.COMPLETED:
           data.step = EnrollmentStep.COMPLETED;
+          break;
+        default:
+          data.step = EnrollmentStep.FORM_FILLING;
           break;
       }
 
