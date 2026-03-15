@@ -1087,8 +1087,24 @@ async function uploadAttachment(file, captionText = '') {
     }
 
     const payload = unwrapApiPayload(await response.json());
-    const msg = payload?.item || payload;
-    return msg || null;
+    const msg =
+      payload?.item?.id
+        ? payload.item
+        : payload?.id
+          ? payload
+          : payload?.data?.item?.id
+            ? payload.data.item
+            : payload?.data?.id
+              ? payload.data
+              : Array.isArray(payload?.items) && payload.items[0]?.id
+                ? payload.items[0]
+                : null;
+
+    if (!msg?.id) {
+      throw new Error('Attachment uploaded but message payload was invalid. Please refresh and try again.');
+    }
+
+    return msg;
   } catch (error) {
     console.error('uploadAttachment failed:', error);
     throw error;
@@ -1114,8 +1130,11 @@ async function uploadAttachments(files, captionText = '') {
           messagesContainer.appendChild(messageElement);
           messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
+        uploadedCount += 1;
+      } else {
+        failedFiles.push(file);
+        showMessageBox(`Failed to upload: ${file.name}`, 'error');
       }
-      uploadedCount += 1;
     } catch (error) {
       failedFiles.push(file);
       showMessageBox(error.message || `Failed to upload: ${file.name}`, 'error');

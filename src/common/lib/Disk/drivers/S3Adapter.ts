@@ -8,6 +8,7 @@ import { DiskOption } from '../Option';
 export class S3Adapter implements IStorage {
   private _config: DiskOption;
   private s3: AWS.S3;
+  private bucketEnsured = false;
 
   constructor(config: DiskOption) {
     this._config = config;
@@ -87,19 +88,31 @@ export class S3Adapter implements IStorage {
     value: Buffer | Uint8Array | string,
     options?: { contentType?: string; contentDisposition?: string },
   ): Promise<AWS.S3.ManagedUpload.SendData> {
+    const params = {
+      Bucket: this._config.connection.awsBucket,
+      Key: key,
+      Body: value,
+      ...(options?.contentType ? { ContentType: options.contentType } : {}),
+      ...(options?.contentDisposition
+        ? { ContentDisposition: options.contentDisposition }
+        : {}),
+    };
+
     try {
-      const params = {
-        Bucket: this._config.connection.awsBucket,
-        Key: key,
-        Body: value,
-        ...(options?.contentType ? { ContentType: options.contentType } : {}),
-        ...(options?.contentDisposition
-          ? { ContentDisposition: options.contentDisposition }
-          : {}),
-      };
       const upload = await this.s3.upload(params).promise();
       return upload;
     } catch (error) {
+      const awsError = error as AWS.AWSError;
+      if (
+        (awsError?.code === 'NoSuchBucket' || awsError?.code === 'NotFound') &&
+        !this.bucketEnsured
+      ) {
+        await this.s3
+          .createBucket({ Bucket: this._config.connection.awsBucket })
+          .promise();
+        this.bucketEnsured = true;
+        return this.s3.upload(params).promise();
+      }
       throw error;
     }
   }
