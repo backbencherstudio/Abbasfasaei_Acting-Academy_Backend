@@ -6,7 +6,9 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { CreateDmDto } from './dto/create-dm.dto';
@@ -15,6 +17,9 @@ import { id } from 'date-fns/locale';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { MemberRole } from '@prisma/client';
+import { memoryStorage } from 'multer';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiOkResponse } from '@nestjs/swagger';
 
 
 @UseGuards(JwtAuthGuard)
@@ -28,12 +33,22 @@ export class ConversationsController {
   }
 
   @Post('group')
-  createGroup(@GetUser() user: any, @Body() dto: CreateGroupDto) {
+  @ApiOkResponse({ description: 'Group conversation created successfully.' })
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      storage: memoryStorage(),
+    }),
+  )
+  createGroup(
+    @GetUser() user: any,
+    @Body() dto: CreateGroupDto,
+    @UploadedFile() avatar?: Express.Multer.File,
+  ) {
     return this.service.createGroup(
       user.userId,
       dto.title,
       dto.memberIds,
-      dto.avatarUrl,
+      avatar,
     );
   }
 
@@ -87,8 +102,8 @@ export class ConversationsController {
   }
 
   @Get(':id/members')
-  getMembers(@Param('id') id: string) {
-    return this.service.getGroupMembers(id);
+  getMembers(@Param('id') id: string, @GetUser() user: any) {
+    return this.service.getGroupMembers(id, user.userId);
   }
 
   @Patch(':id/members/:userId/role')

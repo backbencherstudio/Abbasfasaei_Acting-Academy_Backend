@@ -7,6 +7,9 @@ import {
 import { ConversationType, MemberRole, Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import appConfig from 'src/config/app.config';
+import { extname } from 'path';
 
 @Injectable()
 export class ConversationsService {
@@ -17,6 +20,14 @@ export class ConversationsService {
 
   private dmKeyFor(a: string, b: string) {
     return [a, b].sort().join('_');
+  }
+
+  private resolveAvatarUrl(avatar?: string | null) {
+    if (!avatar) return null;
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+      return avatar;
+    }
+    return SazedStorage.url(appConfig().storageUrl.avatar + avatar);
   }
 
   async ensureMember(conversationId: string, userId: string) {
@@ -106,9 +117,37 @@ export class ConversationsService {
     currentUserId: string,
     title: string,
     memberIds: string[],
-    avatarUrl?: string,
-    createdBy?: string,
+    avatar?: Express.Multer.File,
+    _createdBy?: string,
   ) {
+    let avatarUrl: string | undefined;
+
+    if (avatar) {
+      if (!avatar.mimetype?.startsWith('image/')) {
+        throw new BadRequestException('Group avatar must be an image file');
+      }
+
+      const maxBytes = 5 * 1024 * 1024;
+      if (avatar.size > maxBytes) {
+        throw new BadRequestException('Group avatar size must be 5MB or less');
+      }
+
+      const avatarFolder = appConfig()
+        .storageUrl.avatar.replace(/^\/+/, '')
+        .replace(/\/+$/, '');
+      const safeExt =
+        extname(avatar.originalname || '').toLowerCase() ||
+        (avatar.mimetype === 'image/png'
+          ? '.png'
+          : avatar.mimetype === 'image/webp'
+            ? '.webp'
+            : '.jpg');
+      const fileKey = `${avatarFolder}/group-${Date.now()}-${currentUserId}${safeExt}`;
+
+      await SazedStorage.put(fileKey, avatar.buffer);
+      avatarUrl = SazedStorage.url(fileKey);
+    }
+
     const uniqueMembers = Array.from(new Set([currentUserId, ...memberIds]));
     return this.prisma.conversation.create({
       data: {
@@ -127,7 +166,6 @@ export class ConversationsService {
       include: { memberships: true },
     });
   }
-
 
   // list conversations the user is in
   async myConversations(
@@ -164,6 +202,12 @@ export class ConversationsService {
           orderBy: { createdAt: 'desc' },
           take: 1,
         },
+        creator: {
+          select: { id: true, avatar: true },
+        },
+        participant: {
+          select: { id: true, avatar: true },
+        },
       },
     });
     if (convs.length === 0) return [];
@@ -173,10 +217,7 @@ export class ConversationsService {
     for (const c of convs) {
       const me = c.memberships.find((m) => m.userId === userId);
       const lb = new Date(
-        Math.max(
-          me?.lastReadAt?.getTime() ?? 0,
-          me?.clearedAt?.getTime() ?? 0,
-        ),
+        Math.max(me?.lastReadAt?.getTime() ?? 0, me?.clearedAt?.getTime() ?? 0),
       );
       bounds[c.id] = lb;
     }
@@ -192,11 +233,28 @@ export class ConversationsService {
           createdAt: { gt: lb },
         },
       });
-      enriched.push({ ...c, unread });
+
+      // Add the other participant's avatar for DMs
+      let otherUserAvatar = null;
+      if (c.type === ConversationType.DM) {
+        // For DM, get the avatar of the "other" participant
+        const otherUser = c.creator_id === userId ? c.participant : c.creator;
+        if (otherUser?.avatar) {
+          // If avatar is already a full URL, use it as-is; otherwise construct the URL
+          if (otherUser.avatar.startsWith('http')) {
+            otherUserAvatar = otherUser.avatar;
+          } else {
+            otherUserAvatar = SazedStorage.url(
+              appConfig().storageUrl.avatar + otherUser.avatar,
+            );
+          }
+        }
+      }
+
+      enriched.push({ ...c, unread, otherUserAvatar });
     }
     return opts?.unreadOnly ? enriched.filter((c) => c.unread > 0) : enriched;
   }
-
 
   async listGroupConversations(userId: string) {
     const groups = await this.prisma.conversation.findMany({
@@ -262,7 +320,6 @@ export class ConversationsService {
     return { conversationId, lastReadAt: next, unread };
   }
 
-
   // ---- member management ----
   async addMembers(
     conversationId: string,
@@ -299,24 +356,39 @@ export class ConversationsService {
     return { ok: true, added: toAdd };
   }
 
-
   // list members of a group conversation
-  async getGroupMembers(conversationId: string) {
+  async getGroupMembers(conversationId: string, currentUserId: string) {
+    await this.ensureMember(conversationId, currentUserId);
+
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { type: true },
+    });
+    if (!conv || conv.type !== ConversationType.GROUP) {
+      throw new BadRequestException(
+        'Members list is available only for group conversations',
+      );
+    }
+
     const members = await this.prisma.membership.findMany({
       where: { conversationId },
       select: {
         userId: true,
         role: true,
-        user: { select: { name: true } },
+        user: { select: { name: true, username: true, avatar: true } },
       },
+      orderBy: [{ role: 'desc' }, { joinedAt: 'asc' }],
     });
+
     return members.map((m) => ({
       userId: m.userId,
       displayName: m.user.name,
+      username: m.user.username,
+      avatarUrl: this.resolveAvatarUrl(m.user.avatar),
+      isCurrentUser: m.userId === currentUserId,
       role: m.role,
     }));
   }
-
 
   // change role of a member (admin only)
   async removeMember(
@@ -330,7 +402,6 @@ export class ConversationsService {
     });
     return { ok: true };
   }
-
 
   // change role of a member (admin only)
   async setRole(
@@ -346,7 +417,6 @@ export class ConversationsService {
     });
     return { ok: true };
   }
-
 
   // get unread count for a conversation
   async unreadFor(conversationId: string, userId: string) {
@@ -364,7 +434,6 @@ export class ConversationsService {
     });
     return { conversationId, unread };
   }
-
 
   //------ clear conversation for me----
   async clearForUser(conversationId: string, userId: string, upTo?: Date) {
