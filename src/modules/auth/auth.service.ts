@@ -289,6 +289,7 @@ export class AuthService {
           refresh_token: refreshToken,
         },
         type: user.type,
+        userId: user.id,
       };
     } catch (error) {
       return {
