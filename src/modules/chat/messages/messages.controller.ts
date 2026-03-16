@@ -51,19 +51,19 @@ export class MessagesController {
     );
   }
 
-  // @Post('conversations/:id/messages')
-  // sendMessage(
-  //   @Param('id') conversationId: string,
-  //   @GetUser() user: any,
-  //   @Body() dto: SendMessageDto,
-  // ) {
-  //   return this.service.sendMessage(
-  //     conversationId,
-  //     user.userId,
-  //     dto.kind,
-  //     dto.content,
-  //   );
-  // }
+  @Post('conversations/:id/messages')
+  sendMessage(
+    @Param('id') conversationId: string,
+    @GetUser() user: any,
+    @Body() dto: SendMessageDto,
+  ) {
+    return this.service.sendMessage(
+      conversationId,
+      user.userId,
+      dto.kind,
+      dto.content,
+    );
+  }
 
   // /messages/search?q=hello&conversationId=...&take=20&skip=0
   @Get('messages/search')
