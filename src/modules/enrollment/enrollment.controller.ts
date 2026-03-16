@@ -81,24 +81,19 @@ export class EnrollmentController {
     @Body()
     dto: AcceptRulesOrContractDto,
   ) {
-    try {
-      if (
-        !dto.digital_signature_date ||
-        isNaN(Date.parse(dto.digital_signature_date))
-      ) {
-        throw new BadRequestException('Invalid signature date');
-      }
-
-      const result = await this.enrollmentService.acceptRules(
-        user.userId,
-        enrollmentId,
-        dto,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new BadRequestException('Error accepting rules and regulations');
+    if (
+      !dto?.digital_signature_date ||
+      isNaN(Date.parse(dto?.digital_signature_date))
+    ) {
+      throw new BadRequestException('Invalid signature date');
     }
+
+    const result = await this.enrollmentService.acceptRules(
+      user.userId,
+      enrollmentId,
+      dto,
+    );
+    return result;
   }
 
   @ApiOperation({ summary: 'Accept contract terms' })

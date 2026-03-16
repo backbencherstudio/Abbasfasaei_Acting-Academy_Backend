@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EnrollmentStep } from '@prisma/client';
 // import { PaymentStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
@@ -234,7 +235,11 @@ export class HomeService {
         select: { name: true, first_name: true, last_name: true },
       }),
       this.prisma.enrollment.findFirst({
-        where: { user_id: userId },
+        where: {
+          user_id: userId,
+          step: EnrollmentStep.COMPLETED,
+          IsPaymentCompleted: true,
+        },
         orderBy: { created_at: 'desc' },
       }),
     ]);
@@ -250,7 +255,7 @@ export class HomeService {
     if (enrollment?.IsPaymentCompleted) {
       const [rawClasses, rawAssignments, rawEvents] = await Promise.all([
         // Upcoming Classes
-        this.prisma.moduleClass.findMany({
+        this.prisma.moduleClass.findFirst({
           where: {
             start_date: { gt: now },
             module: {
@@ -296,11 +301,10 @@ export class HomeService {
             },
           },
           orderBy: { start_date: 'asc' },
-          take: 10,
         }),
 
         // Upcoming Assignments
-        this.prisma.assignment.findMany({
+        this.prisma.assignment.findFirst({
           where: {
             due_date: { gt: now },
             moduleClass: {
@@ -342,11 +346,10 @@ export class HomeService {
             },
           },
           orderBy: { due_date: 'asc' },
-          take: 10,
         }),
 
         // Upcoming Events
-        this.prisma.event.findMany({
+        this.prisma.event.findFirst({
           where: {
             date: { gt: now },
           },
@@ -372,46 +375,51 @@ export class HomeService {
             },
           },
           orderBy: { date: 'asc' },
-          take: 10,
         }),
       ]);
 
-      const upcomingClasses = rawClasses.map((c) => ({
-        id: c.id,
-        class_title: c.class_title,
-        class_name: c.class_name,
-        duration: c.duration,
-        start_date: c.start_date,
-        class_time: c.class_time,
-        module_name: c.module?.module_name,
-        module_title: c.module?.module_title,
-        course_title: c.module?.course?.title,
-        instructor_name: c.module?.course?.instructor?.name,
-        materials: c.classAssets,
-      }));
+      const upcomingClasses = rawClasses
+        ? {
+            id: rawClasses.id,
+            class_title: rawClasses.class_title,
+            class_name: rawClasses.class_name,
+            duration: rawClasses.duration,
+            start_date: rawClasses.start_date,
+            class_time: rawClasses.class_time,
+            module_name: rawClasses.module?.module_name,
+            module_title: rawClasses.module?.module_title,
+            course_title: rawClasses.module?.course?.title,
+            instructor_name: rawClasses.module?.course?.instructor?.name,
+            materials: rawClasses.classAssets,
+          }
+        : null;
 
-      const upcomingAssignments = rawAssignments.map((a) => ({
-        id: a.id,
-        title: a.title,
-        due_date: a.due_date,
-        submission_Date: a.submission_Date,
-        total_marks: a.total_marks,
-        teacher_name: a.teacher?.name,
-        course_title: a.moduleClass?.module?.course?.title,
-      }));
+      const upcomingAssignments = rawAssignments
+        ? {
+            id: rawAssignments.id,
+            title: rawAssignments.title,
+            due_date: rawAssignments.due_date,
+            submission_Date: rawAssignments.submission_Date,
+            total_marks: rawAssignments.total_marks,
+            teacher_name: rawAssignments.teacher?.name,
+            course_title: rawAssignments.moduleClass?.module?.course?.title,
+          }
+        : null;
 
-      const upcomingEvents = rawEvents.map((e) => ({
-        id: e.id,
-        name: e.name,
-        description: e.description,
-        overview: e.overview,
-        date: e.date,
-        time: e.time,
-        location: e.location,
-        amount: e.amount,
-        creator_name: e.creator?.name,
-        is_member: e.members.length > 0,
-      }));
+      const upcomingEvents = rawEvents
+        ? {
+            id: rawEvents.id,
+            name: rawEvents.name,
+            description: rawEvents.description,
+            overview: rawEvents.overview,
+            date: rawEvents.date,
+            time: rawEvents.time,
+            location: rawEvents.location,
+            amount: rawEvents.amount,
+            creator_name: rawEvents.creator?.name,
+            is_member: rawEvents.members.length > 0,
+          }
+        : null;
 
       return {
         userProfile,

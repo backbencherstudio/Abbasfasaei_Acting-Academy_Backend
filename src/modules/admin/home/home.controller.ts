@@ -4,7 +4,7 @@ import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { ApiBearerAuth } from '@nestjs/swagger';
 
-@Controller('home')
+@Controller('admin/home')
 export class HomeController {
   constructor(private readonly homeService: HomeService) {}
 

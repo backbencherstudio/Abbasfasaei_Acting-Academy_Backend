@@ -5,6 +5,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { StringHelper } from 'src/common/helper/string.helper';
 import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
+import { EnrollmentStep } from '@prisma/client';
 
 @Injectable()
 export class CourseService {
@@ -34,7 +35,11 @@ export class CourseService {
 
       // 1) Get all courseIds the user is enrolled in
       const enrollments = await this.prisma.enrollment.findMany({
-        where: { user_id: userId },
+        where: {
+          user_id: userId,
+          step: EnrollmentStep.COMPLETED,
+          IsPaymentCompleted: true,
+        },
         select: { courseId: true },
       });
       const myCourseIds = enrollments.map((e) => e.courseId);
@@ -297,7 +302,12 @@ export class CourseService {
       }
 
       const enrollment = await this.prisma.enrollment.findFirst({
-        where: { courseId: courseId, user_id: userId },
+        where: {
+          courseId: courseId,
+          user_id: userId,
+          step: EnrollmentStep.COMPLETED,
+          IsPaymentCompleted: true,
+        },
       });
 
       if (!enrollment) {
