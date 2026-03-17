@@ -12,6 +12,20 @@ import appConfig from 'src/config/app.config';
 export class CoursesService {
   constructor(private prisma: PrismaService) {}
 
+  private buildSafeFileName(originalName: string) {
+    const safeName = (originalName || 'file')
+      .toLowerCase()
+      .replace(/[^a-z0-9.\s-_]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
+
+    return `${StringHelper.randomString(10)}_${safeName}`;
+  }
+
+  private buildStorageUrl(key: string) {
+    return SazedStorage.url(encodeURI(key));
+  }
+
   async create_course(adminUserId: string, createCourseDto: CreateCourseDto) {
     console.log('User Id from token:', adminUserId);
 
@@ -696,20 +710,12 @@ export class CoursesService {
 
       if (files && files.length > 0) {
         for (const file of files) {
-          const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+          const filename = this.buildSafeFileName(file.originalname);
+          const objectKey = `${appConfig().storageUrl.attachment}/${filename}`;
 
-          await SazedStorage.put(
-            appConfig().storageUrl.attachment + `/${filename}`,
-            file.buffer,
-          );
+          await SazedStorage.put(objectKey, file.buffer);
 
-          mediaUrls.push(
-            process.env.AWS_S3_ENDPOINT +
-              '/' +
-              process.env.AWS_S3_BUCKET +
-              appConfig().storageUrl.attachment +
-              `/${filename}`,
-          );
+          mediaUrls.push(this.buildStorageUrl(objectKey));
         }
       }
 
@@ -879,19 +885,11 @@ export class CoursesService {
 
       if (files && files.length > 0) {
         for (const file of files) {
-          const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
-          await SazedStorage.put(
-            appConfig().storageUrl.attachment + `/${filename}`,
-            file.buffer,
-          );
+          const filename = this.buildSafeFileName(file.originalname);
+          const objectKey = `${appConfig().storageUrl.attachment}/${filename}`;
+          await SazedStorage.put(objectKey, file.buffer);
 
-          mediaUrls.push(
-            process.env.AWS_S3_ENDPOINT +
-              '/' +
-              process.env.AWS_S3_BUCKET +
-              appConfig().storageUrl.attachment +
-              `/${filename}`,
-          );
+          mediaUrls.push(this.buildStorageUrl(objectKey));
         }
       }
 
@@ -1186,7 +1184,7 @@ export class CoursesService {
 
       if (files && files.length > 0) {
         for (const file of files) {
-          const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+          const filename = this.buildSafeFileName(file.originalname);
 
           const derivedType: 'PHOTO' | 'VIDEO' | 'FILE' = mediaType
             ? mediaType
@@ -1205,14 +1203,10 @@ export class CoursesService {
             basePath = appConfig().storageUrl.attachment;
           }
 
-          await SazedStorage.put(`${basePath}/${filename}`, file.buffer);
+          const objectKey = `${basePath}/${filename}`;
+          await SazedStorage.put(objectKey, file.buffer);
 
-          const publicUrl =
-            process.env.AWS_S3_ENDPOINT +
-            '/' +
-            process.env.AWS_S3_BUCKET +
-            basePath +
-            `/${filename}`;
+          const publicUrl = this.buildStorageUrl(objectKey);
 
           const asset = await this.prisma.classAsset.create({
             data: {

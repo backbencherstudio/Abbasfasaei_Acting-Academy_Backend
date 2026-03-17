@@ -1,6 +1,51 @@
 import * as AWS from 'aws-sdk';
+import { extname } from 'path';
 import { IStorage } from './iStorage';
 import { DiskOption } from '../Option';
+
+const MIME_MAP: Record<string, string> = {
+  // Video
+  '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo',
+  '.mkv': 'video/x-matroska',
+  '.webm': 'video/webm',
+  '.flv': 'video/x-flv',
+  '.wmv': 'video/x-ms-wmv',
+  // Audio
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.aac': 'audio/aac',
+  '.m4a': 'audio/mp4',
+  // Image
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  // Document
+  '.pdf': 'application/pdf',
+  '.doc': 'application/msword',
+  '.docx':
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx':
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.pptx':
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.txt': 'text/plain',
+  '.csv': 'text/csv',
+  '.json': 'application/json',
+  '.zip': 'application/zip',
+};
+
+function mimeFromKey(key: string): string {
+  return MIME_MAP[extname(key).toLowerCase()] ?? 'application/octet-stream';
+}
 
 /**
  * S3Adapter for s3 bucket storage
@@ -88,14 +133,14 @@ export class S3Adapter implements IStorage {
     value: Buffer | Uint8Array | string,
     options?: { contentType?: string; contentDisposition?: string },
   ): Promise<AWS.S3.ManagedUpload.SendData> {
+    const contentType = options?.contentType ?? mimeFromKey(key);
+    const contentDisposition = options?.contentDisposition ?? 'inline';
     const params = {
       Bucket: this._config.connection.awsBucket,
       Key: key,
       Body: value,
-      ...(options?.contentType ? { ContentType: options.contentType } : {}),
-      ...(options?.contentDisposition
-        ? { ContentDisposition: options.contentDisposition }
-        : {}),
+      ContentType: contentType,
+      ContentDisposition: contentDisposition,
     };
 
     try {
