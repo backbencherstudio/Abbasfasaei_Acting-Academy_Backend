@@ -28,11 +28,7 @@ export class CommunityManagementService {
       const { page, limit, search, status, role } = query;
       const skip = (page - 1) * limit;
 
-      const where: Prisma.CommunityPostWhereInput = {
-        status: {
-          not: 'REQUEST',
-        },
-      };
+      const where: Prisma.CommunityPostWhereInput = {};
 
       if (search) {
         where.OR = [
@@ -45,8 +41,12 @@ export class CommunityManagementService {
         ];
       }
 
-      if (status && status !== 'REQUEST') {
+      if (status) {
         where.status = status;
+      } else {
+        where.status = {
+          not: 'REQUEST',
+        };
       }
 
       if (role) {
@@ -129,7 +129,7 @@ export class CommunityManagementService {
         message: 'Error fetching posts',
       };
     }
-  } 
+  }
 
   async getAllRequestedPost(userId: string, query: GetPostsQueryDto) {
     try {
