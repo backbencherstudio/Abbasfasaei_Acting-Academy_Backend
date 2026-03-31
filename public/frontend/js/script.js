@@ -33,6 +33,7 @@ const sendMessageBtn = document.getElementById('send-message-btn');
 const messagesContainer = document.getElementById('messages');
 const conversationList = document.getElementById('conversation-list');
 const chatTitle = document.getElementById('chat-title');
+const chatAvatar = document.getElementById('chat-avatar');
 const sidebar = document.getElementById('sidebar');
 const sidebarToggle = document.getElementById('sidebar-toggle');
 const userIdDisplay = document.getElementById('user-id-display');
@@ -195,6 +196,86 @@ function getConversationTitle(conv) {
   return conv.senderTitle || 'Direct Message';
 }
 
+function getConversationAvatarUrl(conv) {
+  if (!conv) return null;
+
+  if (conv.type === 'DM') {
+    return conv.otherUserAvatar || null;
+  }
+
+  return conv.avatarUrl || null;
+}
+
+function getInitialAvatarUrl(label, size = 40) {
+  const first = getAvatarFallbackTitle(label);
+  return `https://placehold.co/${size}x${size}/d1d5db/ffffff?text=${encodeURIComponent(first)}`;
+}
+
+function resolveMessageSenderAvatarUrl(message) {
+  if (!message || !message.sender) return message?.senderAvatarUrl || null;
+
+  if (message.senderAvatarUrl) return message.senderAvatarUrl;
+  if (message.sender.avatarUrl) return message.sender.avatarUrl;
+
+  if (
+    typeof message.sender.avatar === 'string' &&
+    (message.sender.avatar.startsWith('http://') ||
+      message.sender.avatar.startsWith('https://'))
+  ) {
+    return message.sender.avatar;
+  }
+
+  return null;
+}
+
+function updateChatHeader(conversation, title) {
+  chatTitle.textContent = title || 'Select a Chat';
+
+  if (!chatAvatar) return;
+  if (!conversation) {
+    chatAvatar.src = getInitialAvatarUrl('Chat', 48);
+    return;
+  }
+
+  const avatarUrl = getConversationAvatarUrl(conversation);
+  const fallback = getInitialAvatarUrl(title || 'Chat', 48);
+  chatAvatar.src = avatarUrl || fallback;
+  chatAvatar.onerror = () => {
+    chatAvatar.onerror = null;
+    chatAvatar.src = fallback;
+  };
+}
+
+function getAvatarFallbackTitle(title) {
+  if (!title) return 'U';
+  const first = String(title).trim().charAt(0).toUpperCase();
+  return first || 'U';
+}
+
+function getConversationLastMessagePreview(conv) {
+  const last = Array.isArray(conv?.messages) ? conv.messages[0] : null;
+  if (!last) return 'No messages yet';
+
+  const isMine = last.senderId === userId;
+  const prefix = isMine ? 'You: ' : '';
+  const kind = String(last.kind || 'TEXT').toUpperCase();
+
+  if (kind === 'TEXT') {
+    const text = last.content?.text || '';
+    return text ? `${prefix}${text}` : `${prefix}(empty)`;
+  }
+
+  if (kind === 'IMAGE') return `${prefix}Photo`;
+  if (kind === 'VIDEO') return `${prefix}Video`;
+  if (kind === 'FILE') {
+    const fileName = last.content?.fileName || 'File';
+    return `${prefix}${fileName}`;
+  }
+  if (kind === 'AUDIO') return `${prefix}Audio`;
+
+  return `${prefix}New message`;
+}
+
 function createMessageElement(message, isSentByMe) {
   const div = document.createElement('div');
   div.classList.add(isSentByMe ? 'message-sent' : 'message-received');
@@ -207,11 +288,16 @@ function createMessageElement(message, isSentByMe) {
   const text = message.content?.text || '';
   const kind = message.kind || 'TEXT';
   const mediaUrl = message.media_Url || message.mediaUrl || message.content?.url || '';
+  const senderName = message.sender?.name || 'User';
+  const senderAvatarUrl = resolveMessageSenderAvatarUrl(message);
 
   let htmlContent = '';
   if (!isSentByMe) {
-    const first = (message.senderId || 'U').charAt(0).toUpperCase();
-    htmlContent += `<img src="https://placehold.co/40x40/d1d5db/ffffff?text=${first}" alt="Avatar" style="width:2.5rem;height:2.5rem;border-radius:9999px;object-fit:cover;">`;
+    const fallbackAvatar = getInitialAvatarUrl(senderName, 40);
+    const safeSenderAvatar = String(senderAvatarUrl || fallbackAvatar).replace(/"/g, '&quot;');
+    const safeFallbackAvatar = String(fallbackAvatar).replace(/"/g, '&quot;');
+    const safeSenderName = String(senderName).replace(/"/g, '&quot;');
+    htmlContent += `<img src="${safeSenderAvatar}" alt="${safeSenderName} avatar" style="width:2.5rem;height:2.5rem;border-radius:9999px;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null;this.src='${safeFallbackAvatar}'">`;
   }
 
   htmlContent += `<div class="message-bubble ${isSentByMe ? 'sent' : 'received'}">`;
@@ -861,6 +947,7 @@ function handleLogout() {
   messagesContainer.innerHTML = '';
   conversationList.innerHTML = '';
   chatTitle.textContent = 'Select a Chat';
+  if (chatAvatar) chatAvatar.src = getInitialAvatarUrl('Chat', 48);
   searchInput.value = '';
   suggestionBox.innerHTML = '';
   suggestionBox.style.display = 'none';
@@ -935,6 +1022,9 @@ async function renderConversations() {
       conversationsById.set(conv.id, conv);
       const li = document.createElement('li');
       const convTitle = getConversationTitle(conv);
+      const convPreview = getConversationLastMessagePreview(conv);
+      const avatarUrl = getConversationAvatarUrl(conv);
+      const avatarFallback = getAvatarFallbackTitle(convTitle);
 
       li.setAttribute('data-id', conv.id);
       li.classList.add('conversation-item');
@@ -942,9 +1032,35 @@ async function renderConversations() {
         li.classList.add('active');
       }
 
-      const text = document.createElement('span');
-      text.textContent = convTitle;
-      li.appendChild(text);
+      const avatarEl = document.createElement('img');
+      avatarEl.className = 'conversation-avatar';
+      avatarEl.alt = `${convTitle} avatar`;
+      avatarEl.style.width = '2rem';
+      avatarEl.style.height = '2rem';
+      avatarEl.style.borderRadius = '9999px';
+      avatarEl.style.objectFit = 'cover';
+      avatarEl.style.flexShrink = '0';
+      avatarEl.src = avatarUrl || getInitialAvatarUrl(avatarFallback, 40);
+      avatarEl.onerror = () => {
+        avatarEl.onerror = null;
+        avatarEl.src = getInitialAvatarUrl(avatarFallback, 40);
+      };
+      li.appendChild(avatarEl);
+
+      const meta = document.createElement('div');
+      meta.className = 'conversation-meta';
+
+      const titleEl = document.createElement('span');
+      titleEl.className = 'conversation-title';
+      titleEl.textContent = convTitle;
+
+      const previewEl = document.createElement('span');
+      previewEl.className = 'conversation-preview';
+      previewEl.textContent = convPreview;
+
+      meta.appendChild(titleEl);
+      meta.appendChild(previewEl);
+      li.appendChild(meta);
 
       const members = conv.memberships ? conv.memberships.map((m) => m.userId) : [];
       const isOnline = members.some((m) => onlineUsers.has(m));
@@ -972,7 +1088,7 @@ async function renderConversations() {
 async function selectConversation(conversationId, title) {
   currentConversationId = conversationId;
   selectedConversationSnapshot = conversationsById.get(conversationId) || null;
-  chatTitle.textContent = title;
+  updateChatHeader(selectedConversationSnapshot, title);
   clearPendingAttachments();
   attachmentInput.value = '';
 

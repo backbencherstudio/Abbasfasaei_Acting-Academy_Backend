@@ -21,6 +21,14 @@ export class MessagesService {
     private users: UsersService,
   ) {}
 
+  private resolveAvatarUrl(avatar?: string | null) {
+    if (!avatar) return null;
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+      return avatar;
+    }
+    return SazedStorage.url(appConfig().storageUrl.avatar + avatar);
+  }
+
   /**
    * List messages in a conversation with cursor pagination.
    * Respects per-user "clearedAt" (clear chat for me) and global soft-deletes.
@@ -59,7 +67,13 @@ export class MessagesService {
 
     const nextCursor =
       items.length === take ? items[items.length - 1].id : null;
-    return { items, nextCursor };
+
+    const normalizedItems = items.map((m) => ({
+      ...m,
+      senderAvatarUrl: this.resolveAvatarUrl(m.sender?.avatar),
+    }));
+
+    return { items: normalizedItems, nextCursor };
   }
 
   async sendMessage(
@@ -125,14 +139,10 @@ export class MessagesService {
         content: content ?? {},
         media_Url: mediaUrl,
       },
-      select: {
-        id: true,
-        kind: true,
-        content: true,
-        createdAt: true,
-        senderId: true,
-        conversationId: true,
-        media_Url: true,
+      include: {
+        sender: {
+          select: { id: true, name: true, avatar: true },
+        },
       },
     });
 
@@ -144,7 +154,10 @@ export class MessagesService {
       data: { updatedAt: new Date() },
     });
 
-    return msg;
+    return {
+      ...msg,
+      senderAvatarUrl: this.resolveAvatarUrl(msg.sender?.avatar),
+    };
   }
 
   // mark messages as read up to "at" timestamp (or now if not provided)

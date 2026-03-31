@@ -363,3 +363,10 @@ npx prisma generate
 ```
 
 - Swagger fails to initialize due to complex DTO circular references; set `ENABLE_SWAGGER=false` temporarily so API can still boot.
+
+
+
+#frontend start
+```
+npx live-server public/frontend --host=0.0.0.0 --port=5500 --no-browser
+```

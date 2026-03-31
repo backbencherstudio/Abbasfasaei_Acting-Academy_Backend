@@ -480,6 +480,21 @@ export class CommunityService {
       return { success: false, message: 'User not found' };
     }
 
+    // Validate parentId if provided
+    if (parentId) {
+      const parentComment = await this.prisma.communityComment.findUnique({
+        where: { id: parentId },
+        select: { id: true },
+      });
+      if (!parentComment) {
+        return {
+          success: false,
+          message: 'Parent comment or reply not found',
+          error: 'INVALID_PARENT_ID',
+        };
+      }
+    }
+
     return this.prisma.communityComment.create({
       data: {
         postId,
