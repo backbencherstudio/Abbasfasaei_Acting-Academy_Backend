@@ -682,6 +682,18 @@ export class CourseService {
               },
             },
           },
+          submissions: {
+            where: { studentId: userId },
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              fileUrl: true,
+              submitted: true,
+              submittedAt: true,
+              grade: { select: { id: true, grade: true, grade_number: true } },
+            },
+          },
         },
       });
 
@@ -689,7 +701,14 @@ export class CourseService {
         return { success: false, message: 'Assignment not found' };
       }
 
-      return { success: true, data: assignment };
+      const formattedAssignment = {
+        ...assignment,
+        submission: assignment.submissions?.[0] || null,
+      };
+
+      delete formattedAssignment.submissions;
+
+      return { success: true, data: formattedAssignment };
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException(
