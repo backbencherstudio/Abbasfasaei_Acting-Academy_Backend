@@ -357,7 +357,12 @@ export class ConversationsService {
   }
 
   // list members of a group conversation
-  async getGroupMembers(conversationId: string, currentUserId: string) {
+  // optionally filter by role (ADMIN or MEMBER)
+  async getGroupMembers(
+    conversationId: string,
+    currentUserId: string,
+    role?: MemberRole,
+  ) {
     await this.ensureMember(conversationId, currentUserId);
 
     const conv = await this.prisma.conversation.findUnique({
@@ -371,7 +376,10 @@ export class ConversationsService {
     }
 
     const members = await this.prisma.membership.findMany({
-      where: { conversationId },
+      where: {
+        conversationId,
+        ...(role ? { role } : {}),
+      },
       select: {
         userId: true,
         role: true,

@@ -21,7 +21,6 @@ import { memoryStorage } from 'multer';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOkResponse } from '@nestjs/swagger';
 
-
 @UseGuards(JwtAuthGuard)
 @Controller('conversations')
 export class ConversationsController {
@@ -102,8 +101,12 @@ export class ConversationsController {
   }
 
   @Get(':id/members')
-  getMembers(@Param('id') id: string, @GetUser() user: any) {
-    return this.service.getGroupMembers(id, user.userId);
+  getMembers(
+    @Param('id') id: string,
+    @GetUser() user: any,
+    @Query('role') role?: MemberRole,
+  ) {
+    return this.service.getGroupMembers(id, user.userId, role);
   }
 
   @Patch(':id/members/:userId/role')
