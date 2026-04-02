@@ -139,6 +139,17 @@ export class CourseController {
     }
   }
 
+  @Get('all-assignments')
+  async getAllAssignments(@GetUser() user) {
+    try {
+      const result = await this.courseService.getAllAssignments(user.userId);
+      return result;
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('Error fetching assignments');
+    }
+  }
+
   @ApiOperation({ summary: 'Get my Assignments for a course' })
   @Get('assignments/:courseId')
   async getAssignmentsForCourse(
@@ -181,6 +192,17 @@ export class CourseController {
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException('Error submitting assignment');
+    }
+  }
+
+  @Get('all-assets')
+  async getAllAssets(@GetUser() user) {
+    try {
+      const result = await this.courseService.getAllAssets(user.userId);
+      return result;
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('Error fetching assets');
     }
   }
 

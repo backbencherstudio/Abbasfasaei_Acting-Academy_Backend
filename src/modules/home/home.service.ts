@@ -307,6 +307,12 @@ export class HomeService {
         this.prisma.assignment.findFirst({
           where: {
             due_date: { gt: now },
+            submissions: {
+              none: {
+                studentId: userId,
+                submitted: true,
+              },
+            },
             moduleClass: {
               module: {
                 course: {
