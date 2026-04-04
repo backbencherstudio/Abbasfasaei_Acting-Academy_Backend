@@ -891,6 +891,12 @@ export class CourseService {
         },
         orderBy: { createdAt: 'asc' },
         select: {
+          course: {
+            select: {
+              title: true,
+              id: true,
+            },
+          },
           id: true,
           module_title: true,
           module_name: true,
@@ -957,6 +963,8 @@ export class CourseService {
               assignments.push({
                 id: a.id,
                 title: a.title,
+                course_id: m.course.id,
+                course_title: m.course.title,
                 class_id: c.id,
                 class_title: c.class_title,
                 class_name: c.class_name,
@@ -1030,6 +1038,12 @@ export class CourseService {
         },
         orderBy: { createdAt: 'asc' },
         select: {
+          course: {
+            select: {
+              title: true,
+              id: true,
+            },
+          },
           id: true,
           module_title: true,
           module_name: true,
@@ -1070,6 +1084,8 @@ export class CourseService {
               class_id: c.id,
               class_title: c.class_title,
               class_name: c.class_name,
+              course_id: m.course.id,
+              course_title: m.course.title,
               asset_url: a.asset_url,
               file_name: fileNameFromUrl(a.asset_url),
             })),
@@ -1088,6 +1104,8 @@ export class CourseService {
               class_id: c.id,
               class_title: c.class_title,
               class_name: c.class_name,
+              course_id: m.course.id,
+              course_title: m.course.title,
               asset_url: a.asset_url,
               file_name: fileNameFromUrl(a.asset_url),
             })),

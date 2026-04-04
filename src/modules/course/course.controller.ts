@@ -3,17 +3,13 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
-  Delete,
   UseGuards,
   InternalServerErrorException,
   UseInterceptors,
   UploadedFiles,
 } from '@nestjs/common';
 import { CourseService } from './course.service';
-import { CreateCourseDto } from './dto/create-course.dto';
-import { UpdateCourseDto } from './dto/update-course.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GetUser } from '../auth/decorators/get-user.decorator';
@@ -139,7 +135,7 @@ export class CourseController {
     }
   }
 
-  @Get('all-assignments')
+  @Get('assignments/all')
   async getAllAssignments(@GetUser() user) {
     try {
       const result = await this.courseService.getAllAssignments(user.userId);
@@ -195,7 +191,7 @@ export class CourseController {
     }
   }
 
-  @Get('all-assets')
+  @Get('assets/all')
   async getAllAssets(@GetUser() user) {
     try {
       const result = await this.courseService.getAllAssets(user.userId);
