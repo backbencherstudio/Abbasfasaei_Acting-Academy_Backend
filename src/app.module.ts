@@ -1,7 +1,7 @@
 // external imports
 import { MiddlewareConsumer, Module } from '@nestjs/common';
 // import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-// import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { RedisModule } from '@nestjs-modules/ioredis';
@@ -36,6 +36,8 @@ import { RtcModule } from './modules/chat/rtc/rtc.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { FinanceandpaymentsModule } from './modules/financeandpayments/financeandpayments.module';
+import { ProfileModule } from './modules/profile/profile.module';
+import { UserStatusGuard } from './common/guard/user-status.guard';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -104,6 +106,7 @@ import { FinanceandpaymentsModule } from './modules/financeandpayments/financean
     AttendanceModule,
     DashboardModule,
     FinanceandpaymentsModule,
+    ProfileModule,
   ],
   controllers: [AppController],
   providers: [
@@ -117,6 +120,10 @@ import { FinanceandpaymentsModule } from './modules/financeandpayments/financean
     //   useClass: ThrottlerBehindProxyGuard,
     // },
     AppService,
+    {
+      provide: APP_GUARD,
+      useClass: UserStatusGuard,
+    },
   ],
 })
 export class AppModule {

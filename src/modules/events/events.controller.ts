@@ -3,8 +3,11 @@ import { EventsService } from './events.service';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
+@DisAllowDeactivated()
 @Controller('events')
 export class EventsController {
   constructor(private eventsService: EventsService) {}

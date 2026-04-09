@@ -5,6 +5,8 @@ import { StringHelper } from 'src/common/helper/string.helper';
 import appConfig from 'src/config/app.config';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
+import { UserStatus } from 'src/common/constants/user-status.enum';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class CommunityService {
@@ -234,19 +236,21 @@ export class CommunityService {
   //   "visibility": "PUBLIC"
   // }
 
-  async getFeed(userId: string, onlyMyPost?: boolean) {
-    let where: any = {
+  async getFeed(myId: string, userId?: string) {
+    const where: Prisma.CommunityPostWhereInput = {
       OR: [
-        // Always show the author's own posts (any status)
-        { author_Id: userId },
-        // Show approved public posts from others
-        { status: 'APPROVED', visibility: 'PUBLIC' },
+        // Show approved public posts from others WHO ARE ACTIVE
+        {
+          status: 'APPROVED',
+          visibility: 'PUBLIC',
+          author: { status: UserStatus.ACTIVE },
+        },
       ],
     };
-    if (onlyMyPost) {
-      where = {
-        author_Id: userId,
-      };
+    if (userId) {
+      where.author_Id = userId;
+    } else {
+      where.OR.push({ author_Id: myId });
     }
     const posts = await this.prisma.communityPost.findMany({
       where,
@@ -512,7 +516,11 @@ export class CommunityService {
   // Get comments with replies and like count
   async getComments(postId: string) {
     const comments = await this.prisma.communityComment.findMany({
-      where: { postId, parentId: null },
+      where: {
+        postId,
+        parentId: null,
+        user: { status: UserStatus.ACTIVE }, // Only show comments from active users
+      },
       include: {
         user: {
           select: { id: true, name: true, username: true, avatar: true },
@@ -524,6 +532,9 @@ export class CommunityService {
               select: { id: true, name: true, username: true, avatar: true },
             },
             likes: { select: { id: true } }, // Fetch likes for the replies
+          },
+          where: {
+            user: { status: UserStatus.ACTIVE }, // Only show replies from active users
           },
         },
       },
@@ -608,25 +619,41 @@ export class CommunityService {
           username: true,
           email: true,
           avatar: true,
+          cover_image: true,
           about: true,
         },
       });
       return {
         success: true,
         message: 'Profile fetch successfully',
-        data: profile,
+        data: {
+          ...profile,
+          avatar: profile.avatar
+            ? `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${profile.avatar}`
+            : null,
+          cover_image: profile.cover_image
+            ? `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${profile.cover_image}`
+            : null,
+        },
       };
     } catch (error) {
       throw new Error('Error fetching user profile');
     }
   }
 
-  async editUserProfile(userId: string, dto: any) {
+  async editUserProfile(
+    userId: string,
+    dto: any,
+    files?: {
+      avatar?: Express.Multer.File[];
+      cover_image?: Express.Multer.File[];
+    },
+  ) {
     try {
       // Ensure the user exists
       const existing = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true },
+        select: { id: true, avatar: true, cover_image: true },
       });
 
       if (!existing) {
@@ -638,8 +665,51 @@ export class CommunityService {
       if (dto.name !== undefined) data.name = dto.name;
       if (dto.username !== undefined) data.username = dto.username;
       if (dto.email !== undefined) data.email = dto.email;
-      if (dto.avatar !== undefined) data.avatar = dto.avatar;
       if (dto.about !== undefined) data.about = dto.about;
+
+      // Handle avatar upload
+      if (files?.avatar?.[0]) {
+        const file = files.avatar[0];
+        const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+        await SazedStorage.put(
+          appConfig().storageUrl.avatar + `/${filename}`,
+          file.buffer,
+        );
+        data.avatar = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.avatar}/${filename}`;
+
+        // Optional: delete old avatar
+        if (existing.avatar) {
+          try {
+            const oldKey = existing.avatar.split(process.env.AWS_S3_BUCKET)[1];
+            if (oldKey) await SazedStorage.delete(oldKey);
+          } catch (e) {
+            console.error('Error deleting old avatar:', e);
+          }
+        }
+      }
+
+      // Handle cover_image upload
+      if (files?.cover_image?.[0]) {
+        const file = files.cover_image[0];
+        const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
+        await SazedStorage.put(
+          appConfig().storageUrl.avatar + `/${filename}`, // Using avatar storage path or define a new one if needed
+          file.buffer,
+        );
+        data.cover_image = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.avatar}/${filename}`;
+
+        // Optional: delete old cover_image
+        if (existing.cover_image) {
+          try {
+            const oldKey = existing.cover_image.split(
+              process.env.AWS_S3_BUCKET,
+            )[1];
+            if (oldKey) await SazedStorage.delete(oldKey);
+          } catch (e) {
+            console.error('Error deleting old cover_image:', e);
+          }
+        }
+      }
 
       await this.prisma.user.update({ where: { id: userId }, data });
 
@@ -675,11 +745,20 @@ export class CommunityService {
         email: user.email,
         avatar: user.avatar,
         about: user.about,
+        cover_image: user.cover_image,
       };
 
       return {
         success: true,
-        data: userProfile,
+        data: {
+          ...userProfile,
+          avatar: userProfile.avatar
+            ? `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${userProfile.avatar}`
+            : null,
+          cover_image: userProfile.cover_image
+            ? `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${userProfile.cover_image}`
+            : null,
+        },
       };
     } catch (error) {
       return {

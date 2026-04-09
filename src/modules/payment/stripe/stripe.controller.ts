@@ -14,7 +14,10 @@ import { createPaymentIntent } from './dto/create-stripe.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guard/role/roles.guard';
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @Controller('payment/stripe')
+@DisAllowDeactivated()
 export class StripeController {
   constructor(private readonly stripeService: StripeService) {}
 

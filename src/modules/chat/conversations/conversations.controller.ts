@@ -21,8 +21,11 @@ import { memoryStorage } from 'multer';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOkResponse } from '@nestjs/swagger';
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @UseGuards(JwtAuthGuard)
 @Controller('conversations')
+@DisAllowDeactivated()
 export class ConversationsController {
   constructor(private readonly service: ConversationsService) {}
 

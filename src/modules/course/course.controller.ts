@@ -17,8 +17,11 @@ import { SubmitAssignmentDto } from './dto/submit-assignment.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @ApiTags('Course')
 @UseGuards(JwtAuthGuard)
+@DisAllowDeactivated()
 @Controller('course')
 export class CourseController {
   constructor(private readonly courseService: CourseService) {}

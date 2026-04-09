@@ -22,8 +22,11 @@ import {
 } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @Controller('enrollment')
 @UseGuards(JwtAuthGuard)
+@DisAllowDeactivated()
 export class EnrollmentController {
   constructor(private readonly enrollmentService: EnrollmentService) {}
 

@@ -5,7 +5,10 @@ import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @Controller('rtc')
+@DisAllowDeactivated()
 export class RtcController {
   constructor(
     private readonly rtcService: RtcService,

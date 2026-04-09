@@ -21,8 +21,11 @@ function fileFilter(_, file, cb) {
   else cb(new Error('Unsupported file type'), false);
 }
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @UseGuards(JwtAuthGuard)
 @Controller('uploads')
+@DisAllowDeactivated()
 export class UploadsController {
   @Post()
   @UseInterceptors(FileInterceptor('file', {

@@ -391,6 +391,7 @@ export class DashboardService {
       return enrollments.map((enroll) => ({
         id: enroll.id,
         userName: enroll?.user?.name,
+        full_name: enroll.user.first_name + ' ' + enroll.user.last_name,
         avatar: enroll?.user?.avatar
           ? SazedStorage.url(
               appConfig().storageUrl.avatar + '/' + enroll.user.avatar,

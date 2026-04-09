@@ -155,7 +155,7 @@ export class HomeService {
         }),
       ]);
 
-      const upcomingClasses = rawClasses.map((c) => ({
+      const upcomingClass = rawClasses.map((c) => ({
         id: c.id,
         class_title: c.class_title,
         class_name: c.class_name,
@@ -169,7 +169,7 @@ export class HomeService {
         materials: c.classAssets,
       }));
 
-      const upcomingAssignments = rawAssignments.map((a) => ({
+      const upcomingAssignment = rawAssignments.map((a) => ({
         id: a.id,
         title: a.title,
         due_date: a.due_date,
@@ -179,7 +179,7 @@ export class HomeService {
         course_title: a.moduleClass?.module?.course?.title,
       }));
 
-      const upcomingEvents = rawEvents.map((e) => ({
+      const upcomingEvent = rawEvents.map((e) => ({
         id: e.id,
         name: e.name,
         description: e.description,
@@ -194,9 +194,9 @@ export class HomeService {
 
       return {
         userProfile,
-        upcomingClasses,
-        upcomingAssignments,
-        upcomingEvents,
+        upcomingClass,
+        upcomingAssignment,
+        upcomingEvent,
       };
     } else {
       const rawCourses = await this.prisma.course.findMany({
@@ -221,7 +221,7 @@ export class HomeService {
         take: 5,
       });
 
-      const upcomingCourses = rawCourses.map((c) => ({
+      const upcomingCourse = rawCourses.map((c) => ({
         id: c.id,
         title: c.title,
         fee: c.fee,
@@ -234,7 +234,7 @@ export class HomeService {
 
       return {
         userProfile,
-        upcomingCourses,
+        upcomingCourse,
       };
     }
   }
