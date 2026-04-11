@@ -5,6 +5,7 @@ import {
   Body,
   Patch,
   Param,
+  Query,
   UseGuards,
   UseInterceptors,
   UploadedFiles,
@@ -72,9 +73,25 @@ export class StudentManagementController {
 
   @ApiTags('Get All Students')
   @Get()
-  async getAllStudents(@GetUser() user: any) {
-    console.log('user in controller:', user);
-    return this.studentManagementService.getAllStudents(user.userId);
+  async getAllStudents(
+    @GetUser() user: any,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('experienceLevel') experienceLevel?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('courseId') courseId?: string,
+  ) {
+    return this.studentManagementService.getAllStudents(user.userId, {
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      status,
+      experienceLevel,
+      paymentStatus,
+      courseId,
+    });
   }
 
   @ApiTags('Update Enrollment Info')
