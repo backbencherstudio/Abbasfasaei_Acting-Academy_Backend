@@ -39,15 +39,16 @@ model User {
   approved_at  DateTime?
   availability String?
 
-  email      String? @unique
-  username   String? @unique
-  name       String? @db.VarChar(255)
-  first_name String? @db.VarChar(255)
-  last_name  String? @db.VarChar(255)
-  password   String? @db.VarChar(255)
-  domain     String? @unique
-  avatar     String?
-  about      String?
+  email       String? @unique
+  username    String? @unique
+  name        String? @db.VarChar(255)
+  first_name  String? @db.VarChar(255)
+  last_name   String? @db.VarChar(255)
+  password    String? @db.VarChar(255)
+  domain      String? @unique
+  avatar      String?
+  cover_image String?
+  about       String?
 
   phone_number  String?
   country       String?

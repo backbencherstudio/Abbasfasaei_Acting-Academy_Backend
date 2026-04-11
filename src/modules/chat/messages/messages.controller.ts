@@ -31,8 +31,11 @@ function fname(_, file, cb) {
   cb(null, id + extname(file.originalname));
 }
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @UseGuards(JwtAuthGuard)
 @Controller()
+@DisAllowDeactivated()
 export class MessagesController {
   constructor(private readonly service: MessagesService) {}
 

@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client'; // Import for Decimal
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
 import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
+import { UserStatus } from 'src/common/constants/user-status.enum';
 
 @Injectable()
 export class InstructorsService {
@@ -34,7 +35,8 @@ export class InstructorsService {
     }
 
     if (query?.status) {
-      where.status = query.status == 'ACTIVE' ? 1 : 0;
+      where.status =
+        query.status == 'ACTIVE' ? UserStatus.ACTIVE : UserStatus.DEACTIVATED;
     }
 
     if (query?.teacherId) {
@@ -82,7 +84,7 @@ export class InstructorsService {
               ? t.avatar
               : SazedStorage.url(appConfig().storageUrl.avatar + t.avatar)
             : null,
-          status: t.status == 1 ? 'ACTIVE' : 'INACTIVE',
+          status: t.status == UserStatus.ACTIVE ? 'ACTIVE' : 'INACTIVE',
           class_count: _count.Course,
         };
       }),
@@ -149,7 +151,7 @@ export class InstructorsService {
             password: hashedPassword,
             phone_number: createTeacherDto.phone_number,
             type: createTeacherDto.teacherType,
-            status: 1,
+            status: UserStatus.ACTIVE,
             experience_level: createTeacherDto.experienceLevel,
             joined_at: createTeacherDto.joined_at,
           },
@@ -391,7 +393,8 @@ export class InstructorsService {
               appConfig().storageUrl.avatar + teacherDetails.avatar,
             )
           : null,
-        status: teacherDetails.status == 1 ? 'ACTIVE' : 'INACTIVE',
+        status:
+          teacherDetails.status == UserStatus.ACTIVE ? 'ACTIVE' : 'INACTIVE',
       },
     };
   }

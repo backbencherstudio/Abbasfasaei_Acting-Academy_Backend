@@ -3,17 +3,13 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
-  Delete,
   UseGuards,
   InternalServerErrorException,
   UseInterceptors,
   UploadedFiles,
 } from '@nestjs/common';
 import { CourseService } from './course.service';
-import { CreateCourseDto } from './dto/create-course.dto';
-import { UpdateCourseDto } from './dto/update-course.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GetUser } from '../auth/decorators/get-user.decorator';
@@ -21,8 +17,11 @@ import { SubmitAssignmentDto } from './dto/submit-assignment.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @ApiTags('Course')
 @UseGuards(JwtAuthGuard)
+@DisAllowDeactivated()
 @Controller('course')
 export class CourseController {
   constructor(private readonly courseService: CourseService) {}
@@ -139,16 +138,16 @@ export class CourseController {
     }
   }
 
-  @Get('all-assignments')
-  async getAllAssignments(@GetUser() user) {
-    try {
-      const result = await this.courseService.getAllAssignments(user.userId);
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching assignments');
-    }
-  }
+  // @Get('assignments/all')
+  // async getAllAssignments(@GetUser() user) {
+  //   try {
+  //     const result = await this.courseService.getAllAssignments(user.userId);
+  //     return result;
+  //   } catch (error) {
+  //     console.error(error);
+  //     throw new InternalServerErrorException('Error fetching assignments');
+  //   }
+  // }
 
   @ApiOperation({ summary: 'Get my Assignments for a course' })
   @Get('assignments/:courseId')
@@ -195,16 +194,16 @@ export class CourseController {
     }
   }
 
-  @Get('all-assets')
-  async getAllAssets(@GetUser() user) {
-    try {
-      const result = await this.courseService.getAllAssets(user.userId);
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching assets');
-    }
-  }
+  // @Get('assets/all')
+  // async getAllAssets(@GetUser() user) {
+  //   try {
+  //     const result = await this.courseService.getAllAssets(user.userId);
+  //     return result;
+  //   } catch (error) {
+  //     console.error(error);
+  //     throw new InternalServerErrorException('Error fetching assets');
+  //   }
+  // }
 
   @ApiOperation({ summary: 'Get course assets' })
   @Get('assets/:courseId')

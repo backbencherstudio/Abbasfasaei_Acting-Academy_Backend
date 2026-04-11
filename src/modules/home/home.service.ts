@@ -434,7 +434,7 @@ export class HomeService {
         upcomingEvents,
       };
     } else {
-      const rawCourses = await this.prisma.course.findMany({
+      const rawCourse = await this.prisma.course.findFirst({
         where: {
           start_date: { gt: now },
         },
@@ -453,23 +453,24 @@ export class HomeService {
           },
         },
         orderBy: { start_date: 'asc' },
-        take: 5,
       });
 
-      const upcomingCourses = rawCourses.map((c) => ({
-        id: c.id,
-        title: c.title,
-        fee: c.fee,
-        duration: c.duration,
-        start_date: c.start_date,
-        class_time: c.class_time,
-        seat_capacity: c.seat_capacity,
-        instructor_name: c.instructor?.name,
-      }));
+      const upcomingCourse = rawCourse
+        ? {
+            id: rawCourse.id,
+            title: rawCourse.title,
+            fee: rawCourse.fee,
+            duration: rawCourse.duration,
+            start_date: rawCourse.start_date,
+            class_time: rawCourse.class_time,
+            seat_capacity: rawCourse.seat_capacity,
+            instructor_name: rawCourse.instructor?.name,
+          }
+        : null;
 
       return {
         userProfile,
-        upcomingCourses,
+        upcomingCourse,
       };
     }
   }

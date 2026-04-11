@@ -400,35 +400,28 @@ export class UserRepository {
    * @returns
    */
   static async deleteUser(user_id: string) {
-    try {
-      // check if user exist
-      const existUser = await prisma.user.findFirst({
-        where: {
-          id: user_id,
-        },
-      });
-      if (!existUser) {
-        return {
-          success: false,
-          message: 'User not found',
-        };
-      }
-
-      await prisma.user.delete({
-        where: {
-          id: user_id,
-        },
-      });
-      return {
-        success: true,
-        message: 'User deleted successfully',
-      };
-    } catch (error) {
+    // check if user exist
+    const existUser = await prisma.user.findFirst({
+      where: {
+        id: user_id,
+      },
+    });
+    if (!existUser) {
       return {
         success: false,
-        message: error.message,
+        message: 'User not found',
       };
     }
+
+    await prisma.user.delete({
+      where: {
+        id: user_id,
+      },
+    });
+    return {
+      success: true,
+      message: 'User deleted successfully',
+    };
   }
 
   // change password

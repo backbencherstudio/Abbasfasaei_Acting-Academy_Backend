@@ -27,8 +27,6 @@ export class CoursesService {
   }
 
   async create_course(adminUserId: string, createCourseDto: CreateCourseDto) {
-    console.log('User Id from token:', adminUserId);
-
     if (!adminUserId) {
       return { message: 'Unauthorized', success: false };
     }
@@ -100,7 +98,30 @@ export class CoursesService {
         return { message: 'Unauthorized', success: false };
       }
 
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          role_users: {
+            include: {
+              role: true,
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        return { message: 'User not found', success: false };
+      }
+
+      let isTeacher = false;
+      if (user.role_users.some((role) => role.role.name === 'TEACHER')) {
+        isTeacher = true;
+      }
+
       const courses = await this.prisma.course.findMany({
+        where: {
+          instructorId: isTeacher ? userId : undefined,
+        },
         select: {
           id: true,
           title: true,
@@ -113,9 +134,6 @@ export class CoursesService {
           start_date: true,
           class_time: true,
           createdBy: true,
-          course_overview: true,
-          course_module_details: true,
-          installment_process: true,
           instructor: {
             select: {
               name: true,
@@ -123,8 +141,18 @@ export class CoursesService {
               phone_number: true,
             },
           },
-          modules: true,
-          enrollments: true,
+          _count: {
+            select: {
+              modules: true,
+              enrollments: {
+                where: {
+                  status: 'ACTIVE',
+                  IsPaymentCompleted: true,
+                  step: 'COMPLETED',
+                },
+              },
+            },
+          },
         },
       });
 
@@ -136,7 +164,16 @@ export class CoursesService {
       return {
         message: 'Courses fetched successfully',
         success: true,
-        data: courses,
+        data: courses.map((course) => {
+          const total_modules = course._count.modules;
+          const total_enrollments = course._count.enrollments;
+          delete course._count;
+          return {
+            ...course,
+            total_modules,
+            total_enrollments,
+          };
+        }),
       };
     } catch (error) {
       console.error('Error fetching courses:', error);
@@ -173,8 +210,18 @@ export class CoursesService {
             phone_number: true,
           },
         },
-        modules: true,
-        enrollments: true,
+        _count: {
+          select: {
+            modules: true,
+            enrollments: {
+              where: {
+                status: 'ACTIVE',
+                IsPaymentCompleted: true,
+                step: 'COMPLETED',
+              },
+            },
+          },
+        },
       },
     });
 
@@ -349,8 +396,15 @@ export class CoursesService {
           module_overview: true,
           courseId: true,
           createdAt: true,
-          updatedAt: true,
-          classes: true,
+
+          classes: {
+            select: {
+              id: true,
+              class_title: true,
+              class_name: true,
+              createdAt: true,
+            },
+          },
         },
       });
 
@@ -576,7 +630,57 @@ export class CoursesService {
 
       const existingClass = await this.prisma.moduleClass.findUnique({
         where: { id: classId },
+        select: {
+          id: true,
+          class_title: true,
+          class_name: true,
+          class_overview: true,
+          duration: true,
+          start_date: true,
+          class_time: true,
+          moduleId: true,
+          createdAt: true,
+          module: {
+            select: {
+              course: {
+                select: {
+                  instructor: {
+                    select: {
+                      name: true,
+                      email: true,
+                    },
+                  },
+                  _count: {
+                    select: {
+                      enrollments: {
+                        where: {
+                          status: 'ACTIVE',
+                          IsPaymentCompleted: true,
+                          step: 'COMPLETED',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
+
+      const formattedClass = {
+        id: existingClass.id,
+        class_title: existingClass.class_title,
+        class_name: existingClass.class_name,
+        class_overview: existingClass.class_overview,
+        duration: existingClass.duration,
+        start_date: existingClass.start_date,
+        class_time: existingClass.class_time,
+        moduleId: existingClass.moduleId,
+        createdAt: existingClass.createdAt,
+        instructor: existingClass.module?.course?.instructor,
+        enrollmentCount: existingClass.module?.course?._count?.enrollments,
+      };
 
       if (!existingClass) {
         return { message: 'Class not found', success: false };
@@ -585,7 +689,7 @@ export class CoursesService {
       return {
         message: 'Class fetched successfully',
         success: true,
-        data: existingClass,
+        data: formattedClass,
       };
     } catch (error) {
       console.error('Error fetching class:', error);
@@ -792,29 +896,39 @@ export class CoursesService {
           id: true,
           title: true,
           description: true,
-          attachment_url: true,
           submission_Date: true,
           due_date: true,
-          total_marks: true,
-          moduleClass: {
+          moduleClassId: true,
+          _count: {
             select: {
-              id: true,
-              class_title: true,
-              class_name: true,
+              submissions: true,
+              grades: true,
             },
           },
-
-          submissions: {
-            select: { id: true, studentId: true, total_Submissions: true },
-          },
-          grades: { select: { id: true, studentId: true, total_graded: true } },
         },
+      });
+
+      const formattedAssignments = assignments.map((assignment) => {
+        const total_submissions = assignment._count.submissions;
+        const total_graded = assignment._count.grades;
+        delete assignment._count;
+
+        return {
+          id: assignment.id,
+          title: assignment.title,
+          description: assignment.description,
+          submission_Date: assignment.submission_Date,
+          due_date: assignment.due_date,
+          class_id: assignment.moduleClassId,
+          submissions: total_submissions,
+          grades: total_graded,
+        };
       });
 
       return {
         message: 'Assignments retrieved successfully',
         success: true,
-        data: assignments,
+        data: formattedAssignments,
       };
     } catch (error) {
       console.error('Error retrieving assignments:', error);
@@ -841,10 +955,29 @@ export class CoursesService {
           moduleClass: {
             select: {
               id: true,
-              class_title: true,
-              class_name: true,
+              module: {
+                select: {
+                  course: {
+                    select: {
+                      instructor: {
+                        select: {
+                          id: true,
+                          name: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
+          _count: {
+            select: {
+              submissions: true,
+              grades: true,
+            },
+          },
+          average_score: true,
         },
       });
 
@@ -855,7 +988,23 @@ export class CoursesService {
       return {
         message: 'Assignment retrieved successfully',
         success: true,
-        data: assignment,
+        data: {
+          id: assignment.id,
+          title: assignment.title,
+          description: assignment.description,
+          attachment_url: assignment.attachment_url,
+          submission_Date: assignment.submission_Date,
+          due_date: assignment.due_date,
+          total_marks: assignment.total_marks,
+          class_id: assignment.moduleClass.id,
+          instructor: {
+            id: assignment.moduleClass.module.course.instructor.id,
+            name: assignment.moduleClass.module.course.instructor.name,
+          },
+          submissions: assignment._count.submissions,
+          grades: assignment._count.grades,
+          average_score: assignment.average_score,
+        },
       };
     } catch (error) {
       console.error('Error retrieving assignment:', error);
@@ -970,22 +1119,12 @@ export class CoursesService {
         where: { assignmentId: assignmentId },
         select: {
           id: true,
-          studentId: true,
           title: true,
           description: true,
           submittedAt: true,
           fileUrl: true,
 
-          assignment: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              submission_Date: true,
-              attachment_url: true,
-              total_marks: true,
-            },
-          },
+          assignmentId: true,
 
           grade: {
             select: {
@@ -998,14 +1137,37 @@ export class CoursesService {
             },
           },
           student: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true, avatar: true },
           },
         },
       });
       return {
         message: 'Submissions retrieved successfully',
         success: true,
-        data: submissions,
+        data: submissions.map((submission) => {
+          return {
+            id: submission.id,
+            title: submission?.title,
+            description: submission?.description,
+            submitted_at: submission?.submittedAt,
+            file_url: submission?.fileUrl,
+            assignment_id: submission?.assignmentId,
+
+            student: {
+              id: submission.student?.id,
+              name: submission.student?.name,
+              avatar: submission.student?.avatar,
+            },
+            grade: {
+              id: submission.grade?.id,
+              graded_at: submission.grade?.gradedAt,
+              feedback: submission.grade?.feedback,
+              graded_by: submission.grade?.gradedBy,
+              grade: submission.grade?.grade,
+              grade_number: submission.grade?.grade_number,
+            },
+          };
+        }),
       };
     } catch (error) {
       console.error('Error retrieving submissions:', error);
@@ -1063,7 +1225,11 @@ export class CoursesService {
   async gradeSubmission(
     userId: string,
     submissionId: string,
-    gradeSubmissionDto: any,
+    gradeSubmissionDto: {
+      grade?: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
+      feedback: string;
+      grade_number: number;
+    },
   ) {
     try {
       if (!userId) {
@@ -1089,10 +1255,6 @@ export class CoursesService {
           ],
         },
       });
-
-      if (existingGrade) {
-        return { message: 'Submission already graded', success: false };
-      }
 
       const assignment = await this.prisma.assignment.findUnique({
         where: { id: submission.assignmentId },
@@ -1126,24 +1288,58 @@ export class CoursesService {
         gradeSubmissionDto.grade_number,
         assignment.total_marks,
       );
-
+      if (existingGrade) {
+        const grade = await this.prisma.assignmentGrade.update({
+          where: { id: existingGrade.id },
+          data: {
+            feedback: gradeSubmissionDto.feedback,
+            grade: gradeSubmissionDto.grade || gradeLetter || 'F',
+            grade_number: Number(gradeSubmissionDto.grade_number) || 0,
+            gradedBy: userId,
+          },
+        });
+        return {
+          message: 'Submission graded successfully',
+          success: true,
+          data: {
+            id: grade.id,
+            feedback: grade.feedback,
+            grade: grade.grade,
+            grade_number: grade.grade_number,
+            graded_by: grade.gradedBy,
+          },
+        };
+      }
       const grade = await this.prisma.assignmentGrade.create({
         data: {
           feedback: gradeSubmissionDto.feedback,
-          grade: gradeLetter,
-          grade_number: gradeSubmissionDto.grade_number,
+          grade: gradeSubmissionDto.grade || gradeLetter || 'F',
+          grade_number: Number(gradeSubmissionDto.grade_number) || 0,
           gradedBy: userId,
           assignment: { connect: { id: submission.assignmentId } },
           student: { connect: { id: submission.studentId } },
           teacher: { connect: { id: userId } },
           submission: { connect: { id: submissionId } },
         },
+        select: {
+          id: true,
+          feedback: true,
+          grade: true,
+          grade_number: true,
+          gradedBy: true,
+        },
       });
 
       return {
         message: 'Submission graded successfully',
         success: true,
-        data: grade,
+        data: {
+          id: grade.id,
+          feedback: grade.feedback,
+          grade: grade.grade,
+          grade_number: grade.grade_number,
+          graded_by: grade.gradedBy,
+        },
       };
     } catch (error) {
       console.error('Error grading submission:', error);
@@ -1260,10 +1456,42 @@ export class CoursesService {
         },
       });
 
+      const fileNameFromUrl = (url: string) => {
+        try {
+          const parts = url.split('?')[0].split('#')[0].split('/');
+          return parts[parts.length - 1] || url;
+        } catch {
+          return url;
+        }
+      };
+
+      const videos = assets
+        .filter((a) => a.asset_type === 'VIDEO')
+        .map((a) => {
+          return {
+            id: a.id,
+            asset_url: a.asset_url,
+            file_name: fileNameFromUrl(a.asset_url),
+          };
+        });
+
+      const files = assets
+        .filter((a) => a.asset_type === 'FILE')
+        .map((a) => {
+          return {
+            id: a.id,
+            asset_url: a.asset_url,
+            file_name: fileNameFromUrl(a.asset_url),
+          };
+        });
+
       return {
         message: 'Class assets fetched successfully',
         success: true,
-        data: assets,
+        data: {
+          videos,
+          files,
+        },
       };
     } catch (error) {
       console.error('Error fetching class assets:', error);

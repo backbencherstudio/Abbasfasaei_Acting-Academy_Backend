@@ -5,17 +5,44 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UserRepository } from '../../common/repository/user/user.repository';
 import * as bcrypt from 'bcrypt';
-import { AuthService } from '../auth/auth.service';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import Redis from 'ioredis';
 import appConfig from 'src/config/app.config';
 import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { UserStatus } from '../../common/constants/user-status.enum';
 
 @Injectable()
 export class ProfileService {
   constructor(
     private prisma: PrismaService,
-    private readonly authService: AuthService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
+
+  private async revokeRefreshToken(user_id: string) {
+    try {
+      const storedToken = await this.redis.get(`refresh_token:${user_id}`);
+      if (!storedToken) {
+        return {
+          success: false,
+          message: 'Refresh token not found',
+        };
+      }
+
+      await this.redis.del(`refresh_token:${user_id}`);
+
+      return {
+        success: true,
+        message: 'Refresh token revoked successfully',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
 
   private getFileUrl(filename: string): string {
     if (!filename) return null;
@@ -107,10 +134,7 @@ export class ProfileService {
         date_of_birth: true,
         experience_level: true,
         avatar: true,
-        about: true,
-        country: true,
-        city: true,
-        address: true,
+        ActingGoals: true,
       },
     });
 
@@ -125,45 +149,69 @@ export class ProfileService {
       dateOfBirth: user.date_of_birth,
       experienceLevel: user.experience_level,
       avatar: user.avatar,
-      about: user.about,
-      address: {
-        country: user.country,
-        city: user.city,
-        address: user.address,
-      },
+      actingGoals: user?.ActingGoals?.acting_goals || null,
     };
   }
 
   async updatePersonalInfo(userId: string, updateData: any) {
-    const { fullName, phone, dateOfBirth, experienceLevel, about, address } =
-      updateData;
+    const {
+      fullName,
+      phone,
+      dateOfBirth,
+      experienceLevel,
+      actingGoals,
+      address,
+    } = updateData;
 
-    // Split full name if provided
-    let firstName, lastName;
-    if (fullName) {
+    // Dynamic data object তৈরি করুন
+    const updateFields: any = {};
+
+    // প্রত্যেক ফিল্ড চেক করে যোগ করুন
+    if (fullName !== undefined) {
       const nameParts = fullName.split(' ');
-      firstName = nameParts[0];
-      lastName = nameParts.slice(1).join(' ');
+      updateFields.name = fullName;
+      updateFields.first_name = nameParts[0];
+      updateFields.last_name = nameParts.slice(1).join(' ');
+    }
+
+    if (phone !== undefined) {
+      updateFields.phone_number = phone || null; // খালি string হলে null
+    }
+
+    if (dateOfBirth !== undefined) {
+      updateFields.date_of_birth = dateOfBirth ? new Date(dateOfBirth) : null;
+    }
+
+    if (experienceLevel !== undefined) {
+      updateFields.experience_level = experienceLevel || null;
+    }
+
+    if (actingGoals !== undefined) {
+      const goalsValue = actingGoals || '';
+      updateFields.about = goalsValue;
+      updateFields.ActingGoals = {
+        upsert: {
+          create: { acting_goals: goalsValue },
+          update: { acting_goals: goalsValue },
+        },
+      };
+    }
+
+    if (address) {
+      if (address.country !== undefined) {
+        updateFields.country = address.country || null;
+      }
+      if (address.city !== undefined) {
+        updateFields.city = address.city || null;
+      }
+      if (address.address !== undefined) {
+        updateFields.address = address.address || null;
+      }
     }
 
     const user = await this.prisma.user.update({
       where: { id: userId },
-      data: {
-        ...(fullName && {
-          name: fullName,
-          first_name: firstName,
-          last_name: lastName,
-        }),
-        ...(phone && { phone_number: phone }),
-        ...(dateOfBirth && { date_of_birth: new Date(dateOfBirth) }),
-        ...(experienceLevel && { experience_level: experienceLevel }),
-        ...(about && { about }),
-        ...(address && {
-          country: address.country,
-          city: address.city,
-          address: address.address,
-        }),
-      },
+      data: updateFields,
       select: {
         id: true,
         name: true,
@@ -171,6 +219,8 @@ export class ProfileService {
         phone_number: true,
         date_of_birth: true,
         experience_level: true,
+        about: true,
+        ActingGoals: true,
       },
     });
 
@@ -182,87 +232,80 @@ export class ProfileService {
         phone: user.phone_number,
         dateOfBirth: user.date_of_birth,
         experienceLevel: user.experience_level,
+        actingGoals: user?.ActingGoals?.acting_goals || null,
       },
     };
   }
 
-  async changePassword(
-    userId: string,
-    passwordData: { currentPassword: string; newPassword: string },
-  ) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { password: true },
-    });
+  // async changePassword(
+  //   userId: string,
+  //   passwordData: { currentPassword: string; newPassword: string },
+  // ) {
+  //   const user = await this.prisma.user.findUnique({
+  //     where: { id: userId },
+  //     select: { password: true },
+  //   });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+  //   if (!user) {
+  //     throw new NotFoundException('User not found');
+  //   }
 
-    // Verify current password
-    if (user.password) {
-      const isCurrentPasswordValid = await bcrypt.compare(
-        passwordData.currentPassword,
-        user.password,
-      );
+  //   // Verify current password
+  //   if (user.password) {
+  //     const isCurrentPasswordValid = await bcrypt.compare(
+  //       passwordData.currentPassword,
+  //       user.password,
+  //     );
 
-      if (!isCurrentPasswordValid) {
-        throw new ForbiddenException('Current password is incorrect');
-      }
-    }
+  //     if (!isCurrentPasswordValid) {
+  //       throw new ForbiddenException('Current password is incorrect');
+  //     }
+  //   }
 
-    // Hash new password
-    const hashedNewPassword = await bcrypt.hash(passwordData.newPassword, 12);
+  //   // Hash new password
+  //   const hashedNewPassword = await bcrypt.hash(passwordData.newPassword, 12);
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedNewPassword },
-    });
+  //   await this.prisma.user.update({
+  //     where: { id: userId },
+  //     data: { password: hashedNewPassword },
+  //   });
 
-    return { message: 'Password changed successfully' };
-  }
+  //   return { message: 'Password changed successfully' };
+  // }
 
   async disableAccount(userId: string) {
     await this.prisma.user.update({
       where: { id: userId },
       data: {
-        status: 0, // Disabled status
+        status: UserStatus.DEACTIVATED,
         deleted_at: new Date(),
       },
     });
 
-    const response = await this.authService.revokeRefreshToken(userId);
+    const response = await this.revokeRefreshToken(userId);
 
     return { message: 'Account disabled successfully', response };
   }
 
-  async deleteAccount(userId: string) {
-    // Check if user has active enrollments or payments
-    const activeEnrollments = await this.prisma.enrollment.count({
-      where: {
-        user_id: userId,
-        status: 'ACTIVE',
-      },
-    });
-
-    if (activeEnrollments > 0) {
-      throw new ConflictException(
-        'Cannot delete account with active enrollments',
-      );
-    }
-
-    // Soft delete the user
+  async activateAccount(userId: string) {
     await this.prisma.user.update({
       where: { id: userId },
       data: {
-        status: 0,
-        deleted_at: new Date(),
-        email: `deleted_${Date.now()}@deleted.com`, // Avoid unique constraint issues
-        username: `deleted_${Date.now()}`,
+        status: UserStatus.ACTIVE,
+        deleted_at: null,
       },
     });
 
-    const response = await this.authService.revokeRefreshToken(userId);
+    return { message: 'Account activated successfully' };
+  }
+
+  async deleteAccount(userId: string) {
+    // Hard delete the user
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
+
+    const response = await this.revokeRefreshToken(userId);
 
     return { message: 'Account deleted successfully', response };
   }
@@ -364,7 +407,7 @@ export class ProfileService {
       data: { lastSeenAt: new Date() },
     });
 
-    const response = await this.authService.revokeRefreshToken(userId);
+    const response = await this.revokeRefreshToken(userId);
 
     return { message: 'Logged out successfully', response };
   }

@@ -9,6 +9,8 @@ import {
   Patch,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
+  Query,
 } from '@nestjs/common';
 import { CommunityService } from './community.service';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -20,11 +22,17 @@ import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
-import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  FileFieldsInterceptor,
+  FileInterceptor,
+} from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+import { EditProfileDto } from './dto/update-community-profile.dto';
 
 @Controller('community')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@DisAllowDeactivated()
 export class CommunityController {
   constructor(private service: CommunityService) {}
 
@@ -57,9 +65,9 @@ export class CommunityController {
   // }
 
   @Get('feed')
-  getFeed(@GetUser() user: any) {
+  getFeed(@GetUser() user: any, @Query('userId') userId?: string) {
     try {
-      return this.service.getFeed(user.userId);
+      return this.service.getFeed(user.userId, userId);
     } catch (error) {
       throw new Error('Error fetching feed');
     }
@@ -67,7 +75,7 @@ export class CommunityController {
   @Get('my-posts')
   geMyPosts(@GetUser() user: any) {
     try {
-      return this.service.getFeed(user.userId, true);
+      return this.service.getFeed(user.userId, user.userId);
     } catch (error) {
       throw new Error('Error fetching feed');
     }
@@ -211,9 +219,28 @@ export class CommunityController {
   }
 
   @Patch('edit-profile')
-  editProfile(@GetUser() user: any, @Body() dto: any) {
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'avatar', maxCount: 1 },
+        { name: 'cover_image', maxCount: 1 },
+      ],
+      {
+        storage: memoryStorage(),
+      },
+    ),
+  )
+  editProfile(
+    @GetUser() user: any,
+    @Body() dto: EditProfileDto,
+    @UploadedFiles()
+    files: {
+      avatar?: Express.Multer.File[];
+      cover_image?: Express.Multer.File[];
+    },
+  ) {
     try {
-      return this.service.editUserProfile(user.userId, dto);
+      return this.service.editUserProfile(user.userId, dto, files);
     } catch (error) {
       throw new Error('Error updating user profile');
     }

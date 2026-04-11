@@ -11,8 +11,11 @@ import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @UseGuards(JwtAuthGuard)
 @Controller('users')
+@DisAllowDeactivated()
 export class UsersController {
   constructor(private users: UsersService) {}
 

@@ -365,6 +365,14 @@ export class StudentManagementService {
           step: EnrollmentStep.COMPLETED,
         },
       });
+      await this.prisma.user.update({
+        where: {
+          id: enrollment.user.id,
+        },
+        data: {
+          name: enrollment.user.first_name + ' ' + enrollment.user.last_name,
+        },
+      });
     }
 
     return {

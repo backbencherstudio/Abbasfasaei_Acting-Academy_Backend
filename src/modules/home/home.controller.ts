@@ -10,7 +10,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 
+import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
 @Controller('home')
+@DisAllowDeactivated()
 export class HomeController {
   constructor(private readonly homeService: HomeService) {}
 
