@@ -711,6 +711,13 @@ export class StudentManagementService {
       return { success: false, message: 'enrollment not found' };
     }
 
+    if (!dto || typeof dto !== 'object') {
+      return {
+        success: false,
+        message: 'Request body is required',
+      };
+    }
+
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { id: enrollmentId },
     });
@@ -719,13 +726,36 @@ export class StudentManagementService {
       return { success: false, message: 'Enrollment not found' };
     }
 
+    const data: any = {};
+
+    if (dto.status !== undefined) {
+      const nextStatus = String(dto.status).toUpperCase();
+      const allowedStatuses = Object.values(EnrollmentStatus);
+      if (!allowedStatuses.includes(nextStatus as EnrollmentStatus)) {
+        return {
+          success: false,
+          message: `Invalid status. Allowed values: ${allowedStatuses.join(', ')}`,
+        };
+      }
+      data.status = nextStatus as EnrollmentStatus;
+    }
+
+    if (dto.payment_status !== undefined) {
+      const paymentStatus = String(dto.payment_status).toUpperCase();
+      data.IsPaymentCompleted =
+        paymentStatus === 'PAID' || paymentStatus === 'SUCCESS';
+    }
+
+    if (Object.keys(data).length === 0) {
+      return {
+        success: false,
+        message: 'Nothing to update. Provide status or payment_status',
+      };
+    }
+
     const updatedEnrollment = await this.prisma.enrollment.update({
       where: { id: enrollmentId },
-      data: {
-        status: dto.status,
-        IsPaymentCompleted:
-          dto.payment_status === 'PAID' || dto.payment_status === 'SUCCESS',
-      },
+      data,
     });
 
     return { success: true, data: updatedEnrollment };

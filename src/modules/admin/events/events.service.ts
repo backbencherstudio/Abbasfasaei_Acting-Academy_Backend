@@ -16,8 +16,47 @@ export class EventsService {
   async getEventById(eventId: string) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone_number: true,
+                avatar: true,
+              },
+            },
+          },
+          orderBy: { created_at: 'asc' },
+        },
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true,
+          },
+        },
+      },
     });
-    return event;
+
+    if (!event) {
+      return {
+        success: false,
+        message: 'Event not found',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Event fetched successfully',
+      data: {
+        ...event,
+        registeredMembersCount: event.members.length,
+      },
+    };
   }
 
   async addEvent(dto: addEventDto, userId: string) {
