@@ -71,6 +71,8 @@ export class InstructorsController {
       status?: 'ACTIVE' | 'INACTIVE';
       page?: string;
       limit?: string;
+      teacherId?: string;
+      includeClasses?: string;
     },
   ) {
     try {

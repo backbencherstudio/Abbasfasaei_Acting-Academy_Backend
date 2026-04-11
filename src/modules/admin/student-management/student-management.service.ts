@@ -6,7 +6,9 @@ import appConfig from 'src/config/app.config';
 import {
   EnrollmentStatus,
   EnrollmentStep,
+  ExperienceLevel,
   PaymentGateway,
+  Prisma,
 } from '@prisma/client';
 import { CombinedEnrollmentDto } from './dto/combined-enrollment.dto';
 
@@ -488,7 +490,18 @@ export class StudentManagementService {
     };
   }
 
-  async getAllStudents(userId: string) {
+  async getAllStudents(
+    userId: string,
+    query?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      status?: string;
+      experienceLevel?: string;
+      paymentStatus?: string;
+      courseId?: string;
+    },
+  ) {
     if (!userId) {
       return {
         success: false,
@@ -496,38 +509,165 @@ export class StudentManagementService {
       };
     }
 
-    const students = await this.prisma.enrollment.findMany({
-      select: {
-        id: true,
-        full_name: true,
-        email: true,
-        phone: true,
-        address: true,
-        date_of_birth: true,
-        experience_level: true,
-        status: true,
-        created_at: true,
-        updated_at: true,
-        user: { select: { id: true, email: true } },
-        IsPaymentCompleted: true,
-        course: {
-          select: {
-            id: true,
-            title: true,
-            course_overview: true,
+    const page = Math.max(1, Number(query?.page) || 1);
+    const requestedLimit = Number(query?.limit) || 10;
+    const limit = Math.min(100, Math.max(1, requestedLimit));
+    const skip = (page - 1) * limit;
+
+    const search = (query?.search || '').trim();
+    const status = (query?.status || '').trim().toUpperCase();
+    const experienceLevel = (query?.experienceLevel || '').trim().toUpperCase();
+    const paymentStatus = (query?.paymentStatus || '').trim().toLowerCase();
+    const courseId = (query?.courseId || '').trim();
+
+    const where: Prisma.EnrollmentWhereInput = {};
+
+    if (search) {
+      where.OR = [
+        { full_name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (status) {
+      const allowedStatuses = Object.values(EnrollmentStatus);
+      if (!allowedStatuses.includes(status as EnrollmentStatus)) {
+        return {
+          success: false,
+          message: `Invalid status filter. Allowed values: ${allowedStatuses.join(', ')}`,
+        };
+      }
+      where.status = status as EnrollmentStatus;
+    }
+
+    if (experienceLevel) {
+      const allowedExperienceLevels = Object.values(ExperienceLevel);
+      if (
+        !allowedExperienceLevels.includes(experienceLevel as ExperienceLevel)
+      ) {
+        return {
+          success: false,
+          message: `Invalid experienceLevel filter. Allowed values: ${allowedExperienceLevels.join(', ')}`,
+        };
+      }
+      where.experience_level = experienceLevel as ExperienceLevel;
+    }
+
+    if (paymentStatus) {
+      if (['true', '1', 'paid', 'completed'].includes(paymentStatus)) {
+        where.IsPaymentCompleted = true;
+      } else if (['false', '0', 'unpaid', 'pending'].includes(paymentStatus)) {
+        where.IsPaymentCompleted = false;
+      } else {
+        return {
+          success: false,
+          message:
+            'Invalid paymentStatus filter. Allowed values: true, false, paid, unpaid, completed, pending',
+        };
+      }
+    }
+
+    if (courseId) {
+      where.courseId = courseId;
+    }
+
+    const [total, students] = await this.prisma.$transaction([
+      this.prisma.enrollment.count({ where }),
+      this.prisma.enrollment.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+        select: {
+          id: true,
+          full_name: true,
+          email: true,
+          phone: true,
+          address: true,
+          date_of_birth: true,
+          experience_level: true,
+          status: true,
+          created_at: true,
+          updated_at: true,
+          user: { select: { id: true, email: true, avatar: true } },
+          IsPaymentCompleted: true,
+          course: {
+            select: {
+              id: true,
+              title: true,
+              course_overview: true,
+            },
+          },
+          actingGoals: {
+            select: {
+              acting_goals: true,
+            },
           },
         },
-        actingGoals: {
-          select: {
-            acting_goals: true,
-          },
-        },
-      },
+      }),
+    ]);
+
+    const paymentConditions = Array.from(
+      new Set(
+        students
+          .map((s) => `${s.user.id}::${s.course?.id ?? ''}`)
+          .filter(Boolean),
+      ),
+    ).map((key) => {
+      const [userIdFromRow, courseIdFromRow] = key.split('::');
+      return {
+        user_id: userIdFromRow,
+        course_id: courseIdFromRow || null,
+      };
     });
+
+    const payments = paymentConditions.length
+      ? await this.prisma.payment.findMany({
+          where: { OR: paymentConditions },
+          select: {
+            user_id: true,
+            course_id: true,
+            status: true,
+            payment_type: true,
+            updated_at: true,
+          },
+          orderBy: { updated_at: 'desc' },
+        })
+      : [];
+
+    const latestPaymentByKey = new Map<string, (typeof payments)[number]>();
+    for (const payment of payments) {
+      const key = `${payment.user_id}::${payment.course_id ?? ''}`;
+      if (!latestPaymentByKey.has(key)) {
+        latestPaymentByKey.set(key, payment);
+      }
+    }
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
     return {
       success: true,
-      data: students.map((s) => this.formatEnrollment(s)),
+      data: students.map((s) => {
+        const paymentKey = `${s.user.id}::${s.course?.id ?? ''}`;
+        const payment = latestPaymentByKey.get(paymentKey);
+
+        return this.formatEnrollment({
+          ...s,
+          avatar: s.user?.avatar ?? null,
+          joined_at: s.created_at,
+          payment_status: payment?.status ?? (s.IsPaymentCompleted ? 'COMPLETED' : 'PENDING'),
+          payment_type: payment?.payment_type ?? null,
+        });
+      }),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
     };
   }
 
@@ -546,6 +686,7 @@ export class StudentManagementService {
         address: true,
         date_of_birth: true,
         experience_level: true,
+        avatar: true,
         ActingGoals: { select: { acting_goals: true } },
         transactions: {
           select: {

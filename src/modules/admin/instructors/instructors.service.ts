@@ -17,6 +17,7 @@ export class InstructorsService {
     status?: 'ACTIVE' | 'INACTIVE';
     page?: string;
     limit?: string;
+    teacherId?: string;
   }) {
     const where: Prisma.UserWhereInput = {
       deleted_at: null,
@@ -38,6 +39,10 @@ export class InstructorsService {
         query.status == 'ACTIVE' ? UserStatus.ACTIVE : UserStatus.DEACTIVATED;
     }
 
+    if (query?.teacherId) {
+      where.id = query.teacherId;
+    }
+
     const page = parseInt(query?.page) || 1;
     const limit = parseInt(query?.limit) || 10;
     const skip = (page - 1) * limit;
@@ -53,10 +58,16 @@ export class InstructorsService {
           name: true,
           email: true,
           phone_number: true,
+          avatar: true,
           experience_level: true,
           status: true,
           joined_at: true,
           created_at: true,
+          _count: {
+            select: {
+              Course: true,
+            },
+          },
         },
       }),
       this.prisma.user.count({ where }),
@@ -65,9 +76,16 @@ export class InstructorsService {
       success: true,
       message: 'Teachers fetched successfully',
       data: teachers.map((t) => {
+        const { _count, ...teacherData } = t;
         return {
-          ...t,
+          ...teacherData,
+          avatar: t.avatar
+            ? t.avatar.startsWith('http')
+              ? t.avatar
+              : SazedStorage.url(appConfig().storageUrl.avatar + t.avatar)
+            : null,
           status: t.status == UserStatus.ACTIVE ? 'ACTIVE' : 'INACTIVE',
+          class_count: _count.Course,
         };
       }),
       meta_data: {
@@ -350,10 +368,16 @@ export class InstructorsService {
             course_overview: true,
             fee: true,
             status: true,
+            duration: true,
             start_date: true,
             seat_capacity: true,
             created_at: true,
             updated_at: true,
+            _count: {
+              select: {
+                enrollments: true,
+              },
+            },
           },
         },
       },
