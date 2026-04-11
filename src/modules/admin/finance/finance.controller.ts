@@ -5,6 +5,7 @@ import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import { CreateFinanceDto } from './dto/create-finance.dto';
+import { CreateManualPaymentDto } from './dto/create-manual-payment.dto';
 import { UpdateFinanceDto } from './dto/update-finance.dto';
 import { TransactionsQueryDto } from './dto/query-finance.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
@@ -34,13 +35,24 @@ export class FinanceController {
     return this.finance.update(body);
   }
 
+  @Roles(Role.FINANCE)
+  @ApiResponse({ description: 'Get revenue stats' })
   @Get('revenue/stats')
   async getStats() {
     return this.finance.getStats();
   }
 
+  @Roles(Role.FINANCE)
+  @ApiResponse({ description: 'Get all transactions' })
   @Get('transactions')
   async getAllTransactions(@Query() query: TransactionsQueryDto) {
     return this.finance.getAllTransactions(query);
+  }
+
+  @Roles(Role.FINANCE)
+  @ApiResponse({ description: 'Add manual payment' })
+  @Post('payments/manual')
+  async addManualPayment(@Body() body: CreateManualPaymentDto) {
+    return this.finance.addManualPayment(body);
   }
 }
