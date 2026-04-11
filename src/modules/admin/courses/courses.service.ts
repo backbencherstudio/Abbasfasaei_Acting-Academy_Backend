@@ -27,8 +27,6 @@ export class CoursesService {
   }
 
   async create_course(adminUserId: string, createCourseDto: CreateCourseDto) {
-    console.log('User Id from token:', adminUserId);
-
     if (!adminUserId) {
       return { message: 'Unauthorized', success: false };
     }
@@ -100,7 +98,30 @@ export class CoursesService {
         return { message: 'Unauthorized', success: false };
       }
 
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          role_users: {
+            include: {
+              role: true,
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        return { message: 'User not found', success: false };
+      }
+
+      let isTeacher = false;
+      if (user.role_users.some((role) => role.role.name === 'TEACHER')) {
+        isTeacher = true;
+      }
+
       const courses = await this.prisma.course.findMany({
+        where: {
+          instructorId: isTeacher ? userId : undefined,
+        },
         select: {
           id: true,
           title: true,

@@ -28,6 +28,7 @@ import {
 } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+import { EditProfileDto } from './dto/update-community-profile.dto';
 
 @Controller('community')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -231,7 +232,7 @@ export class CommunityController {
   )
   editProfile(
     @GetUser() user: any,
-    @Body() dto: any,
+    @Body() dto: EditProfileDto,
     @UploadedFiles()
     files: {
       avatar?: Express.Multer.File[];

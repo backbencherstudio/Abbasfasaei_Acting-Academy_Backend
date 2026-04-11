@@ -7,6 +7,7 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { UserStatus } from 'src/common/constants/user-status.enum';
 import { Prisma } from '@prisma/client';
+import { EditProfileDto } from './dto/update-community-profile.dto';
 
 @Injectable()
 export class CommunityService {
@@ -621,13 +622,18 @@ export class CommunityService {
           avatar: true,
           cover_image: true,
           about: true,
+          ActingGoals: true,
         },
       });
       return {
         success: true,
         message: 'Profile fetch successfully',
         data: {
-          ...profile,
+          id: profile.id,
+          name: profile.name,
+          username: profile.username,
+          email: profile.email,
+          about: profile?.ActingGoals?.acting_goals || profile?.about,
           avatar: profile.avatar
             ? `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${profile.avatar}`
             : null,
@@ -643,80 +649,79 @@ export class CommunityService {
 
   async editUserProfile(
     userId: string,
-    dto: any,
+    dto: EditProfileDto,
     files?: {
       avatar?: Express.Multer.File[];
       cover_image?: Express.Multer.File[];
     },
   ) {
     try {
-      // Ensure the user exists
       const existing = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { id: true, avatar: true, cover_image: true },
       });
 
-      if (!existing) {
-        return { success: false, message: 'User not found' };
-      }
+      if (!existing) return { success: false, message: 'User not found' };
 
-      // Build partial update payload to avoid overwriting with undefined
-      const data: any = {};
+      const data: Prisma.UserUpdateInput = {};
+
+      // Update basic fields
       if (dto.name !== undefined) data.name = dto.name;
-      if (dto.username !== undefined) data.username = dto.username;
-      if (dto.email !== undefined) data.email = dto.email;
-      if (dto.about !== undefined) data.about = dto.about;
-
-      // Handle avatar upload
-      if (files?.avatar?.[0]) {
-        const file = files.avatar[0];
-        const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
-        await SazedStorage.put(
-          appConfig().storageUrl.avatar + `/${filename}`,
-          file.buffer,
-        );
-        data.avatar = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.avatar}/${filename}`;
-
-        // Optional: delete old avatar
-        if (existing.avatar) {
-          try {
-            const oldKey = existing.avatar.split(process.env.AWS_S3_BUCKET)[1];
-            if (oldKey) await SazedStorage.delete(oldKey);
-          } catch (e) {
-            console.error('Error deleting old avatar:', e);
-          }
+      if (dto.username !== undefined) {
+        const existing = await this.prisma.user.findUnique({
+          where: { username: dto.username },
+        });
+        if (existing) {
+          return { success: false, message: 'Username already exists' };
         }
+        data.username = dto.username;
+      }
+      if (dto.about !== undefined) {
+        data.about = dto.about;
+        data.ActingGoals = {
+          upsert: {
+            update: { acting_goals: dto.about },
+            create: { acting_goals: dto.about },
+          },
+        };
       }
 
-      // Handle cover_image upload
-      if (files?.cover_image?.[0]) {
-        const file = files.cover_image[0];
+      // Handle file uploads with helper
+      const uploadFile = async (
+        file: Express.Multer.File,
+        field: 'avatar' | 'cover_image',
+        oldUrl?: string,
+      ) => {
         const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
-        await SazedStorage.put(
-          appConfig().storageUrl.avatar + `/${filename}`, // Using avatar storage path or define a new one if needed
-          file.buffer,
-        );
-        data.cover_image = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.avatar}/${filename}`;
+        const path = appConfig().storageUrl.avatar + `/${filename}`;
 
-        // Optional: delete old cover_image
-        if (existing.cover_image) {
+        await SazedStorage.put(path, file.buffer);
+        data[field] =
+          `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${path}`;
+
+        // Delete old file
+        if (oldUrl) {
           try {
-            const oldKey = existing.cover_image.split(
-              process.env.AWS_S3_BUCKET,
-            )[1];
+            const oldKey = oldUrl.split(process.env.AWS_S3_BUCKET)[1];
             if (oldKey) await SazedStorage.delete(oldKey);
           } catch (e) {
-            console.error('Error deleting old cover_image:', e);
+            console.error(`Error deleting old ${field}:`, e);
           }
         }
-      }
+      };
+
+      if (files?.avatar?.[0])
+        await uploadFile(files.avatar[0], 'avatar', existing.avatar);
+      if (files?.cover_image?.[0])
+        await uploadFile(
+          files.cover_image[0],
+          'cover_image',
+          existing.cover_image,
+        );
 
       await this.prisma.user.update({ where: { id: userId }, data });
 
-      return {
-        success: true,
-        message: 'User profile updated successfully',
-      };
+      return { success: true, message: 'User profile updated successfully' };
     } catch (error) {
       return {
         success: false,
@@ -729,6 +734,7 @@ export class CommunityService {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
+        include: { ActingGoals: true },
       });
 
       if (!user) {
@@ -744,7 +750,7 @@ export class CommunityService {
         username: user.username,
         email: user.email,
         avatar: user.avatar,
-        about: user.about,
+        about: user?.ActingGoals?.acting_goals || user?.about,
         cover_image: user.cover_image,
       };
 

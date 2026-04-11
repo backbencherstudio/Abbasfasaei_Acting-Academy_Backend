@@ -73,7 +73,6 @@ export class StudentManagementController {
   @ApiTags('Get All Students')
   @Get()
   async getAllStudents(@GetUser() user: any) {
-    console.log('user in controller:', user);
     return this.studentManagementService.getAllStudents(user.userId);
   }
 

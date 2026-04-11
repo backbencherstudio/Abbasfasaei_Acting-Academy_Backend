@@ -44,7 +44,6 @@ export class CoursesController {
     @GetUser() user: any,
     @Body() createCourseDto: CreateCourseDto,
   ) {
-    console.log('course create in controller:', user);
     return this.coursesService.create_course(user.userId, createCourseDto);
   }
 
