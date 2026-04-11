@@ -23,7 +23,6 @@ import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { Roles } from 'src/common/guard/role/roles.decorator';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
-import { AuthGuard } from '@nestjs/passport';
 import { CreateModuleDto } from './dto/create-module.dto';
 import { UpdateModuleDto } from './dto/update-module.dto';
 import { CreateAssignmentDto } from './dto/createAssignmentDto.dto';
@@ -33,11 +32,10 @@ import { memoryStorage } from 'multer';
 @ApiBearerAuth()
 @ApiTags('Courses')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.TEACHER, Role.ADMIN)
 @Controller('courses')
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
-
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Create a course' })
   @Post()
   async create_course(
@@ -46,19 +44,20 @@ export class CoursesController {
   ) {
     return this.coursesService.create_course(user.userId, createCourseDto);
   }
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all courses' })
   @Get()
   getAllCourses(@GetUser() user: any) {
     return this.coursesService.getAllCourses(user.userId);
   }
 
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a course by ID' })
   @Get(':id')
   getCourseById(@GetUser() user: any, @Param('id') id: string) {
     return this.coursesService.getCourseById(user.userId, id);
   }
-
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Update a course by ID' })
   @Patch(':id')
   updateCourse(
@@ -69,7 +68,7 @@ export class CoursesController {
     console.log('course id in controller:', id);
     return this.coursesService.updateCourse(user.userId, id, updateCourseDto);
   }
-
+  @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Delete a course by ID' })
   @Delete(':id')
   deleteCourse(@GetUser() user: any, @Param('id') id: string) {
@@ -77,6 +76,7 @@ export class CoursesController {
   }
 
   //---------------------module---------------------//
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Add a module to a course' })
   @Post(':courseId/modules')
   addModule(
@@ -90,19 +90,19 @@ export class CoursesController {
       createModuleDto,
     );
   }
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all modules for a course' })
   @Get(':courseId/modules')
   getAllModules(@GetUser() user: any, @Param('courseId') courseId: string) {
     return this.coursesService.getAllModules(user.userId, courseId);
   }
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a module by ID' })
   @Get('modules/:moduleId')
   getModuleById(@GetUser() user: any, @Param('moduleId') moduleId: string) {
     return this.coursesService.getModuleById(user.userId, moduleId);
   }
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Update a module by ID' })
   @Patch('modules/:moduleId')
   updateModule(
@@ -116,7 +116,7 @@ export class CoursesController {
       updateModuleDto,
     );
   }
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete a module by ID' })
   @Delete('modules/:moduleId')
   deleteModule(@GetUser() user: any, @Param('moduleId') moduleId: string) {
@@ -124,7 +124,7 @@ export class CoursesController {
   }
 
   //---------------------classes---------------------//
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Add a class to a module' })
   @Post('modules/:moduleId/classes')
   addClass(
@@ -134,19 +134,21 @@ export class CoursesController {
   ) {
     return this.coursesService.addClass(user.userId, moduleId, createClassDto);
   }
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all classes for a module' })
   @Get('modules/:moduleId/classes')
   getAllClasses(@GetUser() user: any, @Param('moduleId') moduleId: string) {
     return this.coursesService.getAllClasses(user.userId, moduleId);
   }
 
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a class by ID' })
   @Get('classes/:classId')
   getClassById(@GetUser() user: any, @Param('classId') classId: string) {
     return this.coursesService.getClassById(user.userId, classId);
   }
 
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Update a class by ID' })
   @Patch('classes/:classId')
   updateClass(
@@ -160,7 +162,7 @@ export class CoursesController {
       updateClassDto,
     );
   }
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete a class by ID' })
   @Delete('classes/:classId')
   deleteClass(@GetUser() user: any, @Param('classId') classId: string) {
@@ -168,7 +170,7 @@ export class CoursesController {
   }
 
   //---------------------------- assignments Management -------------------------------//
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Create an assignment for a class' })
   @Post('classes/:classId/assignments')
   @UseInterceptors(
@@ -190,6 +192,7 @@ export class CoursesController {
     );
   }
 
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all assignments for a class' })
   @Get('classes/:classId/assignments')
   async getAllAssignments(
@@ -198,7 +201,7 @@ export class CoursesController {
   ) {
     return this.coursesService.getAllAssignments(user.userId, classId);
   }
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get an assignment by ID' })
   @Get('assignments/:assignmentId')
   async getAssignmentById(
@@ -208,6 +211,7 @@ export class CoursesController {
     return this.coursesService.getAssignmentById(user.userId, assignmentId);
   }
 
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Update an assignment by ID' })
   @Patch('assignments/:assignmentId')
   @UseInterceptors(
@@ -228,7 +232,7 @@ export class CoursesController {
       files,
     );
   }
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete an assignment by ID' })
   @Delete('assignments/:assignmentId')
   async deleteAssignment(
@@ -239,7 +243,7 @@ export class CoursesController {
   }
 
   //---------------------------- Assignment Submission Management -------------------------------//
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all submissions for an assignment' })
   @Get('assignments/:assignmentId/submissions')
   async getAllAssignmentsSubmissions(
@@ -252,6 +256,7 @@ export class CoursesController {
     );
   }
 
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a submission by ID' })
   @Get('submissions/:submissionId')
   async getSubmissionById(
@@ -263,13 +268,18 @@ export class CoursesController {
       submissionId,
     );
   }
-
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Grade a submission by ID' })
   @Patch('submissions/:submissionId/grade')
   async gradeSubmission(
     @GetUser() user: any,
     @Param('submissionId') submissionId: string,
-    @Body() gradeSubmissionDto: any,
+    @Body()
+    gradeSubmissionDto: {
+      grade?: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
+      feedback: string;
+      grade_number: number;
+    },
   ) {
     return this.coursesService.gradeSubmission(
       user.userId,
@@ -278,6 +288,7 @@ export class CoursesController {
     );
   }
 
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Upload media files for a class' })
   @Post('classes/:classId/media')
   @UseInterceptors(
@@ -310,6 +321,7 @@ export class CoursesController {
     );
   }
 
+  @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all media assets for a class' })
   @Get('classes/:classId/media')
   async getClassAssets(
