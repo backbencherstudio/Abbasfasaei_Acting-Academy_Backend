@@ -24,7 +24,7 @@ import { CombinedEnrollmentDto } from './dto/combined-enrollment.dto';
 @ApiBearerAuth()
 @ApiTags('Student Management')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
+@Roles(Role.ADMIN, Role.TEACHER)
 @Controller('admin/student-management')
 export class StudentManagementController {
   constructor(
