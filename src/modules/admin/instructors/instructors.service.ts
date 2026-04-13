@@ -150,7 +150,7 @@ export class InstructorsService {
             username: username,
             password: hashedPassword,
             phone_number: createTeacherDto.phone_number,
-            type: createTeacherDto.teacherType,
+            type: 'teacher',
             status: UserStatus.ACTIVE,
             experience_level: createTeacherDto.experienceLevel,
             joined_at: createTeacherDto.joined_at,

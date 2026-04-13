@@ -8,12 +8,11 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateFinanceDto } from './dto/create-finance.dto';
 import { CreateManualPaymentDto } from './dto/create-manual-payment.dto';
 import { UpdateFinanceDto } from './dto/update-finance.dto';
-import { TransactionsQueryDto } from './dto/query-finance.dto';
+import { PaymentType, TransactionsQueryDto } from './dto/query-finance.dto';
 import {
   ItemType,
   OrderStatus,
   PaymentGateway,
-  PaymentType,
   TransactionStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -475,10 +474,8 @@ export class FinanceService {
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
     const normalizedSearch = (search || '').trim();
-
     const where: any = {
-      ...(payment_type !== PaymentType.MONTHLY &&
-      payment_type !== PaymentType.ONE_TIME
+      ...(payment_type !== 'MONTHLY' && payment_type !== 'ONE_TIME'
         ? {}
         : { payment_type }),
       ...(date
@@ -600,6 +597,8 @@ export class FinanceService {
         total,
         total_pages: Math.ceil(total / limit),
         search: normalizedSearch,
+        payment_type: query.payment_type,
+        date: query.date,
       },
     };
   }
@@ -614,7 +613,7 @@ export class FinanceService {
     }
 
     const itemType = body.itemType || ItemType.COURSE_ENROLLMENT;
-    const paymentType = body.paymentType || PaymentType.ONE_TIME;
+    const paymentType = body.paymentType || 'ONE_TIME';
     const paymentStatus = body.paymentStatus || OrderStatus.COMPLETED;
     const transactionStatus =
       body.transactionStatus || TransactionStatus.SUCCESS;
@@ -622,7 +621,9 @@ export class FinanceService {
     const paymentMethod = body.paymentMethod || 'stripe';
 
     if (itemType === ItemType.COURSE_ENROLLMENT && !body.courseId) {
-      throw new BadRequestException('Course ID is required for course payments');
+      throw new BadRequestException(
+        'Course ID is required for course payments',
+      );
     }
 
     if (itemType === ItemType.EVENT_TICKET && !body.eventId) {
@@ -676,7 +677,8 @@ export class FinanceService {
     const amount = Number(body.amount);
     const orderNumber = `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const transactionRef =
-      body.transactionRef || `MANUAL-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      body.transactionRef ||
+      `MANUAL-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.create({
@@ -690,8 +692,7 @@ export class FinanceService {
           status: paymentStatus,
           item_type: itemType,
           payment_type: paymentType,
-          installment_amount:
-            paymentType === PaymentType.MONTHLY ? amount : null,
+          installment_amount: paymentType === 'MONTHLY' ? amount : null,
           notes:
             body.notes ||
             (itemType === ItemType.COURSE_ENROLLMENT
@@ -713,7 +714,9 @@ export class FinanceService {
           gateway: PaymentGateway.STRIPE_MANUAL_ENTRY,
           payment_method: paymentMethod,
           payment_type: paymentType,
-          payment_date: body.paymentDate ? new Date(body.paymentDate) : new Date(),
+          payment_date: body.paymentDate
+            ? new Date(body.paymentDate)
+            : new Date(),
           metadata: {
             manual: true,
             createdBy: 'finance',

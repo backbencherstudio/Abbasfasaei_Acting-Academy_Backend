@@ -656,7 +656,8 @@ export class StudentManagementService {
           ...s,
           avatar: s.user?.avatar ?? null,
           joined_at: s.created_at,
-          payment_status: payment?.status ?? (s.IsPaymentCompleted ? 'COMPLETED' : 'PENDING'),
+          payment_status:
+            payment?.status ?? (s.IsPaymentCompleted ? 'COMPLETED' : 'PENDING'),
           payment_type: payment?.payment_type ?? null,
         });
       }),

@@ -625,6 +625,27 @@ export class CommunityService {
           ActingGoals: true,
         },
       });
+
+      if (profile.avatar) {
+        // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
+        const isAbsolute = /^https?:\/\//i.test(profile.avatar);
+        const normalizedAvatar = String(profile.avatar).replace(/^\/+/, '');
+        profile['avatar'] = isAbsolute
+          ? profile.avatar
+          : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
+      }
+
+      if (profile.cover_image) {
+        // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
+        const isAbsolute = /^https?:\/\//i.test(profile.cover_image);
+        const normalizedAvatar = String(profile.cover_image).replace(
+          /^\/+/,
+          '',
+        );
+        profile['cover_image'] = isAbsolute
+          ? profile.cover_image
+          : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
+      }
       return {
         success: true,
         message: 'Profile fetch successfully',
@@ -634,12 +655,8 @@ export class CommunityService {
           username: profile.username,
           email: profile.email,
           about: profile?.ActingGoals?.acting_goals || profile?.about,
-          avatar: profile.avatar
-            ? `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${profile.avatar}`
-            : null,
-          cover_image: profile.cover_image
-            ? `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${profile.cover_image}`
-            : null,
+          avatar: profile.avatar,
+          cover_image: profile.cover_image,
         },
       };
     } catch (error) {
@@ -729,7 +746,17 @@ export class CommunityService {
       };
     }
   }
-
+  private avatarObjectKey(fileName: string): string {
+    const prefix = appConfig()
+      .storageUrl.avatar.replace(/^\/+/, '')
+      .replace(/\/+$/, '');
+    const name = String(fileName || 'avatar')
+      .trim()
+      .replace(/^\/+/, '')
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9._-]/g, '');
+    return `${prefix}/${name}`;
+  }
   async getUserProfile(userId: string) {
     try {
       const user = await this.prisma.user.findUnique({
@@ -742,6 +769,23 @@ export class CommunityService {
           success: false,
           message: 'User not found',
         };
+      }
+      if (user.avatar) {
+        // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
+        const isAbsolute = /^https?:\/\//i.test(user.avatar);
+        const normalizedAvatar = String(user.avatar).replace(/^\/+/, '');
+        user['avatar'] = isAbsolute
+          ? user.avatar
+          : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
+      }
+
+      if (user.cover_image) {
+        // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
+        const isAbsolute = /^https?:\/\//i.test(user.cover_image);
+        const normalizedAvatar = String(user.cover_image).replace(/^\/+/, '');
+        user['cover_image'] = isAbsolute
+          ? user.cover_image
+          : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
       }
 
       const userProfile = {
@@ -756,15 +800,7 @@ export class CommunityService {
 
       return {
         success: true,
-        data: {
-          ...userProfile,
-          avatar: userProfile.avatar
-            ? `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${userProfile.avatar}`
-            : null,
-          cover_image: userProfile.cover_image
-            ? `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${userProfile.cover_image}`
-            : null,
-        },
+        data: userProfile,
       };
     } catch (error) {
       return {
