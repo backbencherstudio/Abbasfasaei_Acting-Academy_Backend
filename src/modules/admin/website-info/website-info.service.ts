@@ -41,13 +41,13 @@ export class WebsiteInfoService {
         const logo = await this.prisma.websiteInfo.findFirst();
         if (logo) {
           await SazedStorage.delete(
-            appConfig().storageUrl.websiteInfo + logo.logo,
+            `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${String(logo.logo).replace(/^\/+/, '')}`,
           );
         }
         // upload file
         const fileName = `${StringHelper.randomString()}${files.logo.originalname}`;
         await SazedStorage.put(
-          appConfig().storageUrl.websiteInfo + fileName,
+          `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${fileName}`,
           files.logo.buffer,
         );
         data.logo = fileName;
@@ -57,13 +57,13 @@ export class WebsiteInfoService {
         const favicon = await this.prisma.websiteInfo.findFirst();
         if (favicon) {
           await SazedStorage.delete(
-            appConfig().storageUrl.websiteInfo + favicon.favicon,
+            `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${String(favicon.favicon).replace(/^\/+/, '')}`,
           );
         }
         // upload file
         const fileName = `${StringHelper.randomString()}${files.favicon.originalname}`;
         await SazedStorage.put(
-          appConfig().storageUrl.websiteInfo + fileName,
+          `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${fileName}`,
           files.favicon.buffer,
         );
 
@@ -134,13 +134,13 @@ export class WebsiteInfoService {
 
       if (websiteInfo.logo) {
         websiteInfo['logo_url'] = SazedStorage.url(
-          appConfig().storageUrl.websiteInfo + websiteInfo.logo,
+          `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${String(websiteInfo.logo).replace(/^\/+/, '')}`,
         );
       }
 
       if (websiteInfo.favicon) {
         websiteInfo['favicon_url'] = SazedStorage.url(
-          appConfig().storageUrl.websiteInfo + websiteInfo.favicon,
+          `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${String(websiteInfo.favicon).replace(/^\/+/, '')}`,
         );
       }
 

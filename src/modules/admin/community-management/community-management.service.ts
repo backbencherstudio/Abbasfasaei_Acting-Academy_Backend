@@ -103,9 +103,11 @@ export class CommunityManagementService {
             author: {
               ...post.author,
               avatar: post.author.avatar
-                ? SazedStorage.url(
-                    appConfig().storageUrl.avatar + '/' + post.author.avatar,
-                  )
+                ? post.author.avatar.startsWith('http')
+                  ? post.author.avatar
+                  : SazedStorage.url(
+                      `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
+                    )
                 : null,
             },
             comments: post._count.comments,
@@ -189,9 +191,11 @@ export class CommunityManagementService {
           author: {
             ...post.author,
             avatar: post.author.avatar
-              ? SazedStorage.url(
-                  appConfig().storageUrl.avatar + '/' + post.author.avatar,
-                )
+              ? post.author.avatar.startsWith('http')
+                ? post.author.avatar
+                : SazedStorage.url(
+                    `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
+                  )
               : null,
           },
         })),
@@ -335,9 +339,11 @@ export class CommunityManagementService {
         author: {
           ...post.author,
           avatar: post.author.avatar
-            ? SazedStorage.url(
-                appConfig().storageUrl.avatar + '/' + post.author.avatar,
-              )
+            ? post.author.avatar.startsWith('http')
+              ? post.author.avatar
+              : SazedStorage.url(
+                  `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
+                )
             : null,
         },
         comments: post._count.comments,

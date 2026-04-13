@@ -393,9 +393,11 @@ export class DashboardService {
         userName: enroll?.user?.name,
         full_name: enroll.user.first_name + ' ' + enroll.user.last_name,
         avatar: enroll?.user?.avatar
-          ? SazedStorage.url(
-              appConfig().storageUrl.avatar + '/' + enroll.user.avatar,
-            )
+          ? enroll.user.avatar.startsWith('http')
+            ? enroll.user.avatar
+            : SazedStorage.url(
+                `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(enroll.user.avatar).replace(/^\/+/, '')}`,
+              )
           : null,
         courseName: enroll.course.title,
         status: enroll.step === 'COMPLETED' ? 'Enrolled' : 'Pending',

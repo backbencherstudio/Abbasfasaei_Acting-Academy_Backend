@@ -27,7 +27,9 @@ export class ConversationsService {
     if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
       return avatar;
     }
-    return SazedStorage.url(appConfig().storageUrl.avatar + avatar);
+    const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
+    const name = avatar.replace(/^\/+/, '');
+    return SazedStorage.url(`${base}/${name}`);
   }
 
   async ensureMember(conversationId: string, userId: string) {
@@ -245,7 +247,7 @@ export class ConversationsService {
             otherUserAvatar = otherUser.avatar;
           } else {
             otherUserAvatar = SazedStorage.url(
-              appConfig().storageUrl.avatar + otherUser.avatar,
+              `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(otherUser.avatar).replace(/^\/+/, '')}`,
             );
           }
         }
