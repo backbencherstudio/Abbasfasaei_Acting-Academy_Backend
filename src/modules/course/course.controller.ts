@@ -138,16 +138,22 @@ export class CourseController {
     }
   }
 
-  // @Get('assignments/all')
-  // async getAllAssignments(@GetUser() user) {
-  //   try {
-  //     const result = await this.courseService.getAllAssignments(user.userId);
-  //     return result;
-  //   } catch (error) {
-  //     console.error(error);
-  //     throw new InternalServerErrorException('Error fetching assignments');
-  //   }
-  // }
+  @Get('assignments/class/:classId')
+  async getAssignmentsForClass(
+    @Param('classId') classId: string,
+    @GetUser() user,
+  ) {
+    try {
+      const result = await this.courseService.getAssignmentsForClass(
+        user.userId,
+        classId,
+      );
+      return result;
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('Error fetching assignments');
+    }
+  }
 
   @ApiOperation({ summary: 'Get my Assignments for a course' })
   @Get('assignments/:courseId')
@@ -194,16 +200,19 @@ export class CourseController {
     }
   }
 
-  // @Get('assets/all')
-  // async getAllAssets(@GetUser() user) {
-  //   try {
-  //     const result = await this.courseService.getAllAssets(user.userId);
-  //     return result;
-  //   } catch (error) {
-  //     console.error(error);
-  //     throw new InternalServerErrorException('Error fetching assets');
-  //   }
-  // }
+  @Get('assets/class/:classId')
+  async getAllAssets(@Param('classId') classId: string, @GetUser() user) {
+    try {
+      const result = await this.courseService.getAllAssets(
+        classId,
+        user.userId,
+      );
+      return result;
+    } catch (error) {
+      console.error(error);
+      throw new InternalServerErrorException('Error fetching assets');
+    }
+  }
 
   @ApiOperation({ summary: 'Get course assets' })
   @Get('assets/:courseId')

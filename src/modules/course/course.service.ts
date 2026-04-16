@@ -404,13 +404,32 @@ export class CourseService {
             select: {
               id: true,
               title: true,
+              due_date: true,
+              grades: true,
+              submissions: {
+                where: { studentId: userId },
+                select: {
+                  id: true,
+                  submittedAt: true,
+                  grade: {
+                    select: {
+                      id: true,
+                      grade: true,
+                      grade_number: true,
+                    },
+                  },
+                },
+              },
             },
+            orderBy: { createdAt: 'asc' },
           },
           classAssets: {
             select: {
               id: true,
               asset_type: true,
+              asset_url: true,
             },
+            orderBy: { created_at: 'asc' },
           },
         },
       });
@@ -418,7 +437,79 @@ export class CourseService {
       if (!classDetails) {
         return { success: false, message: 'Class not found' };
       }
-      return { success: true, data: classDetails };
+      const fileNameFromUrl = (url: string) => {
+        try {
+          const parts = url.split('?')[0].split('#')[0].split('/');
+          return parts[parts.length - 1] || url;
+        } catch {
+          return url;
+        }
+      };
+
+      const videos = classDetails.classAssets
+        .filter((a) => a.asset_type === 'VIDEO')
+        .map((a) => ({
+          id: a.id,
+          asset_url: a.asset_url,
+          file_name: fileNameFromUrl(a.asset_url),
+        }));
+
+      const pdfs = classDetails.classAssets
+        .filter((a) => a.asset_type === 'FILE')
+        .map((a) => ({
+          id: a.id,
+          asset_url: a.asset_url,
+          file_name: fileNameFromUrl(a.asset_url),
+        }));
+
+      const now = new Date();
+      const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+      const formattedClassDetails = {
+        ...classDetails,
+        assignments: classDetails.assignments.map((a) => {
+          const submission = a.submissions[0];
+          const gradeData = submission?.grade || a.grades[0];
+          const status = gradeData
+            ? 'GRADED'
+            : submission
+              ? 'SUBMITTED'
+              : 'PENDING';
+
+          let due_in_days: number | null = null;
+          let due_label: string | null = null;
+          let is_overdue = false;
+
+          if (a.due_date) {
+            const diff = (a.due_date as Date).getTime() - now.getTime();
+            const days = Math.ceil(diff / MS_PER_DAY);
+            if (days > 0 && status === 'PENDING') {
+              due_in_days = days;
+              due_label = `Due ${days} day${days === 1 ? '' : 's'}`;
+            } else if (days <= 0) {
+              is_overdue = status === 'PENDING';
+            }
+          }
+          delete a.submissions;
+          delete a.grades;
+          return {
+            id: a.id,
+            title: a.title,
+            due_date: a.due_date,
+            grade: gradeData,
+            status,
+            due_in_days,
+            due_label,
+            is_overdue,
+          };
+        }),
+        classAssets: {
+          videos,
+          pdfs,
+        },
+      };
+
+      return { success: true, data: formattedClassDetails };
     } catch (error) {
       console.error(error);
       throw new InternalServerErrorException('Error fetching class details');
@@ -867,201 +958,91 @@ export class CourseService {
     }
   }
 
-  async getAllAssignments(userId: string) {
+  async getAssignmentsForClass(userId: string, classId: string) {
     try {
       if (!userId) {
-        return {
-          success: false,
-          message: 'User ID is required',
-        };
+        return { message: 'Unauthorized', success: false };
       }
 
-      // Fetch modules with their classes, assignments, and the user's submissions/grades in a single query
-      const modules = await this.prisma.courseModule.findMany({
-        where: {
-          course: {
-            enrollments: {
-              some: {
-                IsPaymentCompleted: true,
-                step: 'COMPLETED',
-                user_id: userId,
-              },
-            },
-          },
-        },
-        orderBy: { createdAt: 'asc' },
+      const existingClass = await this.prisma.moduleClass.findUnique({
+        where: { id: classId },
+      });
+
+      if (!existingClass) {
+        return { message: 'Class not found', success: false };
+      }
+
+      const assignments = await this.prisma.assignment.findMany({
+        where: { moduleClassId: classId },
         select: {
-          course: {
-            select: {
-              title: true,
-              id: true,
-            },
-          },
           id: true,
-          module_title: true,
-          module_name: true,
-          classes: {
+          title: true,
+          description: true,
+          submission_Date: true,
+          due_date: true,
+          moduleClassId: true,
+          _count: {
             select: {
-              id: true,
-              class_title: true,
-              class_name: true,
-              assignments: {
-                select: {
-                  id: true,
-                  title: true,
-                  due_date: true,
-                  submissions: {
-                    where: { studentId: userId },
-                    select: {
-                      submittedAt: true,
-                      grade: { select: { grade: true, grade_number: true } },
-                    },
-                  },
-                  grades: {
-                    where: { studentId: userId },
-                    select: { grade: true, grade_number: true },
-                  },
-                },
-              },
+              submissions: true,
+              grades: true,
             },
           },
         },
       });
 
-      const now = new Date();
-      const MS_PER_DAY = 24 * 60 * 60 * 1000;
+      const formattedAssignments = assignments.map((assignment) => {
+        const total_submissions = assignment._count.submissions;
+        const total_graded = assignment._count.grades;
+        delete assignment._count;
 
-      const grouped = modules
-        .map((m) => {
-          const assignments: any[] = [];
+        return {
+          id: assignment.id,
+          title: assignment.title,
+          description: assignment.description,
+          submission_Date: assignment.submission_Date,
+          due_date: assignment.due_date,
+          class_id: assignment.moduleClassId,
+          submissions: total_submissions,
+          grades: total_graded,
+        };
+      });
 
-          m.classes.forEach((c) => {
-            c.assignments.forEach((a) => {
-              const submission = a.submissions[0];
-              const gradeData = submission?.grade || a.grades[0];
-              const status = gradeData
-                ? 'GRADED'
-                : submission
-                  ? 'SUBMITTED'
-                  : 'NOT_SUBMITTED';
-
-              let due_in_days: number | null = null;
-              let due_label: string | null = null;
-              let is_overdue = false;
-
-              if (a.due_date) {
-                const diff = (a.due_date as Date).getTime() - now.getTime();
-                const days = Math.ceil(diff / MS_PER_DAY);
-                if (days > 0 && status === 'NOT_SUBMITTED') {
-                  due_in_days = days;
-                  due_label = `Due ${days} day${days === 1 ? '' : 's'}`;
-                } else if (days <= 0) {
-                  is_overdue = status === 'NOT_SUBMITTED';
-                }
-              }
-
-              assignments.push({
-                id: a.id,
-                title: a.title,
-                course_id: m.course.id,
-                course_title: m.course.title,
-                class_id: c.id,
-                class_title: c.class_title,
-                class_name: c.class_name,
-                module_id: m.id,
-                module_title: m.module_title,
-                module_name: m.module_name,
-                due_date: a.due_date,
-                due_in_days,
-                due_label,
-                is_overdue,
-                submitted: !!submission,
-                submittedAt: submission?.submittedAt ?? null,
-                grade: gradeData?.grade ?? null,
-                grade_number: gradeData?.grade_number ?? null,
-                status,
-              });
-            });
-          });
-
-          return {
-            module_id: m.id,
-            module_title: m.module_title,
-            module_name: m.module_name,
-            assignments: assignments.sort((x, y) => {
-              const dx = x.due_date ? (x.due_date as Date).getTime() : 0;
-              const dy = y.due_date ? (y.due_date as Date).getTime() : 0;
-              return dx - dy;
-            }),
-          };
-        })
-        .filter((m) => m.assignments.length > 0);
-
-      return { success: true, data: grouped };
+      return {
+        message: 'Assignments retrieved successfully',
+        success: true,
+        data: formattedAssignments,
+      };
     } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching assignments');
+      console.error('Error retrieving assignments:', error);
+      throw new Error('Could not retrieve assignments');
     }
   }
 
-  async getAllAssets(userId: string) {
+  async getAllAssets(classId: string, userId: string) {
     try {
       if (!userId) {
-        return {
-          success: false,
-          message: 'User ID is required',
-        };
+        return { message: 'Unauthorized', success: false };
       }
 
-      const enrollment = await this.prisma.enrollment.findFirst({
-        where: { user_id: userId },
+      const existingClass = await this.prisma.moduleClass.findUnique({
+        where: { id: classId },
       });
-      if (!enrollment) {
-        return {
-          success: false,
-          message: 'You are not enrolled in any course',
-        };
+
+      if (!existingClass) {
+        return { message: 'Class not found', success: false };
       }
 
-      // Fetch modules with classes and their assets for the given course
-      const modules = await this.prisma.courseModule.findMany({
-        where: {
-          course: {
-            enrollments: {
-              some: {
-                IsPaymentCompleted: true,
-                step: 'COMPLETED',
-                user_id: userId,
-              },
-            },
-          },
-        },
-        orderBy: { createdAt: 'asc' },
+      const assets = await this.prisma.classAsset.findMany({
+        where: { class_id: classId },
         select: {
-          course: {
-            select: {
-              title: true,
-              id: true,
-            },
-          },
           id: true,
-          module_title: true,
-          module_name: true,
-          classes: {
-            orderBy: { start_date: 'asc' },
-            select: {
-              id: true,
-              class_title: true,
-              class_name: true,
-              classAssets: {
-                select: { id: true, asset_type: true, asset_url: true },
-              },
-            },
-          },
+          asset_type: true,
+          asset_url: true,
+          created_at: true,
+          updated_at: true,
         },
       });
 
-      // Helper to extract a filename-like label from URL
       const fileNameFromUrl = (url: string) => {
         try {
           const parts = url.split('?')[0].split('#')[0].split('/');
@@ -1071,51 +1052,37 @@ export class CourseService {
         }
       };
 
-      // Build grouped responses per type
-      const videos = modules.map((m) => ({
-        module_id: m.id,
-        module_title: m.module_title,
-        module_name: m.module_name,
-        assets: m.classes.flatMap((c) =>
-          c.classAssets
-            .filter((a) => a.asset_type === 'VIDEO')
-            .map((a) => ({
-              id: a.id,
-              class_id: c.id,
-              class_title: c.class_title,
-              class_name: c.class_name,
-              course_id: m.course.id,
-              course_title: m.course.title,
-              asset_url: a.asset_url,
-              file_name: fileNameFromUrl(a.asset_url),
-            })),
-        ),
-      }));
+      const videos = assets
+        .filter((a) => a.asset_type === 'VIDEO')
+        .map((a) => {
+          return {
+            id: a.id,
+            asset_url: a.asset_url,
+            file_name: fileNameFromUrl(a.asset_url),
+          };
+        });
 
-      const pdfs = modules.map((m) => ({
-        module_id: m.id,
-        module_title: m.module_title,
-        module_name: m.module_name,
-        assets: m.classes.flatMap((c) =>
-          c.classAssets
-            .filter((a) => a.asset_type === 'FILE')
-            .map((a) => ({
-              id: a.id,
-              class_id: c.id,
-              class_title: c.class_title,
-              class_name: c.class_name,
-              course_id: m.course.id,
-              course_title: m.course.title,
-              asset_url: a.asset_url,
-              file_name: fileNameFromUrl(a.asset_url),
-            })),
-        ),
-      }));
+      const files = assets
+        .filter((a) => a.asset_type === 'FILE')
+        .map((a) => {
+          return {
+            id: a.id,
+            asset_url: a.asset_url,
+            file_name: fileNameFromUrl(a.asset_url),
+          };
+        });
 
-      return { success: true, data: { videos, pdfs } };
+      return {
+        message: 'Class assets fetched successfully',
+        success: true,
+        data: {
+          videos,
+          files,
+        },
+      };
     } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching course assets');
+      console.error('Error fetching class assets:', error);
+      throw new Error('Could not fetch class assets');
     }
   }
 }
