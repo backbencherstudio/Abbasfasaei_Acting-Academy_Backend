@@ -82,7 +82,7 @@ export class InstructorsService {
           avatar: t.avatar
             ? t.avatar.startsWith('http')
               ? t.avatar
-              : SazedStorage.url(appConfig().storageUrl.avatar + t.avatar)
+              : SazedStorage.url(`${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(t.avatar).replace(/^\/+/, '')}`)
             : null,
           status: t.status == UserStatus.ACTIVE ? 'ACTIVE' : 'INACTIVE',
           class_count: _count.Course,
@@ -389,9 +389,11 @@ export class InstructorsService {
       data: {
         ...teacherDetails,
         avatar: teacherDetails?.avatar
-          ? SazedStorage.url(
-              appConfig().storageUrl.avatar + teacherDetails.avatar,
-            )
+          ? teacherDetails.avatar.startsWith('http')
+            ? teacherDetails.avatar
+            : SazedStorage.url(
+                `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(teacherDetails.avatar).replace(/^\/+/, '')}`,
+              )
           : null,
         status:
           teacherDetails.status == UserStatus.ACTIVE ? 'ACTIVE' : 'INACTIVE',

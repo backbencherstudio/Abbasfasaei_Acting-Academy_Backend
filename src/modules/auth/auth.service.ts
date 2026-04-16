@@ -165,7 +165,7 @@ export class AuthService {
           if (oldImage?.avatar) {
             try {
               await SazedStorage.delete(
-                appConfig().storageUrl.avatar + oldImage.avatar,
+                `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(oldImage.avatar).replace(/^\/+/, '')}`,
               );
             } catch (e) {
               console.warn('Failed to delete old avatar:', e?.message || e);

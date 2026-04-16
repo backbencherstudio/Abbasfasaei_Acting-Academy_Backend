@@ -26,7 +26,9 @@ export class MessagesService {
     if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
       return avatar;
     }
-    return SazedStorage.url(appConfig().storageUrl.avatar + avatar);
+    const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
+    const name = avatar.replace(/^\/+/, '');
+    return SazedStorage.url(`${base}/${name}`);
   }
 
   /**

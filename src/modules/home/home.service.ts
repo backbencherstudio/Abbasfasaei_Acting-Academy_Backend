@@ -254,12 +254,13 @@ export class HomeService {
     const now = new Date();
     if (enrollment?.IsPaymentCompleted) {
       const [rawClasses, rawAssignments, rawEvents] = await Promise.all([
-        // Upcoming Classes
+        // Upcoming Classes (strictly in the future)
         this.prisma.moduleClass.findFirst({
           where: {
             start_date: { gt: now },
             module: {
               course: {
+                status: 'ACTIVE',
                 enrollments: {
                   some: {
                     user_id: userId,
@@ -303,7 +304,7 @@ export class HomeService {
           orderBy: { start_date: 'asc' },
         }),
 
-        // Upcoming Assignments
+        // Upcoming Assignments (future due date AND not yet submitted)
         this.prisma.assignment.findFirst({
           where: {
             due_date: { gt: now },
@@ -316,6 +317,7 @@ export class HomeService {
             moduleClass: {
               module: {
                 course: {
+                  status: 'ACTIVE',
                   enrollments: {
                     some: {
                       user_id: userId,
@@ -354,7 +356,7 @@ export class HomeService {
           orderBy: { due_date: 'asc' },
         }),
 
-        // Upcoming Events
+        // Upcoming Events (strictly in the future, next one only)
         this.prisma.event.findFirst({
           where: {
             date: { gt: now },
@@ -434,26 +436,57 @@ export class HomeService {
         upcomingEvents,
       };
     } else {
-      const rawCourse = await this.prisma.course.findFirst({
-        where: {
-          start_date: { gt: now },
-        },
-        select: {
-          id: true,
-          title: true,
-          fee: true,
-          duration: true,
-          start_date: true,
-          class_time: true,
-          seat_capacity: true,
-          instructor: {
-            select: {
-              name: true,
+      const [rawCourse, rawEvents] = await Promise.all([
+        this.prisma.course.findFirst({
+          where: {
+            start_date: { gt: now },
+            status: 'ACTIVE',
+          },
+          select: {
+            id: true,
+            title: true,
+            fee: true,
+            duration: true,
+            start_date: true,
+            class_time: true,
+            seat_capacity: true,
+            instructor: {
+              select: {
+                name: true,
+              },
             },
           },
-        },
-        orderBy: { start_date: 'asc' },
-      });
+          orderBy: { start_date: 'asc' },
+        }),
+        // Upcoming Events for non-paid/new users (strictly in the future, next one only)
+        this.prisma.event.findFirst({
+          where: {
+            date: { gt: now },
+          },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            overview: true,
+            date: true,
+            time: true,
+            location: true,
+            amount: true,
+            creator: {
+              select: {
+                name: true,
+              },
+            },
+            members: {
+              where: { user_id: userId },
+              select: {
+                user_id: true,
+              },
+            },
+          },
+          orderBy: { date: 'asc' },
+        }),
+      ]);
 
       const upcomingCourse = rawCourse
         ? {
@@ -468,9 +501,25 @@ export class HomeService {
           }
         : null;
 
+      const upcomingEvents = rawEvents
+        ? {
+            id: rawEvents.id,
+            name: rawEvents.name,
+            description: rawEvents.description,
+            overview: rawEvents.overview,
+            date: rawEvents.date,
+            time: rawEvents.time,
+            location: rawEvents.location,
+            amount: rawEvents.amount,
+            creator_name: rawEvents.creator?.name,
+            is_member: rawEvents.members.length > 0,
+          }
+        : null;
+
       return {
         userProfile,
         upcomingCourse,
+        upcomingEvents,
       };
     }
   }

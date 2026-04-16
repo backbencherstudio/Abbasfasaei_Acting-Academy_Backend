@@ -114,9 +114,12 @@ export class UserService {
 
       // add avatar url to user
       if (user.avatar) {
-        user['avatar_url'] = SazedStorage.url(
-          appConfig().storageUrl.avatar + user.avatar,
-        );
+        if (/^https?:\/\//i.test(user.avatar)) {
+          user['avatar_url'] = user.avatar;
+        } else {
+          const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
+          user['avatar_url'] = SazedStorage.url(`${base}/${String(user.avatar).replace(/^\/+/, '')}`);
+        }
       }
 
       if (!user) {

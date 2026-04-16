@@ -59,18 +59,18 @@ export class CommunityService {
 
       if (body.mediaType === 'PHOTO') {
         await SazedStorage.put(
-          appConfig().storageUrl.communityPhoto + `/${filename}`,
+          `${appConfig().storageUrl.communityPhoto.replace(/\/+$/, '')}/${filename}`,
           file.buffer,
         );
 
-        mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.communityPhoto}/${filename}`;
+        mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}/${appConfig().storageUrl.communityPhoto.replace(/^\/+/, '')}/${filename}`;
       } else if (body.mediaType === 'VIDEO') {
         await SazedStorage.put(
-          appConfig().storageUrl.communityVideo + `/${filename}`,
+          `${appConfig().storageUrl.communityVideo.replace(/\/+$/, '')}/${filename}`,
           file.buffer,
         );
 
-        mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.communityVideo}/${filename}`;
+        mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}/${appConfig().storageUrl.communityVideo.replace(/^\/+/, '')}/${filename}`;
       }
     }
 
@@ -179,16 +179,16 @@ export class CommunityService {
 
           if (mediaType === 'PHOTO') {
             await SazedStorage.put(
-              appConfig().storageUrl.communityPhoto + `/${filename}`,
+              `${appConfig().storageUrl.communityPhoto.replace(/\/+$/, '')}/${filename}`,
               file.buffer,
             );
-            mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.communityPhoto}/${filename}`;
+            mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}/${appConfig().storageUrl.communityPhoto.replace(/^\/+/, '')}/${filename}`;
           } else if (mediaType === 'VIDEO') {
             await SazedStorage.put(
-              appConfig().storageUrl.communityVideo + `/${filename}`,
+              `${appConfig().storageUrl.communityVideo.replace(/\/+$/, '')}/${filename}`,
               file.buffer,
             );
-            mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${appConfig().storageUrl.communityVideo}/${filename}`;
+            mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}/${appConfig().storageUrl.communityVideo.replace(/^\/+/, '')}/${filename}`;
           }
         }
       }
@@ -710,7 +710,7 @@ export class CommunityService {
         oldUrl?: string,
       ) => {
         const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
-        const path = appConfig().storageUrl.avatar + `/${filename}`;
+        const path = `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${filename}`;
 
         await SazedStorage.put(path, file.buffer);
         data[field] =

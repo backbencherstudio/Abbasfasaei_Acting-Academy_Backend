@@ -68,15 +68,23 @@ export class NotificationService {
       if (notifications.length > 0) {
         for (const notification of notifications) {
           if (notification.sender && notification.sender.avatar) {
-            notification.sender['avatar_url'] = SazedStorage.url(
-              appConfig().storageUrl.avatar + notification.sender.avatar,
-            );
+            const sAvatar = String(notification.sender.avatar);
+            if (/^https?:\/\//i.test(sAvatar)) {
+              notification.sender['avatar_url'] = sAvatar;
+            } else {
+              const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
+              notification.sender['avatar_url'] = SazedStorage.url(`${base}/${sAvatar.replace(/^\/+/, '')}`);
+            }
           }
 
           if (notification.receiver && notification.receiver.avatar) {
-            notification.receiver['avatar_url'] = SazedStorage.url(
-              appConfig().storageUrl.avatar + notification.receiver.avatar,
-            );
+            const rAvatar = String(notification.receiver.avatar);
+            if (/^https?:\/\//i.test(rAvatar)) {
+              notification.receiver['avatar_url'] = rAvatar;
+            } else {
+              const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
+              notification.receiver['avatar_url'] = SazedStorage.url(`${base}/${rAvatar.replace(/^\/+/, '')}`);
+            }
           }
         }
       }
