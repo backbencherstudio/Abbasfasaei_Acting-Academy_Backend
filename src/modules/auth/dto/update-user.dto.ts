@@ -1,6 +1,7 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { CreateUserDto } from './create-user.dto';
 import { IsOptional } from 'class-validator';
+import { ExperienceLevel } from '@prisma/client';
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {
   @IsOptional()
@@ -29,7 +30,7 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
     description: 'Experience Level',
     example: 'Intermediate',
   })
-  experience_level?: string;
+  experience_level?: ExperienceLevel = ExperienceLevel.BEGINNER;
 
   @IsOptional()
   @ApiProperty({
