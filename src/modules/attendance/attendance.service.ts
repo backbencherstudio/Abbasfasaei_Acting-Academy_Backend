@@ -1,4 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 
@@ -9,6 +15,15 @@ export class AttendanceService {
 
   async qrscanner(token: string, userId: string) {
     try {
+        const normalizedToken = (token || '').trim();
+        if (!normalizedToken) {
+          throw new BadRequestException('QR token is required');
+        }
+
+        if (!userId) {
+          throw new BadRequestException('User ID is required');
+        }
+
       const now = new Date();
 
       // FIRST: Check if the user is actually a student
@@ -26,7 +41,7 @@ export class AttendanceService {
       });
 
       if (!user) {
-        throw new Error('User not found');
+        throw new NotFoundException('User not found');
       }
 
       // Check if user has student role
@@ -38,13 +53,15 @@ export class AttendanceService {
       );
 
       if (!isStudent) {
-        throw new Error('Only students can mark attendance via QR code');
+        throw new ForbiddenException(
+          'Only students can mark attendance via QR code',
+        );
       }
 
       // THEN: Verify QR session is valid and active (THIS IS WHERE TOKEN IS USED)
       const qrSession = await this.prisma.qRAttendanceSession.findFirst({
         where: {
-          token,
+          token: normalizedToken,
           expires_at: { gt: now },
           is_active: true,
         },
@@ -54,7 +71,7 @@ export class AttendanceService {
       });
 
       if (!qrSession) {
-        throw new Error('QR code is invalid or expired');
+        throw new BadRequestException('QR code is invalid or expired');
       }
 
       const enrollment = await this.prisma.enrollment.findFirst({
@@ -75,39 +92,20 @@ export class AttendanceService {
       });
 
       if (!enrollment) {
-        throw new Error('You are not enrolled in this course');
+        throw new ForbiddenException('You are not enrolled in this course');
       }
-
-      // Check if student already marked attendance for this class today
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
 
       const existingAttendance = await this.prisma.attendance.findFirst({
         where: {
           class_id: qrSession.class_id,
           student_id: userId,
-          created_at: {
-            gte: today,
-            lt: tomorrow,
-          },
         },
       });
 
       if (existingAttendance) {
-        // Update existing attendance if already marked
-        const updatedAttendance = await this.prisma.attendance.update({
-          where: { id: existingAttendance.id },
-          data: {
-            status: 'PRESENT',
-            attended_at: now,
-            attendance_by: 'QR',
-            updated_at: now,
-          },
-        });
-
-        return updatedAttendance;
+        throw new ConflictException(
+          'Attendance already marked for this class',
+        );
       }
 
       // Create new attendance record
@@ -121,9 +119,13 @@ export class AttendanceService {
         },
       });
 
-      return attendance;
+      return {
+        success: true,
+        message: 'Attendance marked successfully',
+        data: attendance,
+      };
     } catch (error) {
-      throw new Error(`Error marking attendance: ${error.message}`);
+      throw error;
     }
   }
 }

@@ -21,23 +21,6 @@ export class AttendanceController {
     @Body()
     body: any,
   ) {
-    try {
-      const token = body.token;
-      const attendance = await this.attendanceService.qrscanner(
-        token,
-        user.userId,
-      );
-
-      return {
-        success: true,
-        message: 'Attendance marked successfully',
-        data: attendance,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
+    return this.attendanceService.qrscanner(body?.token, user.userId);
   }
 }

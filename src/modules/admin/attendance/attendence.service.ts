@@ -1,44 +1,204 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import * as crypto from 'crypto';
 import * as QRCode from 'qrcode';
+import { AttendanceStatus } from '@prisma/client';
 
 @Injectable()
 export class AttendanceService {
   constructor(private prisma: PrismaService) {}
 
-  async getAllAttendance(status?: string, date?: string) {
-    const whereClause: any = {}; // Initial empty where clause
+  async getAllAttendance(query?: {
+    status?: string;
+    date?: string;
+    classId?: string;
+    courseId?: string;
+    page?: string;
+    limit?: string;
+  }) {
+    const whereClause: any = {};
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query?.limit) || 10));
+    const skip = (page - 1) * limit;
 
-    if (status) {
-      whereClause.status = status; // Filter by status if provided
+    if (query?.status) {
+      const normalizedStatus = String(query.status).toUpperCase();
+      const allowedStatuses = Object.values(AttendanceStatus);
+      if (!allowedStatuses.includes(normalizedStatus as AttendanceStatus)) {
+        return {
+          success: false,
+          message: `Invalid status filter. Allowed values: ${allowedStatuses.join(', ')}`,
+        };
+      }
+      whereClause.status = normalizedStatus as AttendanceStatus;
     }
 
-    if (date) {
-      const parsedDate = new Date(date);
+    if (query?.date) {
+      const parsedDate = new Date(query.date);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return {
+          success: false,
+          message: 'Invalid date filter',
+        };
+      }
       const year = parsedDate.getFullYear();
       const month = parsedDate.getMonth();
 
-      // Filter by month and year in attended_at field
       whereClause.attended_at = {
-        gte: new Date(year, month, 1), // Start of the month
-        lt: new Date(year, month + 1, 1), // Start of next month (exclusive)
+        gte: new Date(year, month, 1),
+        lt: new Date(year, month + 1, 1),
       };
     }
 
-    // Fetch the filtered attendance records from Prisma
-    const filteredAttendance = await this.prisma.attendance.findMany({
-      where: whereClause,
-    });
+    if (query?.classId) {
+      const moduleClass = await this.prisma.moduleClass.findUnique({
+        where: { id: query.classId },
+        select: { id: true },
+      });
+
+      if (!moduleClass) {
+        return {
+          success: false,
+          message: 'Class not found',
+        };
+      }
+
+      whereClause.class_id = query.classId;
+    }
+
+    if (query?.courseId) {
+      const course = await this.prisma.course.findUnique({
+        where: { id: query.courseId },
+        select: { id: true },
+      });
+
+      if (!course) {
+        return {
+          success: false,
+          message: 'Course not found',
+        };
+      }
+
+      whereClause.class = {
+        module: {
+          courseId: query.courseId,
+        },
+      };
+    }
+
+    const [filteredAttendance, total] = await Promise.all([
+      this.prisma.attendance.findMany({
+        where: whereClause,
+        include: {
+          student: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              email: true,
+              avatar: true,
+            },
+          },
+          class: {
+            select: {
+              id: true,
+              class_title: true,
+              class_time: true,
+              module: {
+                select: {
+                  id: true,
+                  module_title: true,
+                  course: {
+                    select: {
+                      id: true,
+                      title: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { attended_at: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.attendance.count({ where: whereClause }),
+    ]);
 
     return {
       success: true,
       message: 'Attendance fetched successfully',
       data: filteredAttendance,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page * limit < total,
+        hasPrevPage: page > 1,
+      },
     };
   }
 
   async generateClassQR(classId: string, teacherId: string) {
+    if (!classId) {
+      throw new BadRequestException('Class ID is required');
+    }
+
+    if (!teacherId) {
+      throw new BadRequestException('Teacher ID is required');
+    }
+
+    const teacher = await this.prisma.user.findUnique({
+      where: { id: teacherId },
+      select: {
+        id: true,
+        name: true,
+        role_users: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found');
+    }
+
+    const isTeacher = teacher.role_users.some(
+      (roleUser) => roleUser.role?.name?.toUpperCase() === 'TEACHER',
+    );
+
+    if (!isTeacher) {
+      throw new ForbiddenException('Only teachers can generate QR codes');
+    }
+
+    const moduleClass = await this.prisma.moduleClass.findUnique({
+      where: { id: classId },
+      include: {
+        module: {
+          include: {
+            course: true,
+          },
+        },
+      },
+    });
+
+    if (!moduleClass) {
+      throw new NotFoundException('Class not found');
+    }
+
+    if (moduleClass.module.course.instructorId !== teacherId) {
+      throw new ForbiddenException('You are not assigned to this course/class');
+    }
+
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
 
@@ -54,6 +214,7 @@ export class AttendanceService {
       include: {
         class: {
           select: {
+            id: true,
             class_title: true,
             class_time: true,
           },
