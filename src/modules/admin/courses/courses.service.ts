@@ -228,10 +228,17 @@ export class CoursesService {
     if (!course) {
       return { message: 'Course not found', success: false };
     }
+    const total_modules = course._count.modules;
+    const total_enrollments = course._count.enrollments;
+    delete course._count;
     return {
       message: 'Course fetched successfully',
       success: true,
-      data: course,
+      data: {
+        ...course,
+        total_modules,
+        total_enrollments,
+      },
     };
   }
 
