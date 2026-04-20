@@ -5,6 +5,7 @@ import {
   Param,
   Query,
   UseGuards,
+  Body,
 } from '@nestjs/common';
 import { AttendanceService } from './attendence.service';
 import { ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
@@ -56,10 +57,26 @@ export class AttendanceController {
       date?: string;
       classId?: string;
       courseId?: string;
+      search?: string;
       page?: string;
       limit?: string;
     },
   ) {
     return this.attendanceService.getAllAttendance(query);
+  }
+
+  @ApiResponse({ description: 'Mark manual attendance' })
+  @Post('manual')
+  async markManualAttendance(
+    @GetUser() user: any,
+    @Body()
+    body: {
+      classId?: string;
+      studentId?: string;
+      status?: string;
+      attendedAt?: string;
+    },
+  ) {
+    return this.attendanceService.markManualAttendance(body, user?.userId);
   }
 }
