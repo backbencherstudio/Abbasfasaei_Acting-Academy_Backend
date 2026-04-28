@@ -58,6 +58,7 @@ export class EventsService {
           ...member,
           event_amount: event.amount,
           event_date: event.date,
+          event_name: event.name,
         })),
         registeredMembersCount: event.members.length,
       },
