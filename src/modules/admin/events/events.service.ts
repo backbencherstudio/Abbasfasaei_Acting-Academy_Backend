@@ -54,6 +54,11 @@ export class EventsService {
       message: 'Event fetched successfully',
       data: {
         ...event,
+        members: event.members.map((member) => ({
+          ...member,
+          event_amount: event.amount,
+          event_date: event.date,
+        })),
         registeredMembersCount: event.members.length,
       },
     };
