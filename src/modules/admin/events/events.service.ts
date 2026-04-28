@@ -7,8 +7,15 @@ import { updateEventDto } from './dto/updateEventDto';
 export class EventsService {
   constructor(private prisma: PrismaService) {}
 
-  async getAllEvents() {
-    const events = await this.prisma.event.findMany({});
+  async getAllEvents(search: string) {
+    const events = await this.prisma.event.findMany({
+      where: {
+        name: {
+          contains: search,
+          mode: 'insensitive',
+        },
+      },
+    });
 
     return events;
   }
