@@ -25,6 +25,7 @@ export class GetPostsQueryDto extends PaginationDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @Transform(({ value }) => (value ? value : undefined))
   @IsEnum(PostStatus)
   status?: PostStatus;
 
