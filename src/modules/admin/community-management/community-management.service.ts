@@ -43,12 +43,7 @@ export class CommunityManagementService {
 
       if (status) {
         where.status = status;
-      } else {
-        where.status = {
-          not: 'REQUEST',
-        };
       }
-
       if (role) {
         where.author = {
           role_users: {
