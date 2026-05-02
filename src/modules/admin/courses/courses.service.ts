@@ -228,10 +228,17 @@ export class CoursesService {
     if (!course) {
       return { message: 'Course not found', success: false };
     }
+    const total_modules = course._count.modules;
+    const total_enrollments = course._count.enrollments;
+    delete course._count;
     return {
       message: 'Course fetched successfully',
       success: true,
-      data: course,
+      data: {
+        ...course,
+        total_modules,
+        total_enrollments,
+      },
     };
   }
 
@@ -403,15 +410,54 @@ export class CoursesService {
               class_title: true,
               class_name: true,
               createdAt: true,
+              start_date: true,
             },
           },
         },
       });
 
+      const now = new Date();
+
+      // Find the single earliest upcoming class to mark as NEXT_CLASS
+      let nextClassIndex = -1;
+      let earliestFutureDate: Date | null = null;
+
+      modules.forEach((moduleItem, index) => {
+        moduleItem.classes.forEach((classItem, classIndex) => {
+          if (classItem.start_date > now) {
+            if (
+              earliestFutureDate === null ||
+              classItem.start_date < earliestFutureDate
+            ) {
+              earliestFutureDate = classItem.start_date;
+              nextClassIndex = classIndex;
+            }
+          }
+        });
+      });
+
+      const modulesWithStatus = modules.map((moduleItem) => {
+        const classesWithStatus = moduleItem.classes.map((classItem, index) => {
+          let status: string;
+
+          if (classItem.start_date < now) {
+            status = 'COMPLETED';
+          } else if (index === nextClassIndex) {
+            status = 'NEXT_CLASS';
+          } else {
+            status = 'PENDING';
+          }
+
+          return { ...classItem, status };
+        });
+
+        return { ...moduleItem, classes: classesWithStatus };
+      });
+
       return {
         message: 'Modules fetched successfully',
         success: true,
-        data: modules,
+        data: modulesWithStatus,
       };
     } catch (error) {
       console.error('Error fetching modules:', error);
@@ -611,10 +657,42 @@ export class CoursesService {
         return { message: 'No classes found', success: false };
       }
 
+      const now = new Date();
+
+      // Find the single earliest upcoming class to mark as NEXT_CLASS
+      let nextClassIndex = -1;
+      let earliestFutureDate: Date | null = null;
+
+      classes.forEach((classItem, index) => {
+        if (classItem.start_date > now) {
+          if (
+            earliestFutureDate === null ||
+            classItem.start_date < earliestFutureDate
+          ) {
+            earliestFutureDate = classItem.start_date;
+            nextClassIndex = index;
+          }
+        }
+      });
+
+      const classesWithStatus = classes.map((classItem, index) => {
+        let status: string;
+
+        if (classItem.start_date < now) {
+          status = 'COMPLETED';
+        } else if (index === nextClassIndex) {
+          status = 'NEXT_CLASS';
+        } else {
+          status = 'PENDING';
+        }
+
+        return { ...classItem, status };
+      });
+
       return {
         message: 'Classes fetched successfully',
         success: true,
-        data: classes,
+        data: classesWithStatus,
       };
     } catch (error) {
       console.error('Error fetching classes:', error);
@@ -668,6 +746,17 @@ export class CoursesService {
         },
       });
 
+      const now = new Date();
+      let status: string;
+
+      if (existingClass.start_date < now) {
+        status = 'COMPLETED';
+      } else if (existingClass.start_date > now) {
+        status = 'NEXT_CLASS';
+      } else {
+        status = 'ONGOING';
+      }
+
       const formattedClass = {
         id: existingClass.id,
         class_title: existingClass.class_title,
@@ -680,6 +769,7 @@ export class CoursesService {
         createdAt: existingClass.createdAt,
         instructor: existingClass.module?.course?.instructor,
         enrollmentCount: existingClass.module?.course?._count?.enrollments,
+        status: status,
       };
 
       if (!existingClass) {

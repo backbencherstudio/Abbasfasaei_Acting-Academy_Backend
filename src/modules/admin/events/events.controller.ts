@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { EventsService } from './events.service';
 import { ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
@@ -8,43 +17,37 @@ import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { updateEventDto } from './dto/updateEventDto';
 
-
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard )
-
+@UseGuards(JwtAuthGuard)
 @Controller('events')
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
   @ApiResponse({ description: 'Get all teacher' })
   @Get()
-  async getAllEvents() {
-    return this.eventsService.getAllEvents();
+  async getAllEvents(@Query('search') search: string) {
+    return this.eventsService.getAllEvents(search);
   }
 
-  @ApiResponse({ description: "Get Event by Id" })
+  @ApiResponse({ description: 'Get Event by Id' })
   @Get(':id')
-  async getEventById(
-    @Param ('id') id: string) {
+  async getEventById(@Param('id') id: string) {
     return this.eventsService.getEventById(id);
   }
 
-  @ApiResponse({ description : "Add an Event" })
+  @ApiResponse({ description: 'Add an Event' })
   @Post()
-  async addEvent(
-    @GetUser() user: any,
-    @Body() addEventDto : addEventDto
-  ) {
-    return this.eventsService.addEvent(addEventDto, user.userId)
+  async addEvent(@GetUser() user: any, @Body() addEventDto: addEventDto) {
+    return this.eventsService.addEvent(addEventDto, user.userId);
   }
 
-  @ApiResponse({ description : "Edit an Event" })
+  @ApiResponse({ description: 'Edit an Event' })
   @Patch('update/:id')
   async editEvent(
     @GetUser() user: any,
-    @Body() dto : updateEventDto,
-    @Param('id') id : string
+    @Body() dto: updateEventDto,
+    @Param('id') id: string,
   ) {
-    return this.eventsService.editEvent(user.userId, id, dto)
+    return this.eventsService.editEvent(user.userId, id, dto);
   }
 }
