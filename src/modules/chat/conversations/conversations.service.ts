@@ -32,6 +32,26 @@ export class ConversationsService {
     return SazedStorage.url(`${base}/${name}`);
   }
 
+  private async validateExistingUsers(userIds: string[]) {
+    const uniqueIds = Array.from(
+      new Set(userIds.map((id) => String(id || '').trim()).filter(Boolean)),
+    );
+
+    if (uniqueIds.length === 0) {
+      return { validIds: [], invalidIds: [] };
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true },
+    });
+
+    const foundIds = new Set(users.map((user) => user.id));
+    const invalidIds = uniqueIds.filter((id) => !foundIds.has(id));
+
+    return { validIds: uniqueIds.filter((id) => foundIds.has(id)), invalidIds };
+  }
+
   async ensureMember(conversationId: string, userId: string) {
     const m = await this.prisma.membership.findFirst({
       where: { conversationId, userId },
@@ -150,7 +170,27 @@ export class ConversationsService {
       avatarUrl = SazedStorage.url(fileKey);
     }
 
-    const uniqueMembers = Array.from(new Set([currentUserId, ...memberIds]));
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { id: true },
+    });
+
+    if (!currentUser) {
+      throw new BadRequestException('Current user not found');
+    }
+
+    const { validIds, invalidIds } = await this.validateExistingUsers([
+      currentUserId,
+      ...memberIds,
+    ]);
+
+    if (invalidIds.length > 0) {
+      throw new BadRequestException(
+        `Invalid user IDs: ${invalidIds.join(', ')}`,
+      );
+    }
+
+    const uniqueMembers = validIds;
     return this.prisma.conversation.create({
       data: {
         type: ConversationType.GROUP,
@@ -330,7 +370,15 @@ export class ConversationsService {
   ) {
     await this.requireAdmin(conversationId, currentUserId);
 
-    const unique = Array.from(new Set(memberIds));
+    const { validIds, invalidIds } = await this.validateExistingUsers(memberIds);
+
+    if (invalidIds.length > 0) {
+      throw new BadRequestException(
+        `Invalid user IDs: ${invalidIds.join(', ')}`,
+      );
+    }
+
+    const unique = validIds;
 
     const existing = await this.prisma.membership.findMany({
       where: {
