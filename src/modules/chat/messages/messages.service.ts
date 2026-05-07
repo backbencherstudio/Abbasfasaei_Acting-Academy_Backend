@@ -19,7 +19,7 @@ export class MessagesService {
     private prisma: PrismaService,
     private conv: ConversationsService,
     private users: UsersService,
-  ) {}
+  ) { }
 
   private resolveAvatarUrl(avatar?: string | null) {
     if (!avatar) return null;
@@ -39,7 +39,7 @@ export class MessagesService {
     conversationId: string,
     userId: string,
     cursor?: string,
-    take = 500,
+    take = 50,
   ) {
     await this.conv.ensureMember(conversationId, userId);
 
@@ -57,7 +57,7 @@ export class MessagesService {
         deletedAt: null,
         createdAt: { gt: floor }, // hide everything cleared for THIS user
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       include: {

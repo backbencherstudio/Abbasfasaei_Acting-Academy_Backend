@@ -22,11 +22,11 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 @ApiBearerAuth()
 @ApiTags('User')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
 @Controller('admin/user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  @Roles(Role.ADMIN)
   @ApiResponse({ description: 'Create a user' })
   @Post()
   async create(@Body() createUserDto: CreateUserDto) {
@@ -41,6 +41,7 @@ export class UserController {
     }
   }
 
+  @Roles(Role.ADMIN, Role.TEACHER)
   @ApiResponse({ description: 'Get all users' })
   @Get()
   async findAll(
@@ -92,7 +93,7 @@ export class UserController {
       };
     }
   }
-
+  @Roles(Role.ADMIN)
   @ApiResponse({ description: 'Get a user by id' })
   @Get(':id')
   async findOne(@Param('id') id: string) {
@@ -106,7 +107,7 @@ export class UserController {
       };
     }
   }
-
+  @Roles(Role.ADMIN)
   @ApiResponse({ description: 'Update a user by id' })
   @Patch(':id')
   async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
@@ -120,7 +121,7 @@ export class UserController {
       };
     }
   }
-
+  @Roles(Role.ADMIN)
   @ApiResponse({ description: 'Delete a user by id' })
   @Delete(':id')
   async remove(@Param('id') id: string) {
