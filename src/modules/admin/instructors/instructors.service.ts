@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import * as bcrypt from 'bcrypt';
@@ -82,7 +82,9 @@ export class InstructorsService {
           avatar: t.avatar
             ? t.avatar.startsWith('http')
               ? t.avatar
-              : SazedStorage.url(`${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(t.avatar).replace(/^\/+/, '')}`)
+              : SazedStorage.url(
+                  `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(t.avatar).replace(/^\/+/, '')}`,
+                )
             : null,
           status: t.status == UserStatus.ACTIVE ? 'ACTIVE' : 'INACTIVE',
           class_count: _count.Course,
@@ -164,27 +166,30 @@ export class InstructorsService {
           },
         });
       } else {
-        teacher = await this.prisma.user.update({
-          where: { id: existingUser.id },
-          data: {
-            type: createTeacherDto.teacherType,
-            experience_level: createTeacherDto.experienceLevel,
-            phone_number: createTeacherDto.phone_number,
-            joined_at: createTeacherDto.joined_at,
-          },
-        });
-        // Ensure the existing user has TEACHER role attached
-        const alreadyTeacher = await this.prisma.roleUser.findFirst({
-          where: {
-            user_id: existingUser.id,
-            role: { name: { equals: 'TEACHER', mode: 'insensitive' } },
-          },
-        });
-        if (!alreadyTeacher) {
-          await this.prisma.roleUser.create({
-            data: { user_id: existingUser.id, role_id: teacherRole.id },
-          });
-        }
+        // teacher = await this.prisma.user.update({
+        //   where: { id: existingUser.id },
+        //   data: {
+        //     type: createTeacherDto.teacherType,
+        //     experience_level: createTeacherDto.experienceLevel,
+        //     phone_number: createTeacherDto.phone_number,
+        //     joined_at: createTeacherDto.joined_at,
+        //   },
+        // });
+        // // Ensure the existing user has TEACHER role attached
+        // const alreadyTeacher = await this.prisma.roleUser.findFirst({
+        //   where: {
+        //     user_id: existingUser.id,
+        //     role: { name: { equals: 'TEACHER', mode: 'insensitive' } },
+        //   },
+        // });
+        // if (!alreadyTeacher) {
+        //   await this.prisma.roleUser.create({
+        //     data: { user_id: existingUser.id, role_id: teacherRole.id },
+        //   });
+        // }
+        throw new BadRequestException(
+          'Teacher already exists with this email or phone number',
+        );
       }
 
       // 5. Check if course already has a different instructor
@@ -215,7 +220,7 @@ export class InstructorsService {
             (courseUpdate ? ' and assigned to course' : '')
           : 'Teacher created successfully' +
             (courseUpdate ? ' and assigned to course' : ''),
-        data: { teacher, course: courseUpdate },
+        // data: { teacher, course: courseUpdate },
       };
     } catch (error) {
       return {

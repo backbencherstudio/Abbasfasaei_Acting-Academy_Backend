@@ -24,7 +24,7 @@ import { UpdateTeacherDto } from './dto/update-teacher.dto';
 //@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('instructors')
 export class InstructorsController {
-  constructor(private readonly instructorsService: InstructorsService) {}
+  constructor(private readonly instructorsService: InstructorsService) { }
 
   @ApiOperation({ summary: 'Get all teachers' })
   @ApiResponse({
@@ -159,7 +159,7 @@ export class InstructorsController {
   async teacherDetails(@Param('id') teacherId: string) {
     try {
       return this.instructorsService.getTeacherDetails(teacherId);
-    } catch (error) {}
+    } catch (error) { }
   }
 
   @ApiOperation({ summary: 'Update a teacher' })
