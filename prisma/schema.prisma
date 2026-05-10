@@ -30,45 +30,38 @@ model Account {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @default(now())
-  joined_at    DateTime?
-  deleted_at   DateTime?
-  status       Int?      @default(1) @db.SmallInt
-  approved_at  DateTime?
-  availability String?
-
-  email       String? @unique
-  username    String? @unique
-  name        String? @db.VarChar(255)
-  first_name  String? @db.VarChar(255)
-  last_name   String? @db.VarChar(255)
-  password    String? @db.VarChar(255)
-  domain      String? @unique
-  avatar      String?
-  cover_image String?
-  about       String?
-
-  phone_number  String?
-  country       String?
-  state         String?
-  city          String?
-  address       String?
-  zip_code      String?
-  gender        String?
-  date_of_birth DateTime? @db.Date
-
-  customer_id       String?
-  type              String?   @default("user")
+  id                String    @id @default(cuid())
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @default(now())
+  deleted_at        DateTime?
+  approved_at       DateTime?
   email_verified_at DateTime?
+  joined_at         DateTime?
+
+  status   Int?    @default(1) @db.SmallInt
+  email    String? @unique
+  username String? @unique
+  name     String? @db.VarChar(255)
+
+  password String? @db.VarChar(255)
+  avatar   String?
+
+  cover_image   String?
+  about         String?
+  phone_number  String?
+  address       String?
+  date_of_birth DateTime? @db.Date
+  experience    String?
+
+  availability Int?
+  customer_id  String?
+
+  type String? @default("user")
 
   is_two_factor_enabled Int?    @default(0)
   two_factor_secret     String?
 
-  lastSeenAt       DateTime?
-  actingGoalsId    String?
-  experience_level ExperienceLevel?
+  last_active_at DateTime?
 
   // Accounts & auth
   accounts Account[]
@@ -107,9 +100,6 @@ model User {
   assignmentGradesAsStudent AssignmentGrade[]      @relation("AssignmentGradeStudent")
   assignmentGradesAsTeacher AssignmentGrade[]      @relation("AssignmentGradeTeacher")
   assignmentsAsTeacher      Assignment[]           @relation("AssignmentTeacher")
-
-  // ActingGoals
-  ActingGoals ActingGoals?
 
   // Events
   createdEvents    Event[]       @relation("EventCreator")
@@ -242,61 +232,6 @@ model Notification {
 
   @@map("notifications")
 }
-
-// -------------------------------------------------------------
-// LEGACY PAYMENT MODELS (COMMENTED OUT FOR MIGRATION)
-// -------------------------------------------------------------
-
-// model UserPayment {
-//   id                String           @id @default(cuid())
-//   enrollmentId      String           @unique
-//   payment_type      PaymentType?
-//   payment_status    PaymentStatus    @default(DUE)
-//   payment_method    String?
-//   account_holder    String?
-//   card_number       String?
-//   card_expiry       String?
-//   card_cvc          String?
-//   provider          String?          @default("STRIPE")
-//   customer_id       String?
-//   payment_method_id String?
-//   card_brand        String?
-//   card_last4        String?
-//   card_exp_month    Int?
-//   card_exp_year     Int?
-//   invoice_url       String?
-//   invoice_sent      Boolean?         @default(false)
-//   amount            Decimal?
-//   currency          String?          @default("USD")
-//   payment_date      DateTime?        @default(now())
-//   transaction_id    String?
-//   user_id           String
-//   enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-//   user              User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
-//   payment_histories PaymentHistory[]
-// 
-//   @@map("enrollment_payments")
-// }
-// 
-// model PaymentHistory {
-//   id             String        @id @default(cuid())
-//   created_at     DateTime      @default(now())
-//   updated_at     DateTime      @default(now())
-//   deleted_at     DateTime?
-//   user_id        String
-//   description    String?
-//   userPaymentId  String?
-//   amount         Decimal?
-//   currency       String?       @default("USD")
-//   payment_date   DateTime?     @default(now())
-//   payment_status PaymentStatus @default(DUE)
-//   payment_type   PaymentType?
-//   transaction_id String?
-//   userPayment    UserPayment?  @relation(fields: [userPaymentId], references: [id], onDelete: Cascade)
-//   user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-// 
-//   @@map("payment_histories")
-// }
 
 model Course {
   id         String   @id @default(cuid())
@@ -483,10 +418,50 @@ enum EnrollmentStep {
 }
 
 enum EnrollmentStatus {
-  ACTIVE
   PENDING
-  ALUMNI
-  RESTRICTED
+  ACTIVE
+  SUSPENDED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum AttachmentType {
+  ID_CARD
+  PASSPORT
+  NATIONAL_CARD
+  RESUME
+  PHOTO
+  RULES_REGULATIONS
+  DIGITAL_CONTRACT
+  OTHER
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  type         AttachmentType
+  file_url     String
+  file_name    String?
+  mime_type    String?
+  size_bytes   Int?
+  enrollment   Enrollment?    @relation(fields: [enrollmentId], references: [id])
+  enrollmentId String?
+}
+
+enum EnrollmentType {
+  FULL_PAYMENT
+  INSTALLMENT
+  MANUAL
+  FREE
+}
+
+enum CourseProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
 }
 
 model Enrollment {
@@ -495,25 +470,26 @@ model Enrollment {
   updated_at DateTime @updatedAt
 
   user_id          String
-  full_name        String
+  name             String
   email            String
   phone            String
   address          String
-  date_of_birth    DateTime?       @db.Date
-  experience_level ExperienceLevel
+  date_of_birth    DateTime
+  experience_level String?
 
-  courseId           String?
-  enrolled_documents Json?
-  status             EnrollmentStatus @default(PENDING)
-  IsPaymentCompleted Boolean          @default(false)
-  actingGoals        ActingGoals?
-  step               EnrollmentStep   @default(FORM_FILLING)
+  course_id              String?
+  attachments            Attachment[]
+  status                 EnrollmentStatus     @default(PENDING)
+  step                   EnrollmentStep       @default(FORM_FILLING)
+  course_progress_status CourseProgressStatus @default(NOT_STARTED)
 
-  course Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  user   User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  is_payment_completed Boolean         @default(false)
+  enrollment_type      EnrollmentType? @default(FULL_PAYMENT)
 
-  digital_contract_signing  DigitalContractSigning?
-  rules_regulations_signing RulesAndRegulationsSigning?
+  course                     Course?                     @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  user                       User                        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  digitalContractSigning     DigitalContractSigning?
+  rulesAndRegulationsSigning RulesAndRegulationsSigning?
 
   @@map("enrollments")
 }
@@ -554,45 +530,8 @@ model DigitalSignature {
   @@map("digital_signatures")
 }
 
-model ActingGoals {
-  id           String      @id @default(cuid())
-  acting_goals String
-  userId       String      @unique
-  enrollmentId String?     @unique
-  enrollment   Enrollment? @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("acting_goals")
-}
-
-// model EnrollmentProfile {
-//   id                String           @id @default(cuid())
-//   enrollmentId      String           @unique
-//   avatar            String?
-//   personal_info     Json?
-//   account_settings  Json?
-//   subscription      Json?
-//   contract_docs     Json?
-//   feedback          Json?
-//   push_notification Json?
-//   support           Json?
-//   address           String
-//   created_at        DateTime         @default(now())
-//   date_of_birth     DateTime?        @db.Date
-//   email             String
-//   enrollment_status EnrollmentStatus @default(PENDING)
-//   experience_level  ExperienceLevel
-//   full_name         String
-//   phone             String
-//   updated_at        DateTime         @default(now()) @updatedAt
-//   enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-// 
-//   @@map("enrollment_profiles")
-// }
-
-//
 //---------------------------------- Community & Social Models -----------------//
-//
+
 enum PostType {
   POST
   POLL
@@ -880,28 +819,6 @@ model EventMember {
   @@unique([event_id, user_id])
   @@map("event_members")
 }
-
-// model EventPayment {
-//   id              String             @id @default(cuid())
-//   created_at      DateTime           @default(now())
-//   updated_at      DateTime           @default(now())
-//   event_id        String
-//   user_id         String
-//   amount          Decimal
-//   currency        String?            @default("USD")
-//   status          EventPaymentStatus @default(PENDING)
-//   transaction_id  String?
-//   payment_method  String?
-//   payment_date    DateTime?
-//   receipt_file    String?
-//   invoice_file    String?
-//   transaction_ref String?
-//   event           Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
-//   user            User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
-// 
-//   @@unique([event_id, user_id])
-//   @@map("event_payments")
-// }
 
 model Faq {
   id         String    @id @default(cuid())
