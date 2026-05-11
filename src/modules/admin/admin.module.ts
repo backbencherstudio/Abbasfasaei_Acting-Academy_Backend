@@ -1,34 +1,21 @@
 import { Module } from '@nestjs/common';
-import { FaqModule } from './faq/faq.module';
-import { ContactModule } from './contact/contact.module';
-import { WebsiteInfoModule } from './website-info/website-info.module';
+import { OverviewModule } from './overview/overview.module';
+import { CourseModule } from './course/course.module';
+import { EventModule } from './event/event.module';
+import { CommunityModule } from './community/community.module';
 import { UserModule } from './user/user.module';
-import { NotificationModule } from './notification/notification.module';
+import { TransactionModule } from './transaction/transaction.module';
 import { SettingsModule } from './settings/settings.module';
-import { StudentManagementModule } from './student-management/student-management.module';
-import { EventsModule } from './events/events.module';
-import { CommunityManagementModule } from './community-management/community-management.module';
-import { AttendenceModule } from './attendance/attendence.module';
-import { DashboardModule } from './dashboard/dashboard.module';
-import { HomeModule } from './home/home.module';
-import { FinanceModule } from './finance/finance.module';
 
 @Module({
   imports: [
-    FaqModule,
-    ContactModule,
-    WebsiteInfoModule,
+    OverviewModule,
+    CourseModule,
+    EventModule,
+    CommunityModule,
     UserModule,
-    NotificationModule,
+    TransactionModule,
     SettingsModule,
-    StudentManagementModule,
-    EventsModule,
-    AttendenceModule,
-    DashboardModule,
-    HomeModule,
-    CommunityManagementModule,
-    AttendenceModule,
-    FinanceModule,
   ],
 })
 export class AdminModule {}

@@ -8,7 +8,9 @@ import {
   Delete,
   UseGuards,
   Query,
-} from '@nestjs/common';
+  UseInterceptors,
+  UploadedFiles,
+   } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -18,11 +20,17 @@ import { Role } from '../../../common/guard/role/role.enum';
 import { Roles } from '../../../common/guard/role/roles.decorator';
 import { RolesGuard } from '../../../common/guard/role/roles.guard';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { CreateTeacherDto } from './dto/create-teacher.dto';
+import { UpdateTeacherDto } from './dto/update-teacher.dto';
+import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { CombinedEnrollmentDto } from './dto/combined-enrollment.dto';
 
 @ApiBearerAuth()
 @ApiTags('User')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('admin/user')
+@Controller()
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
@@ -195,5 +203,103 @@ export class UserController {
         message: error.message,
       };
     }
+  }
+
+  @Get('admin/instructors')
+  async getAllTeachers(
+    @Query()
+    query: {
+      search?: string;
+      status?: 'ACTIVE' | 'INACTIVE';
+      page?: string;
+      limit?: string;
+      teacherId?: string;
+      includeClasses?: string;
+    },
+  ) {
+    return this.userService.getAllTeachers(query);
+  }
+
+  @Post('admin/instructors')
+  async addTeacher(@Body() createTeacherDto: CreateTeacherDto) {
+    return this.userService.addTeacher(createTeacherDto);
+  }
+
+  @Get('admin/instructors/details/:id')
+  async teacherDetails(@Param('id') teacherId: string) {
+    return this.userService.getTeacherDetails(teacherId);
+  }
+
+  @Patch('admin/instructors/update/:id')
+  async updateTeacher(
+    @Param('id') teacherId: string,
+    @Body() updateTeacherDto: UpdateTeacherDto,
+  ) {
+    return this.userService.updateTeacher(teacherId, updateTeacherDto);
+  }
+
+  @Post('admin/student-management/manual-enrollment')
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'rules_signing', maxCount: 1 },
+        { name: 'contract_signing', maxCount: 1 },
+      ],
+      { storage: memoryStorage() },
+    ),
+  )
+  async manualEnrollmentCombined(
+    @GetUser() user: any,
+    @Body() dto: CombinedEnrollmentDto,
+    @UploadedFiles()
+    files: {
+      rules_signing?: Express.Multer.File[];
+      contract_signing?: Express.Multer.File[];
+    },
+  ) {
+    return this.userService.combinedEnrollment(user.userId, dto, files);
+  }
+
+  @Get('admin/student-management/student/:studentId')
+  async getStudentById(@Param('studentId') studentId: string) {
+    return this.userService.getStudentById(studentId);
+  }
+
+  @Get('admin/student-management')
+  async getManagedStudents(
+    @GetUser() user: any,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('experienceLevel') experienceLevel?: string,
+    @Query('paymentStatus') paymentStatus?: string,
+    @Query('courseId') courseId?: string,
+  ) {
+    return this.userService.getManagedStudents(user.userId, {
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      status,
+      experienceLevel,
+      paymentStatus,
+      courseId,
+    });
+  }
+
+  @Patch('admin/student-management/enrollment/:enrollmentId')
+  async updateEnrollmentInfo(
+    @Param('enrollmentId') enrollmentId: string,
+    @Body() updateData: any,
+  ) {
+    return this.userService.updateEnrollmentInfo(enrollmentId, updateData);
+  }
+
+  @Patch('admin/student-management/enrollment/:enrollmentId/restrict')
+  async restrictStudentAccess(
+    @Param('enrollmentId') enrollmentId: string,
+    @Body() updateData: any,
+  ) {
+    return this.userService.restrictStudentAccess(enrollmentId, updateData);
   }
 }

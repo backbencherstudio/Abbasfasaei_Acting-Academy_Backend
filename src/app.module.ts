@@ -19,24 +19,8 @@ import { MailModule } from './mail/mail.module';
 import { ApplicationModule } from './modules/application/application.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { PaymentModule } from './modules/payment/payment.module';
-// import { PaymentModule } from './modules/payment/payment.module';
-// import { PresenceModule } from './modules/chat/presence/presence.module';
-import { UploadsModule } from './modules/chat/uploads/uploads.module';
-import { MessagesModule } from './modules/chat/messages/messages.module';
-import { ConversationsModule } from './modules/chat/conversations/conversations.module';
-import { RealtimeModule } from './modules/chat/realtime/realtime.module';
-import { CommunityModule } from './modules/community/community.module';
-import { EnrollmentModule } from './modules/enrollment/enrollment.module';
-import { CoursesModule } from './modules/admin/courses/courses.module';
-import { StudentManagementModule } from './modules/admin/student-management/student-management.module';
-import { InstructorsModule } from './modules/admin/instructors/instructors.module';
-import { CourseModule } from './modules/course/course.module';
-import { HomeModule } from './modules/home/home.module';
-import { RtcModule } from './modules/chat/rtc/rtc.module';
-import { AttendanceModule } from './modules/attendance/attendance.module';
-import { DashboardModule } from './modules/dashboard/dashboard.module';
-import { FinanceandpaymentsModule } from './modules/financeandpayments/financeandpayments.module';
-import { ProfileModule } from './modules/profile/profile.module';
+import { ChatModule } from './modules/chat/chat.module';
+import { RootNotificationModule } from './modules/notification/notification.module';
 import { UserStatusGuard } from './common/guard/user-status.guard';
 @Module({
   imports: [
@@ -89,24 +73,9 @@ import { UserStatusGuard } from './common/guard/user-status.guard';
     MailModule,
     ApplicationModule,
     AdminModule,
-    RealtimeModule,
-    ConversationsModule,
-    MessagesModule,
-    UploadsModule,
-    // PresenceModule,
+    ChatModule,
+    RootNotificationModule,
     PaymentModule,
-    CommunityModule,
-    EnrollmentModule,
-    CoursesModule,
-    CourseModule,
-    StudentManagementModule,
-    InstructorsModule,
-    HomeModule,
-    RtcModule,
-    AttendanceModule,
-    DashboardModule,
-    FinanceandpaymentsModule,
-    ProfileModule,
   ],
   controllers: [AppController],
   providers: [

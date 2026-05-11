@@ -6,10 +6,18 @@ import { UserRepository } from '../../../common/repository/user/user.repository'
 import appConfig from '../../../config/app.config';
 import { SazedStorage } from '../../../common/lib/Disk/SazedStorage';
 import { DateHelper } from '../../../common/helper/date.helper';
+import { InstructorsService } from './instructors.helper';
+import { StudentManagementService } from './student-management.helper';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  private readonly instructorsService: InstructorsService;
+  private readonly studentManagementService: StudentManagementService;
+
+  constructor(private prisma: PrismaService) {
+    this.instructorsService = new InstructorsService(prisma);
+    this.studentManagementService = new StudentManagementService(prisma);
+  }
 
   async create(createUserDto: CreateUserDto) {
     try {
@@ -380,5 +388,47 @@ export class UserService {
         message: error.message,
       };
     }
+  }
+
+  getAllTeachers(query?: any) {
+    return this.instructorsService.getAllTeachers(query);
+  }
+
+  addTeacher(dto: any) {
+    return this.instructorsService.addTeacher(dto);
+  }
+
+  getTeacherDetails(teacherId: string) {
+    return this.instructorsService.getTeacherDetails(teacherId);
+  }
+
+  updateTeacher(teacherId: string, dto: any) {
+    return this.instructorsService.updateTeacher(teacherId, dto);
+  }
+
+  combinedEnrollment(userId: string, dto: any, files: any) {
+    return this.studentManagementService.combinedEnrollment(userId, dto, files);
+  }
+
+  getStudentById(studentId: string) {
+    return this.studentManagementService.getStudentById(studentId);
+  }
+
+  getManagedStudents(userId: string, query: any) {
+    return this.studentManagementService.getAllStudents(userId, query);
+  }
+
+  updateEnrollmentInfo(enrollmentId: string, updateData: any) {
+    return this.studentManagementService.updateEnrollmentInfo(
+      enrollmentId,
+      updateData,
+    );
+  }
+
+  restrictStudentAccess(enrollmentId: string, updateData: any) {
+    return this.studentManagementService.restrictStudentAccess(
+      enrollmentId,
+      updateData,
+    );
   }
 }

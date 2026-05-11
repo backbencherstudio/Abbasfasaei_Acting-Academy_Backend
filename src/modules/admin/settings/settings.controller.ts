@@ -16,7 +16,7 @@ import { WebsiteSettingsDto } from './dto/websiteUpdate.dto';
 @ApiTags('User')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.TEACHER)
-@Controller('settings')
+@Controller('admin/settings')
 export class SettingsController {
   constructor(private settingsService: SettingsService) {}
 

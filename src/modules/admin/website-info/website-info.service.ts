@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { CreateWebsiteInfoDto } from './dto/create-website-info.dto';
-import { PrismaService } from '../../../prisma/prisma.service';
-import { SazedStorage } from '../../../common/lib/Disk/SazedStorage';
-import appConfig from '../../../config/app.config';
-import { StringHelper } from '../../../common/helper/string.helper';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import appConfig from 'src/config/app.config';
+import { StringHelper } from 'src/common/helper/string.helper';
 
 @Injectable()
 export class WebsiteInfoService {

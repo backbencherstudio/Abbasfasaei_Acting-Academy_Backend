@@ -16,10 +16,10 @@ import { ApiTags } from '@nestjs/swagger';
 import { WebsiteInfoService } from './website-info.service';
 import { CreateWebsiteInfoDto } from './dto/create-website-info.dto';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
-import { Roles } from '../../../common/guard/role/roles.decorator';
-import { RolesGuard } from '../../../common/guard/role/roles.guard';
-import { JwtAuthGuard } from '../../../modules/auth/guards/jwt-auth.guard';
-import { Role } from '../../../common/guard/role/role.enum';
+import { Roles } from 'src/common/guard/role/roles.decorator';
+import { RolesGuard } from 'src/common/guard/role/roles.guard';
+import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { Role } from 'src/common/guard/role/role.enum';
 
 @ApiBearerAuth()
 @ApiTags('Website Info')
