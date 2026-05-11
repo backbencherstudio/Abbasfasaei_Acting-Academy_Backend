@@ -8,17 +8,17 @@ import {
   Post,
   Req,
   Res,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { memoryStorage } from 'multer';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { CreateUserDto } from './dto/create-user.dto';
+import { CreateUserDto, UserLoginDto } from './dto/create-user.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -30,97 +30,33 @@ import { GetUser } from './decorators/get-user.decorator';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
 
   @ApiOperation({ summary: 'Get user details' })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@Req() req: Request) {
-    try {
-      // console.log(req.user);
-      const user_id = req.user.userId;
-
-      const response = await this.authService.me(user_id);
-
-      return response;
-    } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to fetch user details',
-      };
-    }
+  me(@Req() req: Request) {
+    const user_id = req.user.userId;
+    return this.authService.me(user_id);
   }
 
   @ApiOperation({ summary: 'Register a user' })
   @Post('register')
-  async create(@Body() data: CreateUserDto, @Res() res: Response) {
-    try {
-      const { email, password, type } = data;
-
-      if (!email) {
-        return res.status(HttpStatus.BAD_REQUEST).json({
-          success: false,
-          message: 'Email not provided',
-        });
-      }
-      if (!password) {
-        return res.status(HttpStatus.BAD_REQUEST).json({
-          success: false,
-          message: 'Password not provided',
-        });
-      }
-
-      const result = await this.authService.register({ email, password, type });
-
-      if (result.success) {
-        return res.status(HttpStatus.CREATED).json(result);
-      } else if (
-        result.message &&
-        result.message.toLowerCase().includes('email already exist')
-      ) {
-        return res.status(HttpStatus.CONFLICT).json(result);
-      } else {
-        return res.status(HttpStatus.BAD_REQUEST).json(result);
-      }
-    } catch (error) {
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-        success: false,
-        message: error.message,
-      });
-    }
+  create(@Body() createUserDto: CreateUserDto) {
+    return this.authService.register(createUserDto);
   }
 
   // login user
   @ApiOperation({ summary: 'Login user' })
   @UseGuards(LocalAuthGuard)
   @Post('login')
-  async login(@Req() req: Request, @Res() res: Response) {
-    try {
-      // console.log("user", req.user);
-      const user_id = req.user.id;
+  login(@Body() userLoginDto: UserLoginDto, @GetUser() user) {
+    return this.authService.login({
+      userId: user.id,
+      email: user.email,
+    });
 
-      const user_email = req.user.email;
-
-      const response = await this.authService.login({
-        userId: user_id,
-        email: user_email,
-      });
-
-      // store to secure cookies
-      res.cookie('refresh_token', response.authorization.refresh_token, {
-        httpOnly: true,
-        secure: true,
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      });
-
-      res.json(response);
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
   }
 
   @ApiOperation({ summary: 'Refresh token' })
@@ -213,18 +149,28 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Patch('update')
   @UseInterceptors(
-    FileInterceptor('image', {
-      storage: memoryStorage(),
-    }),
+    FileFieldsInterceptor(
+      [
+        { name: 'avatar', maxCount: 1 },
+        { name: 'cover_image', maxCount: 1 },
+      ],
+      {
+        storage: memoryStorage(),
+      },
+    ),
   )
   async updateUser(
     @Req() req: Request,
     @Body() data: UpdateUserDto,
-    @UploadedFile() image: Express.Multer.File,
+    @UploadedFiles()
+    files: {
+      avatar?: Express.Multer.File[];
+      cover_image?: Express.Multer.File[];
+    },
   ) {
     try {
       const user_id = req.user.userId;
-      const response = await this.authService.updateUser(user_id, data, image);
+      const response = await this.authService.updateUser(user_id, data, avatar, cover_image);
       return response;
     } catch (error) {
       return {

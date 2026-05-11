@@ -3,6 +3,7 @@ import { LocalAdapter } from './drivers/LocalAdapter';
 import { DiskOption, DiskType } from './Option';
 import { S3Adapter } from './drivers/S3Adapter';
 import { IStorage } from './drivers/iStorage';
+import { StringHelper } from '../../helper/string.helper';
 
 /**
  * SazedStorage for handling storage (local storage, aws s3 storage)
@@ -60,6 +61,19 @@ export class SazedStorage {
   public static url(key: string): string {
     const disk = this.storageDisk();
     return disk.url(key);
+  }
+
+  /**
+   * generate safe file name
+   * @param originalName
+   * @returns {string}
+   */
+  public static generateFileName(originalName: string): string {
+    const safeName = (originalName || 'file')
+      .trim()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9._-]/g, '');
+    return `${StringHelper.randomString()}_${safeName}`;
   }
 
   public static async isExists(key: string): Promise<boolean> {

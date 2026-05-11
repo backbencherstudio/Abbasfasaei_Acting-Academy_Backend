@@ -34,7 +34,7 @@ import { memoryStorage } from 'multer';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('admin/courses')
 export class CoursesController {
-  constructor(private readonly coursesService: CoursesService) {}
+  constructor(private readonly coursesService: CoursesService) { }
 
   @Roles(Role.ADMIN, Role.TEACHER)
   @Post('attendance/generate-qr/:classId')
@@ -89,6 +89,8 @@ export class CoursesController {
   ) {
     return this.coursesService.markManualAttendance(body, user?.userId);
   }
+
+
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Create a course' })
   @Post()
