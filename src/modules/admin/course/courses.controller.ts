@@ -11,6 +11,9 @@ import {
   UploadedFiles,
   Query,
   BadRequestException,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
 import { CoursesService } from './courses.service';
 import { CreateCourseDto } from './dto/create-course.dto';
@@ -25,9 +28,13 @@ import { Roles } from 'src/common/guard/role/roles.decorator';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { CreateModuleDto } from './dto/create-module.dto';
 import { UpdateModuleDto } from './dto/update-module.dto';
-import { CreateAssignmentDto } from './dto/createAssignmentDto.dto';
+import { CreateAssignmentDto, GradeAssignmentDto } from './dto/create-assignment.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import { GetAllAssignmentQueryDto, GetAllCourseQueryDto } from './dto/query-course.dto';
+import { CreateClassDto } from './dto/create-class.dto';
+import { UpdateClassDto } from './dto/update-class.dto';
+import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 
 @ApiBearerAuth()
 @ApiTags('Courses')
@@ -90,29 +97,36 @@ export class CoursesController {
     return this.coursesService.markManualAttendance(body, user?.userId);
   }
 
-
+  // updated
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Create a course' })
   @Post()
-  async create_course(
+  async createCourse(
     @GetUser() user: any,
     @Body() createCourseDto: CreateCourseDto,
   ) {
-    return this.coursesService.create_course(user.userId, createCourseDto);
+    return this.coursesService.createCourse(user.userId, createCourseDto);
   }
+
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all courses' })
   @Get()
-  getAllCourses(@GetUser() user: any) {
-    return this.coursesService.getAllCourses(user.userId);
+  getAllCourses(@GetUser() user: any, @Query() query: GetAllCourseQueryDto) {
+    return this.coursesService.getAllCourses(user.userId, query);
   }
 
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a course by ID' })
   @Get(':id')
   getCourseById(@GetUser() user: any, @Param('id') id: string) {
     return this.coursesService.getCourseById(user.userId, id);
   }
+
+
+  // updated
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Update a course by ID' })
   @Patch(':id')
@@ -121,9 +135,10 @@ export class CoursesController {
     @Param('id') id: string,
     @Body() updateCourseDto: UpdateCourseDto,
   ) {
-    console.log('course id in controller:', id);
     return this.coursesService.updateCourse(user.userId, id, updateCourseDto);
   }
+
+  // updated
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Delete a course by ID' })
   @Delete(':id')
@@ -132,258 +147,293 @@ export class CoursesController {
   }
 
   //---------------------module---------------------//
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Add a module to a course' })
-  @Post(':courseId/modules')
+  @Post(':course_id/module')
   addModule(
-    @GetUser() user: any,
-    @Param('courseId') courseId: string,
+    @GetUser('userId') user_id: string,
+    @Param('course_id') course_id: string,
     @Body() createModuleDto: CreateModuleDto,
   ) {
     return this.coursesService.addModule(
-      user.userId,
-      courseId,
+      user_id,
+      course_id,
       createModuleDto,
     );
   }
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all modules for a course' })
-  @Get(':courseId/modules')
-  getAllModules(@GetUser() user: any, @Param('courseId') courseId: string) {
-    return this.coursesService.getAllModules(user.userId, courseId);
+  @Get(':course_id/module')
+  getAllModules(@GetUser("user_id") user_id: string, @Param('course_id') course_id: string) {
+    return this.coursesService.getAllModules(user_id, course_id);
   }
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a module by ID' })
-  @Get('modules/:moduleId')
-  getModuleById(@GetUser() user: any, @Param('moduleId') moduleId: string) {
-    return this.coursesService.getModuleById(user.userId, moduleId);
+  @Get('module/:module_id')
+  getModuleById(@GetUser("user_id") user_id: string, @Param('module_id') module_id: string) {
+    return this.coursesService.getModuleById(user_id, module_id);
   }
+
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Update a module by ID' })
-  @Patch('modules/:moduleId')
+  @Patch('module/:module_id')
   updateModule(
-    @GetUser() user: any,
-    @Param('moduleId') moduleId: string,
+    @GetUser('userId') user_id: string,
+    @Param('module_id') module_id: string,
     @Body() updateModuleDto: UpdateModuleDto,
   ) {
     return this.coursesService.updateModule(
-      user.userId,
-      moduleId,
+      user_id,
+      module_id,
       updateModuleDto,
     );
   }
+
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete a module by ID' })
-  @Delete('modules/:moduleId')
-  deleteModule(@GetUser() user: any, @Param('moduleId') moduleId: string) {
-    return this.coursesService.deleteModule(user.userId, moduleId);
+  @Delete('module/:module_id')
+  deleteModule(@GetUser('userId') user_id: string, @Param('module_id') module_id: string) {
+    return this.coursesService.deleteModule(user_id, module_id);
   }
 
   //---------------------classes---------------------//
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Add a class to a module' })
-  @Post('modules/:moduleId/classes')
+  @Post('module/:module_id/class')
   addClass(
-    @GetUser() user: any,
-    @Param('moduleId') moduleId: string,
-    @Body() createClassDto: any,
+    @GetUser('userId') user_id: string,
+    @Param('module_id') module_id: string,
+    @Body() createClassDto: CreateClassDto,
   ) {
-    return this.coursesService.addClass(user.userId, moduleId, createClassDto);
+    return this.coursesService.addClass(user_id, module_id, createClassDto);
   }
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all classes for a module' })
-  @Get('modules/:moduleId/classes')
-  getAllClasses(@GetUser() user: any, @Param('moduleId') moduleId: string) {
-    return this.coursesService.getAllClasses(user.userId, moduleId);
+  @Get('module/:module_id/class')
+  getAllClasses(@GetUser("userId") user_id: string, @Param('module_id') module_id: string) {
+    return this.coursesService.getAllClasses(user_id, module_id);
   }
 
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a class by ID' })
-  @Get('classes/:classId')
-  getClassById(@GetUser() user: any, @Param('classId') classId: string) {
-    return this.coursesService.getClassById(user.userId, classId);
+  @Get('class/:class_id')
+  getClassById(@GetUser('userId') user_id: string, @Param('class_id') class_id: string) {
+    return this.coursesService.getClassById(user_id, class_id);
   }
 
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Update a class by ID' })
-  @Patch('classes/:classId')
+  @Patch('class/:class_id')
   updateClass(
-    @GetUser() user: any,
-    @Param('classId') classId: string,
-    @Body() updateClassDto: any,
+    @GetUser('userId') user_id: string,
+    @Param('class_id') class_id: string,
+    @Body() updateClassDto: UpdateClassDto,
   ) {
-    return this.coursesService.updateClass(
-      user.userId,
-      classId,
-      updateClassDto,
-    );
+    return this.coursesService.updateClass(user_id, class_id, updateClassDto);
   }
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete a class by ID' })
-  @Delete('classes/:classId')
-  deleteClass(@GetUser() user: any, @Param('classId') classId: string) {
-    return this.coursesService.deleteClass(user.userId, classId);
+  @Delete('class/:class_id')
+  deleteClass(@GetUser('userId') user_id: string, @Param('class_id') class_id: string) {
+    return this.coursesService.deleteClass(user_id, class_id);
   }
 
+  // TODO: start and ends class will be create in future
+
   //---------------------------- assignments Management -------------------------------//
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Create an assignment for a class' })
-  @Post('classes/:classId/assignments')
+  @Post('class/:class_id/assignment')
   @UseInterceptors(
-    FilesInterceptor('media', 5, {
+    FilesInterceptor('attachments', 5, {
       storage: memoryStorage(),
     }),
   )
   createAssignment(
-    @GetUser() user: any,
-    @Param('classId') classId: string,
+    @GetUser('userId') user_id: string,
+    @Param('class_id') class_id: string,
     @Body() createAssignmentDto: CreateAssignmentDto,
-    @UploadedFiles() files: Express.Multer.File[],
+    @UploadedFiles() attachments: Express.Multer.File[],
   ) {
     return this.coursesService.createAssignment(
-      user.userId,
-      classId,
+      user_id,
+      class_id,
       createAssignmentDto,
-      files,
+      attachments,
     );
   }
 
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all assignments for a class' })
-  @Get('classes/:classId/assignments')
+  @Get('class/:class_id/assignments')
   async getAllAssignments(
-    @GetUser() user: any,
-    @Param('classId') classId: string,
+    @GetUser('userId') user_id: string,
+    @Param('class_id') class_id: string,
   ) {
-    return this.coursesService.getAllAssignments(user.userId, classId);
-  }
-  @Roles(Role.TEACHER, Role.ADMIN)
-  @ApiOperation({ summary: 'Get an assignment by ID' })
-  @Get('assignments/:assignmentId')
-  async getAssignmentById(
-    @GetUser() user: any,
-    @Param('assignmentId') assignmentId: string,
-  ) {
-    return this.coursesService.getAssignmentById(user.userId, assignmentId);
+    return this.coursesService.getAllAssignments(user_id, class_id);
   }
 
+
+  // updated
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @ApiOperation({ summary: 'Get an assignment by ID' })
+  @Get('assignment/:assignment_id')
+  async getAssignmentById(
+    @GetUser('userId') user_id: string,
+    @Param('assignment_id') assignment_id: string,
+  ) {
+    return this.coursesService.getAssignmentById(user_id, assignment_id);
+  }
+
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Update an assignment by ID' })
-  @Patch('assignments/:assignmentId')
+  @Patch('assignment/:assignment_id')
   @UseInterceptors(
-    FilesInterceptor('media', 5, {
+    FilesInterceptor('attachments', 5, {
       storage: memoryStorage(),
     }),
   )
   async updateAssignment(
-    @GetUser() user: any,
-    @Param('assignmentId') assignmentId: string,
-    @Body() updateAssignmentDto: any,
-    @UploadedFiles() files: Express.Multer.File[],
+    @GetUser('userId') user_id: string,
+    @Param('assignment_id') assignment_id: string,
+    @Body() updateAssignmentDto: UpdateAssignmentDto,
+    @UploadedFiles() attachments: Express.Multer.File[],
   ) {
     return this.coursesService.updateAssignment(
-      user.userId,
-      assignmentId,
+      user_id,
+      assignment_id,
       updateAssignmentDto,
-      files,
+      attachments,
     );
   }
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete an assignment by ID' })
-  @Delete('assignments/:assignmentId')
+  @Delete('assignment/:assignment_id')
   async deleteAssignment(
-    @GetUser() user: any,
-    @Param('assignmentId') assignmentId: string,
+    @GetUser('userId') user_id: string,
+    @Param('assignment_id') assignment_id: string,
   ) {
-    return this.coursesService.deleteAssignment(user.userId, assignmentId);
+    return this.coursesService.deleteAssignment(user_id, assignment_id);
   }
 
   //---------------------------- Assignment Submission Management -------------------------------//
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all submissions for an assignment' })
-  @Get('assignments/:assignmentId/submissions')
+  @Get('assignment/:assignment_id/submissions')
   async getAllAssignmentsSubmissions(
-    @GetUser() user: any,
-    @Param('assignmentId') assignmentId: string,
+    @GetUser('userId') user_id: string,
+    @Param('assignment_id') assignment_id: string,
+    @Query() query: GetAllAssignmentQueryDto,
   ) {
     return this.coursesService.getAllAssignmentsSubmissions(
-      user.userId,
-      assignmentId,
+      user_id,
+      assignment_id,
+      query,
     );
   }
 
-  @Roles(Role.TEACHER, Role.ADMIN)
-  @ApiOperation({ summary: 'Get a submission by ID' })
-  @Get('submissions/:submissionId')
-  async getSubmissionById(
-    @GetUser() user: any,
-    @Param('submissionId') submissionId: string,
-  ) {
-    return this.coursesService.getSubmitedAssignmentById(
-      user.userId,
-      submissionId,
-    );
-  }
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Grade a submission by ID' })
-  @Patch('submissions/:submissionId/grade')
+  @Post('submissions/:submission_id/grade')
   async gradeSubmission(
-    @GetUser() user: any,
-    @Param('submissionId') submissionId: string,
+    @GetUser('userId') user_id: string,
+    @Param('submission_id') submission_id: string,
     @Body()
-    gradeSubmissionDto: {
-      grade?: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
-      feedback: string;
-      grade_number: number;
-    },
+    gradeAssignmentDto: GradeAssignmentDto,
   ) {
     return this.coursesService.gradeSubmission(
-      user.userId,
-      submissionId,
-      gradeSubmissionDto,
+      user_id,
+      submission_id,
+      gradeAssignmentDto,
     );
   }
 
+
+  // ---------------------------- Class Assets Management -------------------------------//
+
+
+
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Upload media files for a class' })
-  @Post('classes/:classId/media')
+  @Post('class/:class_id/assets')
   @UseInterceptors(
-    FilesInterceptor('media', 5, {
+    FilesInterceptor('attachments', 5, {
       storage: memoryStorage(),
     }),
   )
   async uploadClassAsset(
-    @GetUser() user: any,
-    @Param('classId') classId: string,
-    @UploadedFiles() files: Express.Multer.File[],
-    @Query('mediaType') mediaType?: 'PHOTO' | 'VIDEO' | 'FILE',
+    @GetUser('userId') user_id: string,
+    @Param('class_id') class_id: string,
+    @UploadedFiles(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 50 }),
+
+          new FileTypeValidator({
+            fileType: /^(image\/(jpeg|png|gif|webp)|video\/(mp4|quicktime|x-msvideo|x-matroska)|application\/(pdf|msword|vnd.openxmlformats-officedocument.*)|text\/plain)$/,
+          }),
+        ],
+        fileIsRequired: true,
+      }),
+    )
+    attachments: Express.Multer.File[],
   ) {
-    const allowed = ['PHOTO', 'VIDEO', 'FILE'] as const;
-    let mt: (typeof allowed)[number] | undefined = undefined;
-    if (mediaType) {
-      const upper = mediaType.toUpperCase() as (typeof allowed)[number];
-      if (!allowed.includes(upper)) {
-        throw new BadRequestException(
-          `Invalid mediaType. Allowed values are ${allowed.join(', ')}`,
-        );
-      }
-      mt = upper;
-    }
     return this.coursesService.uploadClassAsset(
-      user.userId,
-      classId,
-      files,
-      mt,
+      user_id,
+      class_id,
+      attachments,
     );
   }
 
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all media assets for a class' })
-  @Get('classes/:classId/media')
+  @Get('class/:class_id/assets')
   async getClassAssets(
-    @GetUser() user: any,
-    @Param('classId') classId: string,
+    @GetUser('userId') user_id: string,
+    @Param('class_id') class_id: string,
   ) {
-    return this.coursesService.getClassAssets(user.userId, classId);
+    return this.coursesService.getClassAssets(user_id, class_id);
   }
+
+
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @ApiOperation({ summary: 'Delete a media asset from a class' })
+  @Delete('asset/:asset_id')
+  async deleteClassAsset(
+    @GetUser('userId') user_id: string,
+    @Param('asset_id') asset_id: string,
+  ) {
+    return this.coursesService.deleteClassAsset(user_id, asset_id);
+  }
+
+
 }

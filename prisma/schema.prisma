@@ -121,7 +121,7 @@ model User {
   created_module_classes    ModuleClass[]
   courseModules             CourseModule[]
 
-  created_assignments Assignment[] @relation("creator")
+  created_assignments Assignment[] @relation
   created_courses     Course[]     @relation("creator")
 
   @@map("users")
@@ -252,7 +252,7 @@ model Course {
   seat_capacity       Int          @default(50)
   installment_process String
   class_time          String
-  duration            String
+  duration            Int
   rules_regulations   String
   contract            String
   status              CourseStatus @default(DRAFT)
@@ -289,15 +289,18 @@ model CourseModule {
 
 // updated
 model ModuleClass {
-  id         String    @id @default(cuid())
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now()) @updatedAt
-  start_at   DateTime?
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
+
+  class_at DateTime?
+  start_at DateTime?
+  end_at   DateTime?
 
   class_name     String
   class_title    String
   class_overview String?
-  duration       String?
+  duration       Int?
 
   module_id  String
   creator_id String?
@@ -307,6 +310,7 @@ model ModuleClass {
   attendances  Attendance[]
   qr_sessions  QRAttendanceSession[]
   class_assets Attachment[]
+  assignments  Assignment[]
 
   @@map("module_classes")
 }
@@ -322,8 +326,11 @@ model Assignment {
   submission_date DateTime
   total_marks     Int
 
+  class_id   String
   creator_id String?
-  creator    User?   @relation("creator", fields: [creator_id], references: [id], onDelete: SetNull)
+
+  creator User?       @relation(fields: [creator_id], references: [id], onDelete: SetNull)
+  class   ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
 
   attachments Attachment[]
   submissions AssignmentSubmission[]
@@ -420,12 +427,12 @@ model AssignmentGrade {
 
 // updated
 enum AttachmentType {
-  PHOTO
+  IMAGE
   DOCUMENT
   VIDEO
   RULES_REGULATIONS
   DIGITAL_CONTRACT
-  OTHER
+  FILE
 }
 
 // updated
@@ -434,11 +441,11 @@ model Attachment {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  type       AttachmentType
-  file_url   String
+  type       AttachmentType?
+  file_path  String
   file_name  String?
   mime_type  String?
-  size_bytes Int?
+  size_bytes BigInt?
 
   enrollment_id            String?
   class_id                 String?

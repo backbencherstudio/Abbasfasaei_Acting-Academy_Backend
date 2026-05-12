@@ -1,13 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { CreateModuleDto } from './dto/create-module.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateModuleDto } from './dto/update-module.dto';
-import { StringHelper } from 'src/common/helper/string.helper';
 import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
 import { AttendanceService } from './attendance.helper';
+import { Role } from 'src/common/guard/role/role.enum';
+import { GetAllAssignmentQueryDto, GetAllCourseQueryDto } from './dto/query-course.dto';
+import { CreateClassDto } from './dto/create-class.dto';
+import { UpdateClassDto } from './dto/update-class.dto';
+import { CreateAssignmentDto, GradeAssignmentDto } from './dto/create-assignment.dto';
+import { AttachmentType, Prisma } from '@prisma/client';
 
 @Injectable()
 export class CoursesService {
@@ -29,178 +34,144 @@ export class CoursesService {
     return this.attendanceService.markManualAttendance(body, userId);
   }
 
-  private buildSafeFileName(originalName: string) {
-    const safeName = (originalName || 'file')
-      .toLowerCase()
-      .replace(/[^a-z0-9.\s-_]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-');
 
-    return `${StringHelper.randomString(10)}_${safeName}`;
-  }
-
-  private buildStorageUrl(key: string) {
-    return SazedStorage.url(encodeURI(key));
-  }
-
-  async create_course(adminUserId: string, createCourseDto: CreateCourseDto) {
-    if (!adminUserId) {
-      return { message: 'Unauthorized', success: false };
+  async createCourse(user_id: string, createCourseDto: CreateCourseDto) {
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
     }
 
-    // Ensure the instructor exists and has the TEACHER role via role_users
-    const instructor = await this.prisma.user.findFirst({
+    const { instructor_id, ...courseData } = createCourseDto;
+
+    const instructor = await this.prisma.user.findUnique({
       where: {
-        id: createCourseDto.instructorId,
-        role_users: {
-          some: { role: { name: { equals: 'TEACHER', mode: 'insensitive' } } },
-        },
+        id: instructor_id,
+        type: Role.TEACHER,
       },
     });
 
-    // console.log("instructor:", instructor);
-
     if (!instructor) {
-      return { message: 'Instructor not found', success: false };
+      throw new NotFoundException('Instructor not found');
     }
 
-    const course = await this.prisma.course.create({
+    await this.prisma.course.create({
       data: {
-        ...createCourseDto,
-        createdBy: adminUserId,
-      },
-      select: {
-        id: true,
-        title: true,
-        created_at: true,
-        updated_at: true,
-        status: true,
-        seat_capacity: true,
-        fee: true,
-        duration: true,
-        start_date: true,
-        class_time: true,
-        createdBy: true,
-        course_overview: true,
-        course_module_details: true,
-        installment_process: true,
-        instructor: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone_number: true,
-            status: true,
-            // role removed; if needed, include role_users
-            avatar: true,
-            about: true,
-            customer_id: true,
-          },
+        ...courseData,
+        fee_pence: (+courseData?.fee_pence * 100).toString() || 0,
+        creator: {
+          connect: { id: user_id },
         },
-        modules: true,
-        enrollments: true,
+        instructor: {
+          connect: { id: instructor_id },
+        },
       },
     });
 
     return {
       message: 'Course created successfully',
       success: true,
-      data: course,
     };
   }
 
-  async getAllCourses(userId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  async getAllCourses(user_id: string, query: GetAllCourseQueryDto) {
+    const { status, search, limit = 10, page = 1 } = query;
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
+    }
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-          role_users: {
-            include: {
-              role: true,
-            },
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const where: Prisma.CourseWhereInput = {
+      status,
+      instructor_id: user.type === Role.TEACHER ? user_id : undefined,
+      ...(search && {
+        OR: [
+          { title: { contains: search, mode: 'insensitive' } },
+          { course_overview: { contains: search, mode: 'insensitive' } },
+          { instructor: { name: { contains: search, mode: 'insensitive' } } },
+          { instructor: { email: { contains: search, mode: 'insensitive' } } },
+          { instructor: { phone_number: { contains: search, mode: 'insensitive' } } },
+        ],
+      }),
+    };
+
+
+    const courses = await this.prisma.course.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        seat_capacity: true,
+        fee_pence: true,
+        duration: true,
+        start_date: true,
+        instructor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
           },
         },
-      });
-
-      if (!user) {
-        return { message: 'User not found', success: false };
-      }
-
-      let isTeacher = false;
-      if (user.role_users.some((role) => role.role.name === 'TEACHER')) {
-        isTeacher = true;
-      }
-
-      const courses = await this.prisma.course.findMany({
-        where: {
-          instructorId: isTeacher ? userId : undefined,
-        },
-        select: {
-          id: true,
-          title: true,
-          created_at: true,
-          status: true,
-          seat_capacity: true,
-          fee: true,
-          duration: true,
-          updated_at: true,
-          start_date: true,
-          class_time: true,
-          createdBy: true,
-          instructor: {
-            select: {
-              name: true,
-              email: true,
-              phone_number: true,
-            },
-          },
-          _count: {
-            select: {
-              modules: true,
-              enrollments: {
-                where: {
-                  status: 'ACTIVE',
-                  IsPaymentCompleted: true,
-                  step: 'COMPLETED',
-                },
+        _count: {
+          select: {
+            enrollments: {
+              where: {
+                status: 'ACTIVE',
+                step: 'COMPLETED',
               },
             },
           },
         },
-      });
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+      take: limit,
+      skip: (page - 1) * limit,
+    });
 
-      if (courses.length === 0) {
-        return { message: 'No courses found', success: false, data: [] };
+    const total_courses = await this.prisma.course.count({
+      where,
+    });
+
+    return {
+      message: 'Courses fetched successfully',
+      success: true,
+      data: courses.map((course) => {
+        const total_enrollments = course._count.enrollments;
+        delete course._count;
+        return {
+          ...course,
+          fee: (+course?.fee_pence / 100).toFixed(2) || 0,
+          total_enrollments,
+        };
+      }),
+      meta_data: {
+        page,
+        limit,
+        total: total_courses,
+        search,
+        status
       }
+    };
 
-      // Return the courses
-      return {
-        message: 'Courses fetched successfully',
-        success: true,
-        data: courses.map((course) => {
-          const total_modules = course._count.modules;
-          const total_enrollments = course._count.enrollments;
-          delete course._count;
-          return {
-            ...course,
-            total_modules,
-            total_enrollments,
-          };
-        }),
-      };
-    } catch (error) {
-      console.error('Error fetching courses:', error);
-      throw new Error('Could not fetch courses');
-    }
   }
 
   async getCourseById(userId: string, id: string) {
     if (!userId) {
-      return { message: 'Unauthorized', success: false };
+      throw new UnauthorizedException('Unauthorized');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
     const course = await this.prisma.course.findUnique({
@@ -208,32 +179,26 @@ export class CoursesService {
       select: {
         id: true,
         title: true,
-        created_at: true,
         status: true,
         seat_capacity: true,
-        fee: true,
+        fee_pence: true,
         duration: true,
-        updated_at: true,
         start_date: true,
         class_time: true,
-        createdBy: true,
         course_overview: true,
-        course_module_details: true,
         installment_process: true,
         instructor: {
           select: {
+            id: true,
             name: true,
             email: true,
-            phone_number: true,
           },
         },
         _count: {
           select: {
-            modules: true,
             enrollments: {
               where: {
                 status: 'ACTIVE',
-                IsPaymentCompleted: true,
                 step: 'COMPLETED',
               },
             },
@@ -245,514 +210,457 @@ export class CoursesService {
     if (!course) {
       return { message: 'Course not found', success: false };
     }
-    const total_modules = course._count.modules;
     const total_enrollments = course._count.enrollments;
     delete course._count;
+
+    const course_progress = Math.max(0, Math.min(100, course?.duration ? ((Date.now() - new Date(course.start_date).getTime()) / (Number(course.duration) * 86400000)) * 100 : 0));
     return {
       message: 'Course fetched successfully',
       success: true,
       data: {
         ...course,
-        total_modules,
+        fee: (+course?.fee_pence / 100).toFixed(2) || 0,
         total_enrollments,
+        course_progress,
       },
     };
   }
 
   async updateCourse(
-    userId: string,
+    user_id: string,
     id: string,
     updateCourseDto: UpdateCourseDto,
   ) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
 
-      console.log('course id:', id);
-
-      const course = await this.prisma.course.findUnique({
-        where: { id: id },
-      });
-
-      console.log('course:', course);
-
-      if (!course) {
-        return { message: 'Course not found', success: false };
-      }
-
-      const updatedCourse = await this.prisma.course.update({
-        where: { id: id },
-        data: {
-          title: updateCourseDto.title ?? course.title,
-          updated_at: new Date(),
-          seat_capacity:
-            updateCourseDto.seat_capacity !== undefined
-              ? updateCourseDto.seat_capacity
-              : course.seat_capacity,
-          fee:
-            updateCourseDto.fee !== undefined
-              ? parseFloat(updateCourseDto.fee.toString())
-              : course.fee,
-          duration: updateCourseDto.duration ?? course.duration,
-          class_time: updateCourseDto.class_time ?? course.class_time,
-          start_date: updateCourseDto.start_date
-            ? new Date(updateCourseDto.start_date)
-            : course.start_date,
-          instructorId:
-            updateCourseDto.instructorId !== undefined
-              ? updateCourseDto.instructorId
-              : course.instructorId,
-        },
-      });
-
-      return {
-        message: 'Course updated successfully',
-        success: true,
-        data: updatedCourse,
-      };
-    } catch (error) {
-      console.error('Error updating course:', error);
-      throw new Error('Could not update course');
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
     }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const course = await this.prisma.course.findUnique({
+      where: { id: id },
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+    if (updateCourseDto.instructor_id) {
+      const instructor = await this.prisma.user.findUnique({
+        where: { id: updateCourseDto.instructor_id },
+      });
+      if (!instructor) {
+        throw new NotFoundException('Instructor not found');
+      }
+    }
+
+    await this.prisma.course.update({
+      where: { id: id },
+      data: {
+        title: updateCourseDto.title ?? course.title,
+        seat_capacity: updateCourseDto.seat_capacity ?? course.seat_capacity,
+        fee_pence: updateCourseDto.fee_pence ? (+updateCourseDto.fee_pence * 100) || 0 : course.fee_pence,
+        duration: updateCourseDto.duration ?? course.duration,
+        class_time: updateCourseDto.class_time ?? course.class_time,
+        start_date: updateCourseDto.start_date ?? course.start_date,
+        instructor_id: updateCourseDto.instructor_id ?? course.instructor_id,
+        course_overview: updateCourseDto.course_overview ?? course.course_overview,
+        installment_process: updateCourseDto.installment_process ?? course.installment_process,
+        rules_regulations: updateCourseDto.rules_regulations ?? course.rules_regulations,
+        contract: updateCourseDto.contract ?? course.contract,
+      },
+    });
+
+    return {
+      message: 'Course updated successfully',
+      success: true,
+    };
+
   }
 
-  async deleteCourse(userId: string, id: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
-
-      const course = await this.prisma.course.findUnique({
-        where: { id: id },
-      });
-
-      if (!course) {
-        return { message: 'Course not found', success: false };
-      }
-
-      await this.prisma.course.delete({
-        where: { id: id },
-      });
-
-      return {
-        message: 'Course deleted successfully',
-        success: true,
-      };
-    } catch (error) {
-      console.error('Error deleting course:', error);
-      throw new Error('Could not delete course');
+  async deleteCourse(user_id: string, id: string) {
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
     }
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const course = await this.prisma.course.findUnique({
+      where: { id: id },
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    await this.prisma.course.delete({
+      where: { id: id },
+    });
+
+    return {
+      message: 'Course deleted successfully',
+      success: true,
+    };
+
   }
 
   //------------------------------- Module Management -------------------------------
 
   async addModule(
-    userId: string,
-    courseId: string,
+    user_id: string,
+    course_id: string,
     createModuleDto: CreateModuleDto,
   ) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
-
-      const course = await this.prisma.course.findUnique({
-        where: { id: courseId },
-      });
-
-      if (!course) {
-        return { message: 'Course not found', success: false };
-      }
-
-      const module = await this.prisma.courseModule.create({
-        data: {
-          module_title: createModuleDto.module_title,
-          module_name: createModuleDto.module_name,
-          module_overview: createModuleDto.module_overview,
-          course: {
-            connect: { id: courseId },
-          },
-        },
-        select: {
-          id: true,
-          module_title: true,
-          module_name: true,
-          module_overview: true,
-          courseId: true,
-          createdAt: true,
-          updatedAt: true,
-          classes: true,
-        },
-      });
-
-      return {
-        message: 'Module added successfully',
-        success: true,
-        data: module,
-      };
-    } catch (error) {
-      console.error('Error adding module:', error);
-      throw new Error('Could not add module');
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
     }
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const course = await this.prisma.course.findUnique({
+      where: { id: course_id },
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    const existing_module = await this.prisma.courseModule.findFirst({
+      where: {
+        course_id: course_id,
+        module_title: createModuleDto.module_title,
+      },
+    });
+    if (existing_module) {
+      throw new ConflictException(`Module with title "${createModuleDto.module_title}" already exists in this course`);
+    }
+
+    const courseModule = await this.prisma.courseModule.create({
+      data: {
+        module_title: createModuleDto.module_title,
+        module_name: createModuleDto.module_name,
+        module_overview: createModuleDto.module_overview,
+        course: {
+          connect: { id: course_id },
+        },
+        creator: {
+          connect: { id: user_id },
+        }
+      },
+    });
+
+    if (!courseModule) {
+      throw new Error('Failed to add module');
+    }
+
+    return {
+      message: 'Module added successfully',
+      success: true,
+    };
+
   }
 
-  async getAllModules(userId: string, courseId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  async getAllModules(user_id: string, course_id: string) {
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
 
-      const course = await this.prisma.course.findUnique({
-        where: { id: courseId },
-      });
+    const user = await this.prisma.user.findUnique({ where: { id: user_id } });
+    if (!user) throw new NotFoundException('User not found');
 
-      if (!course) {
-        return { message: 'Course not found', success: false };
-      }
+    const course = await this.prisma.course.findUnique({ where: { id: course_id } });
+    if (!course) throw new NotFoundException('Course not found');
 
-      const modules = await this.prisma.courseModule.findMany({
-        where: { courseId: courseId },
-        select: {
-          id: true,
-          module_title: true,
-          module_name: true,
-          module_overview: true,
-          courseId: true,
-          createdAt: true,
-
-          classes: {
-            select: {
-              id: true,
-              class_title: true,
-              class_name: true,
-              createdAt: true,
-              start_date: true,
-            },
+    const modules = await this.prisma.courseModule.findMany({
+      where: { course_id: course_id },
+      select: {
+        id: true,
+        module_title: true,
+        module_name: true,
+        module_overview: true,
+        course_id: true,
+        classes: {
+          select: {
+            id: true,
+            class_title: true,
+            class_name: true,
+            start_at: true,
+            end_at: true,
           },
+          orderBy: { created_at: 'asc' },
         },
-      });
+      },
+      orderBy: { created_at: 'asc' },
+    });
 
-      const now = new Date();
+    const now = new Date();
+    const nextClass = modules
+      .flatMap((m) => m.classes)
+      .filter((c) => new Date(c.start_at) > now)
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())[0];
 
-      // Find the single earliest upcoming class to mark as NEXT_CLASS
-      let nextClassIndex = -1;
-      let earliestFutureDate: Date | null = null;
+    return {
+      message: 'Modules fetched successfully',
+      success: true,
+      data: modules.map((moduleItem) => ({
+        ...moduleItem,
+        classes: moduleItem.classes.map((classItem) => {
+          let status = 'PENDING';
+          const startTime = new Date(classItem.start_at);
 
-      modules.forEach((moduleItem, index) => {
-        moduleItem.classes.forEach((classItem, classIndex) => {
-          if (classItem.start_date > now) {
-            if (
-              earliestFutureDate === null ||
-              classItem.start_date < earliestFutureDate
-            ) {
-              earliestFutureDate = classItem.start_date;
-              nextClassIndex = classIndex;
-            }
-          }
-        });
-      });
-
-      const modulesWithStatus = modules.map((moduleItem) => {
-        const classesWithStatus = moduleItem.classes.map((classItem, index) => {
-          let status: string;
-
-          if (classItem.start_date < now) {
+          if (startTime < now) {
             status = 'COMPLETED';
-          } else if (index === nextClassIndex) {
-            status = 'NEXT_CLASS';
-          } else {
-            status = 'PENDING';
+          } else if (nextClass && classItem.id === nextClass.id) {
+            status = 'NEXT';
           }
 
-          return { ...classItem, status };
-        });
-
-        return { ...moduleItem, classes: classesWithStatus };
-      });
-
-      return {
-        message: 'Modules fetched successfully',
-        success: true,
-        data: modulesWithStatus,
-      };
-    } catch (error) {
-      console.error('Error fetching modules:', error);
-      throw new Error('Could not fetch modules');
-    }
+          return {
+            ...classItem,
+            status,
+          };
+        }),
+      })),
+    };
   }
 
-  async getModuleById(userId: string, moduleId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
+  async getModuleById(user_id: string, module_id: string) {
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+    const user = await this.prisma.user.findUnique({ where: { id: user_id } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const courseModule = await this.prisma.courseModule.findUnique({
+      where: { id: module_id },
+      select: {
+        id: true,
+        module_title: true,
+        module_name: true,
+        module_overview: true,
+        course_id: true,
       }
+    });
 
-      const module = await this.prisma.courseModule.findUnique({
-        where: { id: moduleId },
-      });
-
-      if (!module) {
-        return { message: 'Module not found', success: false };
-      }
-
-      return {
-        message: 'Module fetched successfully',
-        success: true,
-        data: module,
-      };
-    } catch (error) {
-      console.error('Error fetching module:', error);
-      throw new Error('Could not fetch module');
+    if (!courseModule) {
+      throw new NotFoundException('Module not found');
     }
+
+    return {
+      message: 'Module fetched successfully',
+      success: true,
+      data: courseModule,
+    };
   }
 
   async updateModule(
-    userId: string,
-    moduleId: string,
+    user_id: string,
+    module_id: string,
     updateModuleDto: UpdateModuleDto,
   ) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
 
-      const module = await this.prisma.courseModule.findUnique({
-        where: { id: moduleId },
-      });
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+    const user = await this.prisma.user.findUnique({ where: { id: user_id } });
+    if (!user) throw new NotFoundException('User not found');
 
-      if (!module) {
-        return { message: 'Module not found', success: false };
-      }
+    const courseModule = await this.prisma.courseModule.findUnique({
+      where: { id: module_id },
+    });
 
-      const updatedModule = await this.prisma.courseModule.update({
-        where: { id: moduleId },
-        data: {
-          module_title:
-            updateModuleDto.module_title !== undefined
-              ? updateModuleDto.module_title
-              : module.module_title,
-          module_name:
-            updateModuleDto.module_name !== undefined
-              ? updateModuleDto.module_name
-              : module.module_name,
-          module_overview:
-            updateModuleDto.module_overview !== undefined
-              ? updateModuleDto.module_overview
-              : module.module_overview,
-        },
-      });
+    if (!courseModule) throw new NotFoundException('Module not found');
 
-      return {
-        message: 'Module updated successfully',
-        success: true,
-        data: updatedModule,
-      };
-    } catch (error) {
-      console.error('Error updating module:', error);
-      throw new Error('Could not update module');
-    }
+    const existing_module = await this.prisma.courseModule.findFirst({
+      where: {
+        course_id: courseModule.course_id,
+        module_title: updateModuleDto.module_title,
+      },
+    });
+    if (existing_module)
+      throw new ConflictException(`Module with title "${updateModuleDto.module_title}" already exists in this course`);
+
+
+    const updatedModule = await this.prisma.courseModule.update({
+      where: { id: module_id },
+      data: {
+        module_title:
+          updateModuleDto.module_title ?? courseModule.module_title,
+        module_name:
+          updateModuleDto.module_name ?? courseModule.module_name,
+        module_overview:
+          updateModuleDto.module_overview ?? courseModule.module_overview,
+      },
+    });
+
+    return {
+      message: 'Module updated successfully',
+      success: true,
+      data: updatedModule,
+    };
+
   }
 
-  async deleteModule(userId: string, moduleId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  async deleteModule(user_id: string, module_id: string) {
 
-      const module = await this.prisma.courseModule.findUnique({
-        where: { id: moduleId },
-      });
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+    const user = await this.prisma.user.findUnique({ where: { id: user_id } });
+    if (!user) throw new NotFoundException('User not found');
 
-      if (!module) {
-        return { message: 'Module not found', success: false };
-      }
+    const courseModule = await this.prisma.courseModule.findUnique({
+      where: { id: module_id },
+    });
 
-      await this.prisma.courseModule.delete({
-        where: { id: moduleId },
-      });
+    if (!courseModule) throw new NotFoundException('Module not found');
 
-      return {
-        message: 'Module deleted successfully',
-        success: true,
-      };
-    } catch (error) {
-      console.error('Error deleting module:', error);
-      throw new Error('Could not delete module');
-    }
+    await this.prisma.courseModule.delete({
+      where: { id: module_id },
+    });
+
+    return {
+      message: 'Module deleted successfully',
+      success: true,
+    };
+
   }
 
   //------------------------------- Class Management -------------------------------
-  async addClass(userId: string, moduleId: string, createClassDto: any) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  async addClass(user_id: string, module_id: string, createClassDto: CreateClassDto) {
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+    const user = await this.prisma.user.findUnique({ where: { id: user_id } });
+    if (!user) throw new NotFoundException('User not found');
 
-      const module = await this.prisma.courseModule.findUnique({
-        where: { id: moduleId },
-      });
+    const courseModule = await this.prisma.courseModule.findUnique({
+      where: { id: module_id },
+    });
 
-      console.log('course module:', module);
+    if (!courseModule) throw new NotFoundException('Module not found');
 
-      if (!module) {
-        return { message: 'Module not found', success: false };
-      }
-
-      const newClass = await this.prisma.moduleClass.create({
-        data: {
-          class_title: createClassDto.class_title,
-          class_name: createClassDto.class_name,
-          class_overview: createClassDto.class_overview,
-          duration: createClassDto.duration,
-          start_date: createClassDto.start_date,
-          class_time: createClassDto.class_time,
-          moduleId: moduleId,
-        },
-        select: {
-          id: true,
-          class_title: true,
-          class_name: true,
-          class_overview: true,
-          duration: true,
-          start_date: true,
-          class_time: true,
-          moduleId: true,
-          createdAt: true,
-          updatedAt: true,
-          attendances: true,
-          assignments: true,
-          classAssets: true,
-        },
-      });
-
-      return {
-        message: 'Class added successfully',
-        success: true,
-        data: newClass,
-      };
-    } catch (error) {
-      console.error('Error adding class:', error);
-      throw new Error('Could not add class');
+    // Combine start_at date with class_time
+    const class_at = new Date(createClassDto.class_date);
+    if (createClassDto.class_time) {
+      const [hours, minutes] = createClassDto.class_time.split(':').map(Number);
+      class_at.setHours(hours, minutes, 0, 0);
     }
+
+    const newClass = await this.prisma.moduleClass.create({
+      data: {
+        class_title: createClassDto.class_title,
+        class_name: createClassDto.class_name,
+        class_overview: createClassDto.class_overview,
+        duration: createClassDto.duration,
+        class_at: class_at,
+        module: { connect: { id: module_id } },
+        creator: { connect: { id: user_id } },
+      }
+    });
+
+    if (!newClass) {
+      throw new InternalServerErrorException('Failed to add class');
+    }
+
+    return {
+      message: 'Class added successfully',
+      success: true,
+    };
   }
 
-  async getAllClasses(userId: string, moduleId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  async getAllClasses(user_id: string, module_id: string) {
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+    const user = await this.prisma.user.findUnique({ where: { id: user_id } });
+    if (!user) throw new NotFoundException('User not found');
 
-      const module = await this.prisma.courseModule.findUnique({
-        where: { id: moduleId },
-      });
+    const courseModule = await this.prisma.courseModule.findUnique({
+      where: { id: module_id },
+    });
 
-      if (!module) {
-        return { message: 'Module not found', success: false };
-      }
+    if (!courseModule) {
+      return { message: 'Module not found', success: false };
+    }
 
-      const classes = await this.prisma.moduleClass.findMany({
-        where: { moduleId: moduleId },
-        select: {
-          id: true,
-          class_title: true,
-          class_name: true,
-          class_overview: true,
-          duration: true,
-          start_date: true,
-          class_time: true,
-          moduleId: true,
-          createdAt: true,
-          updatedAt: true,
-          attendances: true,
-          assignments: true,
-          classAssets: true,
-        },
-      });
+    const classes = await this.prisma.moduleClass.findMany({
+      where: { module_id: module_id },
+      select: {
+        id: true,
+        class_title: true,
+        class_name: true,
+        start_at: true,
+        end_at: true,
+        module_id: true,
+      },
+    });
 
-      if (!classes || classes.length === 0) {
-        return { message: 'No classes found', success: false };
-      }
+    if (!classes || classes.length === 0) {
+      return { message: 'No classes found', success: false };
+    }
 
-      const now = new Date();
+    const now = new Date();
 
-      // Find the single earliest upcoming class to mark as NEXT_CLASS
-      let nextClassIndex = -1;
-      let earliestFutureDate: Date | null = null;
+    const nextClass = classes
+      .filter((c) => new Date(c.start_at) > now)
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())[0];
 
-      classes.forEach((classItem, index) => {
-        if (classItem.start_date > now) {
-          if (
-            earliestFutureDate === null ||
-            classItem.start_date < earliestFutureDate
-          ) {
-            earliestFutureDate = classItem.start_date;
-            nextClassIndex = index;
-          }
-        }
-      });
+    return {
+      message: 'Classes fetched successfully',
+      success: true,
+      data: classes.map((classItem) => {
+        let status = 'PENDING';
+        const startTime = new Date(classItem.start_at);
 
-      const classesWithStatus = classes.map((classItem, index) => {
-        let status: string;
-
-        if (classItem.start_date < now) {
+        if (startTime < now) {
           status = 'COMPLETED';
-        } else if (index === nextClassIndex) {
-          status = 'NEXT_CLASS';
-        } else {
-          status = 'PENDING';
+        } else if (nextClass && classItem.id === nextClass.id) {
+          status = 'NEXT';
         }
 
-        return { ...classItem, status };
-      });
+        return {
+          ...classItem,
+          status,
+        };
+      })
+    };
 
-      return {
-        message: 'Classes fetched successfully',
-        success: true,
-        data: classesWithStatus,
-      };
-    } catch (error) {
-      console.error('Error fetching classes:', error);
-      throw new Error('Could not fetch classes');
-    }
   }
 
-  async getClassById(userId: string, classId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  async getClassById(user_id: string, class_id: string) {
 
-      const existingClass = await this.prisma.moduleClass.findUnique({
-        where: { id: classId },
-        select: {
-          id: true,
-          class_title: true,
-          class_name: true,
-          class_overview: true,
-          duration: true,
-          start_date: true,
-          class_time: true,
-          moduleId: true,
-          createdAt: true,
-          module: {
-            select: {
-              course: {
-                select: {
-                  instructor: {
-                    select: {
-                      name: true,
-                      email: true,
-                    },
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+    const user = await this.prisma.user.findUnique({ where: { id: user_id } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const existingClass = await this.prisma.moduleClass.findUnique({
+      where: { id: class_id },
+      select: {
+        id: true,
+        class_title: true,
+        class_name: true,
+        class_overview: true,
+        duration: true,
+        start_at: true,
+        end_at: true,
+        module_id: true,
+        module: {
+          select: {
+            course: {
+              select: {
+                instructor: {
+                  select: {
+                    name: true,
+                    email: true,
                   },
-                  _count: {
-                    select: {
-                      enrollments: {
-                        where: {
-                          status: 'ACTIVE',
-                          IsPaymentCompleted: true,
-                          step: 'COMPLETED',
-                        },
+                },
+                _count: {
+                  select: {
+                    enrollments: {
+                      where: {
+                        status: 'ACTIVE',
+                        step: 'COMPLETED',
                       },
                     },
                   },
@@ -761,117 +669,125 @@ export class CoursesService {
             },
           },
         },
-      });
+      },
+    });
 
-      const now = new Date();
-      let status: string;
-
-      if (existingClass.start_date < now) {
-        status = 'COMPLETED';
-      } else if (existingClass.start_date > now) {
-        status = 'NEXT_CLASS';
-      } else {
-        status = 'ONGOING';
-      }
-
-      const formattedClass = {
-        id: existingClass.id,
-        class_title: existingClass.class_title,
-        class_name: existingClass.class_name,
-        class_overview: existingClass.class_overview,
-        duration: existingClass.duration,
-        start_date: existingClass.start_date,
-        class_time: existingClass.class_time,
-        moduleId: existingClass.moduleId,
-        createdAt: existingClass.createdAt,
-        instructor: existingClass.module?.course?.instructor,
-        enrollmentCount: existingClass.module?.course?._count?.enrollments,
-        status: status,
-      };
-
-      if (!existingClass) {
-        return { message: 'Class not found', success: false };
-      }
-
-      return {
-        message: 'Class fetched successfully',
-        success: true,
-        data: formattedClass,
-      };
-    } catch (error) {
-      console.error('Error fetching class:', error);
-      throw new Error('Could not fetch class');
+    if (!existingClass) {
+      throw new NotFoundException('Class not found');
     }
+
+    const { module, ...classData } = existingClass;
+
+    // Fetch other classes in the same module to determine if this is the 'NEXT' class
+    const classesInModule = await this.prisma.moduleClass.findMany({
+      where: { module_id: classData.module_id },
+      select: { id: true, start_at: true },
+    });
+
+    const now = new Date();
+    const nextClass = classesInModule
+      .filter((c) => c.start_at && new Date(c.start_at) > now)
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())[0];
+
+    let status = 'PENDING';
+    if (classData.start_at && new Date(classData.start_at) < now) {
+      status = 'COMPLETED';
+    } else if (nextClass && classData.id === nextClass.id) {
+      status = 'NEXT';
+    }
+
+    const formattedClass = {
+      ...classData,
+      instructor: module?.course?.instructor,
+      total_enrollments: module?.course?._count?.enrollments || 0,
+      status: status,
+    };
+
+    return {
+      message: 'Class fetched successfully',
+      success: true,
+      data: formattedClass,
+    };
+
   }
 
-  async deleteClass(userId: string, classId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  async deleteClass(user_id: string, class_id: string) {
 
-      const existingClass = await this.prisma.moduleClass.findUnique({
-        where: { id: classId },
-      });
-
-      if (!existingClass) {
-        return { message: 'Class not found', success: false };
-      }
-
-      await this.prisma.moduleClass.delete({
-        where: { id: classId },
-      });
-
-      return {
-        message: 'Class deleted successfully',
-        success: true,
-      };
-    } catch (error) {
-      console.error('Error deleting class:', error);
-      throw new Error('Could not delete class');
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
     }
+
+    const user = await this.prisma.user.findUnique({ where: { id: user_id } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const existingClass = await this.prisma.moduleClass.findUnique({
+      where: { id: class_id },
+    });
+
+    if (!existingClass) {
+      throw new NotFoundException('Class not found');
+    }
+
+    await this.prisma.moduleClass.delete({
+      where: { id: class_id },
+    });
+
+    return {
+      message: 'Class deleted successfully',
+      success: true,
+    };
   }
 
-  async updateClass(userId: string, classId: string, updateClassDto: any) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  // updated
+  async updateClass(user_id: string, class_id: string, updateClassDto: UpdateClassDto) {
 
-      const existingClass = await this.prisma.moduleClass.findUnique({
-        where: { id: classId },
-      });
-
-      if (!existingClass) {
-        return { message: 'Class not found', success: false };
-      }
-
-      const updatedClass = await this.prisma.moduleClass.update({
-        where: { id: classId },
-        data: {
-          class_title: updateClassDto.class_title || existingClass.class_title,
-          class_name: updateClassDto.class_name || existingClass.class_name,
-          class_overview:
-            updateClassDto.class_overview || existingClass.class_overview,
-          duration: updateClassDto.duration || existingClass.duration,
-          start_date: updateClassDto.start_date || existingClass.start_date,
-          class_time: updateClassDto.class_time || existingClass.class_time,
-        },
-      });
-
-      if (!updatedClass) {
-        return { message: 'Class not found', success: false };
-      }
-
-      return {
-        message: 'Class updated successfully',
-        success: true,
-        data: updatedClass,
-      };
-    } catch (error) {
-      console.error('Error updating class:', error);
-      throw new Error('Could not update class');
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
     }
+    const user = await this.prisma.user.findUnique({ where: { id: user_id } });
+    if (!user) throw new NotFoundException('User not found');
+
+    const existingClass = await this.prisma.moduleClass.findUnique({
+      where: { id: class_id },
+    });
+
+    if (!existingClass) {
+      throw new NotFoundException('Class not found');
+    }
+
+    let newClassDate = new Date(existingClass.class_at);
+
+    if (updateClassDto.class_date) {
+      newClassDate = new Date(updateClassDto.class_date);
+      newClassDate.setHours(existingClass.class_at.getHours(), existingClass.class_at.getMinutes(), 0, 0);
+    }
+    if (updateClassDto.class_time) {
+      const [hours, minutes] = updateClassDto.class_time.split(':').map(Number);
+      newClassDate.setHours(hours, minutes, 0, 0);
+    }
+
+    const updatedClass = await this.prisma.moduleClass.update({
+      where: { id: class_id },
+      data: {
+        class_title: updateClassDto.class_title || existingClass.class_title,
+        class_name: updateClassDto.class_name || existingClass.class_name,
+        class_overview:
+          updateClassDto.class_overview || existingClass.class_overview,
+        duration: updateClassDto.duration || existingClass.duration,
+        class_at: newClassDate,
+      },
+    });
+
+    if (!updatedClass) {
+      throw new InternalServerErrorException('Class not updated');
+    }
+
+    return {
+      message: 'Class updated successfully',
+      success: true,
+      data: updatedClass,
+    };
+
   }
 
   //------------------------------- End of Class Management -------------------------------
@@ -881,196 +797,144 @@ export class CoursesService {
   async createAssignment(
     userId: string,
     classId: string,
-    createAssignmentDto: any,
-    files: Express.Multer.File[],
+    createAssignmentDto: CreateAssignmentDto,
+    attachments: Express.Multer.File[],
   ) {
-    let mediaUrls: string[] = [];
-
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
-
-      const existingClass = await this.prisma.moduleClass.findUnique({
-        where: { id: classId },
-        select: {
-          id: true,
-          module: {
-            select: {
-              course: {
-                select: {
-                  instructorId: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!existingClass) {
-        return { message: 'Class not found', success: false };
-      }
-
-      const submissionDate = new Date(createAssignmentDto.submission_date);
-      const dueDate: Date = createAssignmentDto?.due_date
-        ? new Date(createAssignmentDto.due_date)
-        : submissionDate;
-
-      const teacherId: string =
-        existingClass?.module?.course?.instructorId ?? userId;
-
-      if (files && files.length > 0) {
-        for (const file of files) {
-          const filename = this.buildSafeFileName(file.originalname);
-          const objectKey = `${appConfig().storageUrl.attachment}/${filename}`;
-
-          await SazedStorage.put(objectKey, file.buffer);
-
-          mediaUrls.push(this.buildStorageUrl(objectKey));
-        }
-      }
-
-      const assignment = await this.prisma.assignment.create({
-        data: {
-          title: createAssignmentDto.title,
-          description: createAssignmentDto.description,
-          attachment_url: mediaUrls.length > 0 ? mediaUrls : null,
-          submission_Date: submissionDate,
-          due_date: dueDate,
-          total_marks: parseInt(createAssignmentDto.total_marks),
-          teacher: {
-            connect: { id: teacherId },
-          },
-          moduleClass: {
-            connect: { id: classId },
-          },
-        },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          submission_Date: true,
-          due_date: true,
-          total_marks: true,
-          moduleClass: {
-            select: {
-              id: true,
-              class_title: true,
-              class_name: true,
-            },
-          },
-          teacher: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      });
-
-      if (!assignment) {
-        return { message: 'Assignment not created', success: false };
-      }
-
-      return {
-        message: 'Assignment created successfully',
-        success: true,
-        data: assignment,
-      };
-    } catch (error) {
-      console.error('Error creating assignment:', error);
-      throw new Error('Could not create assignment');
+    if (!userId) {
+      throw new UnauthorizedException('Unauthorized');
     }
+
+    const existingClass = await this.prisma.moduleClass.findUnique({
+      where: { id: classId },
+    });
+
+    if (!existingClass) {
+      throw new NotFoundException('Class not found');
+    }
+
+    const submissionDate = new Date(createAssignmentDto.submission_date);
+    const attachmentsData: Prisma.AttachmentCreateInput[] = [];
+
+    if (attachments && attachments.length > 0) {
+      for (const file of attachments) {
+        const filename = SazedStorage.generateFileName(file.originalname);
+        const objectKey = `${appConfig().storageUrl.assignment}/${filename}`;
+
+        await SazedStorage.put(objectKey, file.buffer);
+
+        attachmentsData.push({
+          file_name: filename,
+          file_path: objectKey,
+          mime_type: file.mimetype,
+          size_bytes: file.size,
+        });
+      }
+    }
+
+    const assignment = await this.prisma.assignment.create({
+      data: {
+        title: createAssignmentDto.title,
+        description: createAssignmentDto.description,
+        submission_date: submissionDate,
+        total_marks: createAssignmentDto.total_marks,
+        creator: {
+          connect: { id: userId },
+        },
+        class: {
+          connect: { id: classId },
+        },
+        attachments: {
+          create: attachmentsData,
+        },
+
+      },
+    });
+
+    if (!assignment) {
+      throw new InternalServerErrorException('Assignment not created');
+    }
+
+    return {
+      message: 'Assignment created successfully',
+      success: true,
+    };
   }
 
-  async getAllAssignments(userId: string, classId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  async getAllAssignments(user_id: string, class_id: string) {
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
 
-      const existingClass = await this.prisma.moduleClass.findUnique({
-        where: { id: classId },
-      });
+    const existingClass = await this.prisma.moduleClass.findUnique({
+      where: { id: class_id },
+    });
 
-      if (!existingClass) {
-        return { message: 'Class not found', success: false };
-      }
+    if (!existingClass) throw new NotFoundException('Class not found');
 
-      const assignments = await this.prisma.assignment.findMany({
-        where: { moduleClassId: classId },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          submission_Date: true,
-          due_date: true,
-          moduleClassId: true,
-          _count: {
-            select: {
-              submissions: true,
-              grades: true,
-            },
+    const assignments = await this.prisma.assignment.findMany({
+      where: { class_id: class_id },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        submission_date: true,
+        _count: {
+          select: {
+            submissions: true,
+            grades: true,
           },
         },
-      });
+      },
+      orderBy: { created_at: 'desc' },
+    });
 
-      const formattedAssignments = assignments.map((assignment) => {
-        const total_submissions = assignment._count.submissions;
-        const total_graded = assignment._count.grades;
-        delete assignment._count;
+    const now = Date.now();
 
-        return {
-          id: assignment.id,
-          title: assignment.title,
-          description: assignment.description,
-          submission_Date: assignment.submission_Date,
-          due_date: assignment.due_date,
-          class_id: assignment.moduleClassId,
-          submissions: total_submissions,
-          grades: total_graded,
-        };
-      });
+    const data = assignments.map(({ _count, ...assignment }) => {
+      // Due days calculation
+      const submissionDate = new Date(assignment.submission_date).getTime();
+      const diffInTime = submissionDate - now;
+      const due_days = Math.ceil(diffInTime / (1000 * 60 * 60 * 24));
 
       return {
-        message: 'Assignments retrieved successfully',
-        success: true,
-        data: formattedAssignments,
+        ...assignment,
+        due_days: due_days < 0 ? 0 : due_days,
+        submissions: _count.submissions,
+        grades: _count.grades,
       };
-    } catch (error) {
-      console.error('Error retrieving assignments:', error);
-      throw new Error('Could not retrieve assignments');
-    }
+    });
+
+    return {
+      message: 'Assignments retrieved successfully',
+      success: true,
+      data,
+    };
   }
 
-  async getAssignmentById(userId: string, assignmentId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  async getAssignmentById(user_id: string, assignment_id: string) {
+    if (!user_id) {
+      return { message: 'Unauthorized', success: false };
+    }
 
-      const assignment = await this.prisma.assignment.findUnique({
-        where: { id: assignmentId },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          attachment_url: true,
-          submission_Date: true,
-          due_date: true,
-          total_marks: true,
-          moduleClass: {
-            select: {
-              id: true,
-              module: {
-                select: {
-                  course: {
-                    select: {
-                      instructor: {
-                        select: {
-                          id: true,
-                          name: true,
-                        },
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: assignment_id },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        attachments: true,
+        submission_date: true,
+        total_marks: true,
+        class: {
+          select: {
+            id: true,
+            module: {
+              select: {
+                course: {
+                  select: {
+                    instructor: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true,
                       },
                     },
                   },
@@ -1078,380 +942,327 @@ export class CoursesService {
               },
             },
           },
-          _count: {
-            select: {
-              submissions: true,
-              grades: true,
-            },
-          },
-          average_score: true,
         },
-      });
-
-      if (!assignment) {
-        return { message: 'Assignment not found', success: false };
-      }
-
-      return {
-        message: 'Assignment retrieved successfully',
-        success: true,
-        data: {
-          id: assignment.id,
-          title: assignment.title,
-          description: assignment.description,
-          attachment_url: assignment.attachment_url,
-          submission_Date: assignment.submission_Date,
-          due_date: assignment.due_date,
-          total_marks: assignment.total_marks,
-          class_id: assignment.moduleClass.id,
-          instructor: {
-            id: assignment.moduleClass.module.course.instructor.id,
-            name: assignment.moduleClass.module.course.instructor.name,
+        _count: {
+          select: {
+            submissions: true,
+            grades: true,
           },
-          submissions: assignment._count.submissions,
-          grades: assignment._count.grades,
-          average_score: assignment.average_score,
         },
-      };
-    } catch (error) {
-      console.error('Error retrieving assignment:', error);
-      throw new Error('Could not retrieve assignment');
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
     }
+
+    const average_score = await this.prisma.assignmentGrade.aggregate({
+      _avg: {
+        grade_number: true,
+      },
+      where: {
+        assignment_id
+      }
+    });
+
+    return {
+      message: 'Assignment retrieved successfully',
+      success: true,
+      data: {
+        id: assignment.id,
+        title: assignment.title,
+        description: assignment.description,
+        attachments: assignment.attachments.map((attachment) => {
+          return {
+            file_name: attachment.file_name,
+            file_path: attachment.file_path ? SazedStorage.url(attachment.file_path) : null,
+            mime_type: attachment.mime_type,
+          };
+        }),
+        submission_date: assignment.submission_date,
+        total_marks: assignment.total_marks,
+        class_id: assignment.class.id,
+        instructor: {
+          id: assignment.class.module.course.instructor.id,
+          name: assignment.class.module.course.instructor.name,
+        },
+        submissions: assignment._count.submissions,
+        grades: assignment._count.grades,
+        average_score: average_score._avg.grade_number ?? 0,
+      },
+    };
+
   }
 
   async updateAssignment(
-    userId: string,
-    assignmentId: string,
+    user_id: string,
+    assignment_id: string,
     updateAssignmentDto: any,
-    files: Express.Multer.File[],
+    attachments: Express.Multer.File[],
   ) {
-    let mediaUrls: string[] = [];
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
-
-      const assignment = await this.prisma.assignment.findUnique({
-        where: { id: assignmentId },
-      });
-
-      if (!assignment) {
-        return { message: 'Assignment not found', success: false };
-      }
-
-      if (files && files.length > 0) {
-        for (const file of files) {
-          const filename = this.buildSafeFileName(file.originalname);
-          const objectKey = `${appConfig().storageUrl.attachment}/${filename}`;
-          await SazedStorage.put(objectKey, file.buffer);
-
-          mediaUrls.push(this.buildStorageUrl(objectKey));
-        }
-      }
-
-      const updatedAssignment = await this.prisma.assignment.update({
-        where: { id: assignmentId },
-        data: {
-          title: updateAssignmentDto.title || assignment.title,
-          description:
-            updateAssignmentDto.description || assignment.description,
-          attachment_url:
-            mediaUrls.length > 0 ? mediaUrls : assignment.attachment_url,
-          submission_Date:
-            updateAssignmentDto.submission_date || assignment.submission_Date,
-          total_marks:
-            parseInt(updateAssignmentDto.total_marks) || assignment.total_marks,
-          due_date: updateAssignmentDto.submission_date
-            ? new Date(
-                new Date(updateAssignmentDto.submission_date).getTime() -
-                  Date.now(),
-              ).toISOString()
-            : assignment.due_date,
-        },
-      });
-
-      return {
-        message: 'Assignment updated successfully',
-        success: true,
-        data: updatedAssignment,
-      };
-    } catch (error) {
-      console.error('Error updating assignment:', error);
-      throw new Error('Could not update assignment');
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
     }
-  }
+    const attachmentsInput: Prisma.AttachmentCreateInput[] = [];
 
-  async deleteAssignment(userId: string, assignmentId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: assignment_id },
+    });
 
-      const assignment = await this.prisma.assignment.findUnique({
-        where: { id: assignmentId },
-      });
-
-      if (!assignment) {
-        return { message: 'Assignment not found', success: false };
-      }
-
-      await this.prisma.assignment.delete({
-        where: { id: assignmentId },
-      });
-      return {
-        message: 'Assignment deleted successfully',
-        success: true,
-      };
-    } catch (error) {
-      console.error('Error deleting assignment:', error);
-      throw new Error('Could not delete assignment');
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
     }
-  }
 
-  async getAllAssignmentsSubmissions(userId: string, assignmentId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
+    if (attachments && attachments.length > 0) {
+      for (const file of attachments) {
+        const filename = SazedStorage.generateFileName(file.originalname);
+        const objectKey = `${appConfig().storageUrl.assignment}/${filename}`;
+        await SazedStorage.put(objectKey, file.buffer);
+
+        attachmentsInput.push({
+          file_name: filename,
+          file_path: objectKey,
+          mime_type: file.mimetype,
+          size_bytes: file.size,
+        });
       }
+    }
 
-      const assignment = await this.prisma.assignment.findUnique({
-        where: { id: assignmentId },
-      });
-
-      if (!assignment) {
-        return { message: 'Assignment not found', success: false };
-      }
-
-      const submissions = await this.prisma.assignmentSubmission.findMany({
-        where: { assignmentId: assignmentId },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          submittedAt: true,
-          fileUrl: true,
-
-          assignmentId: true,
-
-          grade: {
-            select: {
-              id: true,
-              gradedAt: true,
-              feedback: true,
-              gradedBy: true,
-              grade: true,
-              grade_number: true,
+    const updatedAssignment = await this.prisma.assignment.update({
+      where: { id: assignment_id },
+      data: {
+        title: updateAssignmentDto.title || assignment.title,
+        description:
+          updateAssignmentDto.description || assignment.description,
+        attachments: {
+          updateMany: {
+            where: {
+              assignment_id: assignment_id,
             },
+            data: attachmentsInput,
           },
+        },
+        submission_date:
+          updateAssignmentDto.submission_date || assignment.submission_date,
+        total_marks: updateAssignmentDto.total_marks || assignment.total_marks,
+      },
+    });
+
+    if (!updatedAssignment) {
+      throw new InternalServerErrorException('Failed to update assignment');
+    }
+
+    return {
+      message: 'Assignment updated successfully',
+      success: true,
+    };
+  }
+
+  async deleteAssignment(user_id: string, assignment_id: string) {
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: assignment_id },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    await this.prisma.assignment.delete({
+      where: { id: assignment_id },
+    });
+    return {
+      message: 'Assignment deleted successfully',
+      success: true,
+    };
+
+  }
+
+  async getAllAssignmentsSubmissions(user_id: string, assignment_id: string, query: GetAllAssignmentQueryDto) {
+
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: assignment_id },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    const { status, search, page = 1, limit = 10 } = query
+
+    const where: Prisma.AssignmentSubmissionWhereInput = {
+      assignment_id: assignment_id,
+    };
+
+    if (status) {
+      where.status = status;
+    }
+    if (search)
+      where.OR = [
+        { description: { contains: search } },
+        { student: { name: { contains: search } } },
+        { student: { email: { contains: search } } },
+        { student: { phone_number: { contains: search } } },
+      ]
+
+    const submissions = await this.prisma.assignmentSubmission.findMany({
+      where,
+      select: {
+        id: true,
+        description: true,
+        submitted_at: true,
+        attachments: {
+          select: {
+            file_name: true,
+            file_path: true,
+            mime_type: true,
+          },
+        },
+
+        assignment_id: true,
+
+        grades: {
+          select: {
+            id: true,
+            feedback: true,
+            grade: true,
+            grade_number: true,
+          },
+          take: 1,
+          orderBy: {
+            id: 'desc',
+          },
+        },
+        student: {
+          select: { id: true, name: true, avatar: true },
+        },
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: {
+        submitted_at: 'desc',
+      },
+    });
+
+    const total = await this.prisma.assignmentSubmission.count({
+      where,
+    });
+
+    return {
+      message: 'Submissions retrieved successfully',
+      success: true,
+      data: submissions.map((submission) => {
+        const grade = submission?.grades?.[0] || null;
+        delete submission.grades;
+        return {
+          id: submission.id,
+          description: submission?.description,
+          submitted_at: submission?.submitted_at,
+          attachments: submission?.attachments?.map((attachment) => {
+            return {
+              file_name: attachment.file_name,
+              file_path: attachment.file_path ? SazedStorage.url(attachment.file_path) : null,
+              mime_type: attachment.mime_type,
+            };
+          }),
+
           student: {
-            select: { id: true, name: true, avatar: true },
+            ...submission.student,
+            avatar: submission.student?.avatar ? SazedStorage.url(submission.student?.avatar) : null,
           },
-        },
-      });
-      return {
-        message: 'Submissions retrieved successfully',
-        success: true,
-        data: submissions.map((submission) => {
-          return {
-            id: submission.id,
-            title: submission?.title,
-            description: submission?.description,
-            submitted_at: submission?.submittedAt,
-            file_url: submission?.fileUrl,
-            assignment_id: submission?.assignmentId,
-
-            student: {
-              id: submission.student?.id,
-              name: submission.student?.name,
-              avatar: submission.student?.avatar,
-            },
-            grade: {
-              id: submission.grade?.id,
-              graded_at: submission.grade?.gradedAt,
-              feedback: submission.grade?.feedback,
-              graded_by: submission.grade?.gradedBy,
-              grade: submission.grade?.grade,
-              grade_number: submission.grade?.grade_number,
-            },
-          };
-        }),
-      };
-    } catch (error) {
-      console.error('Error retrieving submissions:', error);
-      throw new Error('Could not retrieve submissions');
-    }
-  }
-
-  async getSubmitedAssignmentById(userId: string, submissionId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
+          grade
+        };
+      }),
+      meta_data: {
+        total,
+        page,
+        limit,
+        search,
+        status
       }
+    };
 
-      const submission = await this.prisma.assignmentSubmission.findUnique({
-        where: { id: submissionId },
-        include: {
-          assignment: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-          grade: {
-            select: {
-              id: true,
-              gradedBy: true,
-              grade_number: true,
-            },
-          },
-          student: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
-
-      if (!submission) {
-        return { message: 'Submission not found', success: false };
-      }
-
-      return {
-        message: 'Submission retrieved successfully',
-        success: true,
-        data: submission,
-      };
-    } catch (error) {
-      console.error('Error retrieving submission:', error);
-      throw new Error('Could not retrieve submission');
-    }
   }
 
   async gradeSubmission(
-    userId: string,
-    submissionId: string,
-    gradeSubmissionDto: {
-      grade?: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F';
-      feedback: string;
-      grade_number: number;
-    },
+    user_id: string,
+    submission_id: string,
+    gradeAssignmentDto: GradeAssignmentDto,
   ) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
 
-      const submission = await this.prisma.assignmentSubmission.findUnique({
-        where: { id: submissionId },
-      });
-
-      if (!submission) {
-        return { message: 'Submission not found', success: false };
-      }
-
-      const existingGrade = await this.prisma.assignmentGrade.findFirst({
-        where: {
-          OR: [
-            { submissionId: submissionId },
-            {
-              assignmentId: submission.assignmentId,
-              studentId: submission.studentId,
-            },
-          ],
-        },
-      });
-
-      const assignment = await this.prisma.assignment.findUnique({
-        where: { id: submission.assignmentId },
-      });
-
-      if (!assignment) {
-        return {
-          message: 'Assignment not found for the submission',
-          success: false,
-        };
-      }
-
-      if (gradeSubmissionDto.grade_number > assignment.total_marks) {
-        return {
-          message: 'Grade number exceeds total marks of the assignment',
-          success: false,
-        };
-      }
-
-      const getGradeLetter = (grade: number, total: number): string => {
-        const percentage = (grade / total) * 100;
-        if (percentage >= 90) return 'A+';
-        if (percentage >= 80) return 'A';
-        if (percentage >= 70) return 'B';
-        if (percentage >= 60) return 'C';
-        if (percentage >= 50) return 'D';
-        return 'F';
-      };
-
-      const gradeLetter = getGradeLetter(
-        gradeSubmissionDto.grade_number,
-        assignment.total_marks,
-      );
-      if (existingGrade) {
-        const grade = await this.prisma.assignmentGrade.update({
-          where: { id: existingGrade.id },
-          data: {
-            feedback: gradeSubmissionDto.feedback,
-            grade: gradeSubmissionDto.grade || gradeLetter || 'F',
-            grade_number: Number(gradeSubmissionDto.grade_number) || 0,
-            gradedBy: userId,
-          },
-        });
-        return {
-          message: 'Submission graded successfully',
-          success: true,
-          data: {
-            id: grade.id,
-            feedback: grade.feedback,
-            grade: grade.grade,
-            grade_number: grade.grade_number,
-            graded_by: grade.gradedBy,
-          },
-        };
-      }
-      const grade = await this.prisma.assignmentGrade.create({
-        data: {
-          feedback: gradeSubmissionDto.feedback,
-          grade: gradeSubmissionDto.grade || gradeLetter || 'F',
-          grade_number: Number(gradeSubmissionDto.grade_number) || 0,
-          gradedBy: userId,
-          assignment: { connect: { id: submission.assignmentId } },
-          student: { connect: { id: submission.studentId } },
-          teacher: { connect: { id: userId } },
-          submission: { connect: { id: submissionId } },
-        },
-        select: {
-          id: true,
-          feedback: true,
-          grade: true,
-          grade_number: true,
-          gradedBy: true,
-        },
-      });
-
-      return {
-        message: 'Submission graded successfully',
-        success: true,
-        data: {
-          id: grade.id,
-          feedback: grade.feedback,
-          grade: grade.grade,
-          grade_number: grade.grade_number,
-          graded_by: grade.gradedBy,
-        },
-      };
-    } catch (error) {
-      console.error('Error grading submission:', error);
-      throw new Error('Could not grade submission');
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
     }
+
+    const submission = await this.prisma.assignmentSubmission.findUnique({
+      where: { id: submission_id },
+    });
+
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: submission.assignment_id },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
+    }
+
+    if (gradeAssignmentDto.grade_number > assignment.total_marks) {
+      throw new UnprocessableEntityException('Grade number exceeds total marks of the assignment');
+    }
+
+    const getGradeLetter = (grade: number, total: number): string => {
+      const percentage = (grade / total) * 100;
+      if (percentage >= 90) return 'A+';
+      if (percentage >= 80) return 'A';
+      if (percentage >= 70) return 'B';
+      if (percentage >= 60) return 'C';
+      if (percentage >= 50) return 'D';
+      return 'F';
+    };
+
+    const gradeLetter = getGradeLetter(
+      gradeAssignmentDto.grade_number,
+      assignment.total_marks,
+    );
+
+    const grade = await this.prisma.assignmentSubmission.update({
+      where: { id: submission_id },
+      data: {
+        status: "GRADED",
+        grades: {
+          create: {
+            feedback: gradeAssignmentDto.feedback,
+            grade: gradeAssignmentDto.grade || gradeLetter || 'F',
+            grade_number: gradeAssignmentDto.grade_number || 0,
+            graded_by: "TEACHER",
+            assignment: { connect: { id: submission.assignment_id } },
+            creator: { connect: { id: user_id } },
+
+          }
+        }
+      },
+    });
+
+    if (!grade) {
+      throw new InternalServerErrorException('Error grading submission');
+    }
+
+    return {
+      message: 'Submission graded successfully',
+      success: true,
+    };
+
   }
 
   //
@@ -1461,148 +1272,147 @@ export class CoursesService {
   //
   //------------------------------- Assets Management -------------------------------
   async uploadClassAsset(
-    userId: string,
-    classId: string,
+    user_id: string,
+    class_id: string,
     files: Express.Multer.File[],
-    mediaType?: 'PHOTO' | 'VIDEO' | 'FILE',
   ) {
-    const createdAssets: Array<{
-      id: string;
-      asset_type: string;
-      asset_url: string;
-    }> = [];
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+    if (!files || files.length === 0) throw new UnprocessableEntityException('No files uploaded');
 
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
+    const existingClass = await this.prisma.moduleClass.findUnique({
+      where: { id: class_id },
+    });
+
+    if (!existingClass) throw new NotFoundException('Class not found');
+
+    const uploadPromises = files.map(async (file) => {
+      try {
+        const filename = SazedStorage.generateFileName(file.originalname);
+        const objectKey = `${appConfig().storageUrl.class_assets}/${filename}`;
+
+        await SazedStorage.put(objectKey, file);
+
+        let fileType: AttachmentType = 'FILE';
+        if (file.mimetype.startsWith('video/')) fileType = 'VIDEO';
+        else if (file.mimetype.startsWith('image/')) fileType = 'IMAGE';
+
+        return {
+          file_name: filename,
+          type: fileType,
+          file_path: objectKey,
+          mime_type: file.mimetype,
+          size_bytes: BigInt(file.size),
+        };
+      } catch (error) {
+        console.error(`Failed to upload ${file.originalname}:`, error);
+        return null;
       }
+    });
 
-      const existingClass = await this.prisma.moduleClass.findUnique({
-        where: { id: classId },
-      });
+    const results = await Promise.all(uploadPromises);
+    const attachmentsData = results.filter((item) => item !== null);
 
-      if (!existingClass) {
-        return { message: 'Class not found', success: false };
-      }
+    if (attachmentsData.length === 0) {
+      throw new InternalServerErrorException('Failed to upload any class assets');
+    }
 
-      if (files && files.length > 0) {
-        for (const file of files) {
-          const filename = this.buildSafeFileName(file.originalname);
 
-          const derivedType: 'PHOTO' | 'VIDEO' | 'FILE' = mediaType
-            ? mediaType
-            : file.mimetype?.startsWith('image/')
-              ? 'PHOTO'
-              : file.mimetype?.startsWith('video/')
-                ? 'VIDEO'
-                : 'FILE';
+    await this.prisma.moduleClass.update({
+      where: { id: class_id },
+      data: {
+        class_assets: {
+          create: attachmentsData,
+        },
+      },
+    });
 
-          let basePath: string;
-          if (derivedType === 'PHOTO') {
-            basePath = appConfig().storageUrl.communityPhoto;
-          } else if (derivedType === 'VIDEO') {
-            basePath = appConfig().storageUrl.communityVideo;
-          } else {
-            basePath = appConfig().storageUrl.attachment;
-          }
-
-          const objectKey = `${basePath}/${filename}`;
-          await SazedStorage.put(objectKey, file.buffer);
-
-          const publicUrl = this.buildStorageUrl(objectKey);
-
-          const asset = await this.prisma.classAsset.create({
-            data: {
-              asset_type: derivedType as any,
-              asset_url: publicUrl,
-              class: { connect: { id: classId } },
-            },
-            select: { id: true, asset_type: true, asset_url: true },
-          });
-          createdAssets.push(asset);
-        }
-      }
-
-      if (createdAssets.length === 0) {
-        return { message: 'No files uploaded', success: false };
-      }
-
-      return {
-        message: 'Assets uploaded successfully',
-        success: true,
-        data: createdAssets,
-      };
-    } catch (error) {
-      console.error('Error uploading class assets:', error);
-      throw new Error('Could not upload class assets');
+    return {
+      message: `${attachmentsData.length} assets uploaded successfully`,
+      success: true,
     }
   }
 
-  async getClassAssets(userId: string, classId: string) {
-    try {
-      if (!userId) {
-        return { message: 'Unauthorized', success: false };
-      }
+  async getClassAssets(user_id: string, class_id: string) {
 
-      const existingClass = await this.prisma.moduleClass.findUnique({
-        where: { id: classId },
-      });
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
 
-      if (!existingClass) {
-        return { message: 'Class not found', success: false };
-      }
+    const existingClass = await this.prisma.moduleClass.findUnique({
+      where: { id: class_id },
+    });
 
-      const assets = await this.prisma.classAsset.findMany({
-        where: { class_id: classId },
-        select: {
-          id: true,
-          asset_type: true,
-          asset_url: true,
-          created_at: true,
-          updated_at: true,
-        },
-      });
+    if (!existingClass) throw new NotFoundException('Class not found');
 
-      const fileNameFromUrl = (url: string) => {
-        try {
-          const parts = url.split('?')[0].split('#')[0].split('/');
-          return parts[parts.length - 1] || url;
-        } catch {
-          return url;
-        }
-      };
+    const assets = await this.prisma.attachment.findMany({
+      where: { class_id },
+      select: {
+        id: true,
+        type: true,
+        file_path: true,
+        file_name: true,
+        mime_type: true,
+      },
+    });
 
-      const videos = assets
-        .filter((a) => a.asset_type === 'VIDEO')
-        .map((a) => {
+    return {
+      message: 'Class assets fetched successfully',
+      success: true,
+      data: {
+        videos: assets.filter((a) => a.type === 'VIDEO').map((a) => {
           return {
             id: a.id,
-            asset_url: a.asset_url,
-            file_name: fileNameFromUrl(a.asset_url),
+            type: a.type,
+            file_path: SazedStorage.url(a.file_path),
+            file_name: a.file_name,
+            mime_type: a.mime_type,
           };
-        });
-
-      const files = assets
-        .filter((a) => a.asset_type === 'FILE')
-        .map((a) => {
+        }),
+        files: assets.filter((a) => a.type !== 'VIDEO').map((a) => {
           return {
             id: a.id,
-            asset_url: a.asset_url,
-            file_name: fileNameFromUrl(a.asset_url),
+            type: a.type,
+            file_path: SazedStorage.url(a.file_path),
+            file_name: a.file_name,
+            mime_type: a.mime_type,
           };
-        });
+        }),
+      },
+    };
 
-      return {
-        message: 'Class assets fetched successfully',
-        success: true,
-        data: {
-          videos,
-          files,
+  }
+
+  async deleteClassAsset(user_id: string, asset_id: string) {
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+
+    const asset = await this.prisma.attachment.findUnique({
+      where: { id: asset_id },
+      include: {
+        class: {
+          include: {
+            module: {
+              include: {
+                course: true,
+              },
+            },
+          },
         },
-      };
-    } catch (error) {
-      console.error('Error fetching class assets:', error);
-      throw new Error('Could not fetch class assets');
+      },
+    });
+
+    if (!asset) throw new NotFoundException('Asset not found');
+
+    if (asset.class.module.course.instructor_id !== user_id) {
+      throw new ForbiddenException('You are not the instructor of this course');
     }
+
+    await SazedStorage.delete(asset.file_path);
+
+    await this.prisma.attachment.delete({
+      where: { id: asset_id },
+    });
+
+    return {
+      message: 'Asset deleted successfully',
+      success: true,
+    };
   }
 }

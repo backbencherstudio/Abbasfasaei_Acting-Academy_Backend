@@ -12,8 +12,6 @@ import { MailService } from '../../mail/mail.service';
 import { UcodeRepository } from '../../common/repository/ucode/ucode.repository';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SazedStorage } from '../../common/lib/Disk/SazedStorage';
-import { DateHelper } from '../../common/helper/date.helper';
-import { StringHelper } from '../../common/helper/string.helper';
 
 @Injectable()
 export class AuthService {
@@ -23,16 +21,6 @@ export class AuthService {
     private mailService: MailService,
     @InjectRedis() private readonly redis: Redis,
   ) { }
-
-  private avatarObjectKey(fileName: string): string {
-    const prefix = appConfig().storageUrl.avatar.replace(/^\/+/, '').replace(/\/+$/, '');
-    const name = String(fileName || 'avatar')
-      .trim()
-      .replace(/^\/+/, '')
-      .replace(/\s+/g, '_')
-      .replace(/[^a-zA-Z0-9._-]/g, '');
-    return `${prefix}/${name}`;
-  }
 
   async me(userId: string) {
     const user = await this.prisma.user.findFirst({
@@ -57,12 +45,7 @@ export class AuthService {
     }
 
     if (user.avatar) {
-      // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
-      const isAbsolute = /^https?:\/\//i.test(user.avatar);
-      const normalizedAvatar = String(user.avatar).replace(/^\/+/, '');
-      user['avatar_url'] = isAbsolute
-        ? user.avatar
-        : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
+      user['avatar'] = SazedStorage.url(user?.avatar);
     }
 
     return { success: true, data: user };
@@ -76,88 +59,112 @@ export class AuthService {
     avatar?: Express.Multer.File,
     cover_image?: Express.Multer.File,
   ) {
-    try {
-      const data: any = {};
+    const data: any = {};
 
-      // Update user data fields if provided
-      if (updateUserDto.name) {
-        data.name = updateUserDto.name;
-      }
+    const user = await UserRepository.getUserDetails(user_id);
 
-      if (updateUserDto.phone_number) {
-        data.phone_number = updateUserDto.phone_number;
-      }
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
 
-      if (updateUserDto.experience) {
-        data.experience = updateUserDto.experience;
-      }
+    if (updateUserDto.name) {
+      data.name = updateUserDto.name;
+    }
 
-      if (updateUserDto.date_of_birth) {
-        data.date_of_birth = updateUserDto.date_of_birth;
-      }
+    if (updateUserDto.username) {
+      data.username = updateUserDto.username;
+    }
 
-      if (avatar) {
-        const fileName = appConfig().storageUrl.avatar + '/' + SazedStorage.generateFileName(avatar.originalname);
-        try {
-          // Attempt upload first to avoid deleting old before success
-          await SazedStorage.put(fileName, avatar.buffer, {
-            contentType: avatar.mimetype,
-            contentDisposition: 'inline',
-          });
+    if (updateUserDto.about) {
+      data.about = updateUserDto.about;
+    }
 
-          const mediaUrl = SazedStorage.url(fileName);
+    if (updateUserDto.phone_number) {
+      data.phone_number = updateUserDto.phone_number;
+    }
 
-          // delete old image from storage only after successful upload
-          const oldImage = await this.prisma.user.findFirst({
-            where: { id: user_id },
-            select: { avatar: true },
-          });
+    if (updateUserDto.experience) {
+      data.experience = updateUserDto.experience;
+    }
 
-          if (oldImage?.avatar) {
-            try {
-              await SazedStorage.delete(
-                `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(oldImage.avatar).replace(/^\/+/, '')}`,
-              );
-            } catch (e) {
-              console.warn('Failed to delete old avatar:', e?.message || e);
-            }
-          }
+    if (updateUserDto.date_of_birth) {
+      data.date_of_birth = updateUserDto.date_of_birth;
+    }
 
-          data.avatar = mediaUrl;
-
-          console.log('mediaUrl', mediaUrl);
-        } catch (e) {
-          console.warn('Avatar upload failed:', e?.message || e);
-        }
-      }
-
-      console.log('avater url', data.avatar);
-
-      const user = await UserRepository.getUserDetails(userId);
-      if (user) {
-        await this.prisma.user.update({
-          where: { id: userId },
-          data: {
-            ...data,
-          },
+    if (avatar) {
+      const fileName = appConfig().storageUrl.avatar + '/' + SazedStorage.generateFileName(avatar.originalname);
+      try {
+        // Attempt upload first to avoid deleting old before success
+        await SazedStorage.put(fileName, avatar.buffer, {
+          contentType: avatar.mimetype,
+          contentDisposition: 'inline',
         });
 
-        return {
-          success: true,
-          message: 'User updated successfully',
-        };
-      } else {
-        return {
-          success: false,
-          message: 'User not found',
-        };
+        // delete old image from storage only after successful upload
+        const oldAvatar = await this.prisma.user.findFirst({
+          where: { id: user_id },
+          select: { avatar: true },
+        });
+
+        if (oldAvatar?.avatar) {
+          try {
+            await SazedStorage.delete(oldAvatar?.avatar);
+          } catch (e) {
+            console.warn('Failed to delete old avatar:', e?.message || e);
+          }
+        }
+
+        data.avatar = fileName;
+
+      } catch (e) {
+        console.warn('Avatar upload failed:', e?.message || e);
       }
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
     }
+
+    if (cover_image) {
+      const fileName = appConfig().storageUrl.cover_image + '/' + SazedStorage.generateFileName(cover_image.originalname);
+      try {
+        // Attempt upload first to avoid deleting old before success
+        await SazedStorage.put(fileName, cover_image.buffer, {
+          contentType: cover_image.mimetype,
+          contentDisposition: 'inline',
+        });
+
+        // delete old image from storage only after successful upload
+        const oldCoverImage = await this.prisma.user.findFirst({
+          where: { id: user_id },
+          select: { cover_image: true },
+        });
+
+        if (oldCoverImage?.cover_image) {
+          try {
+            await SazedStorage.delete(oldCoverImage?.cover_image);
+          } catch (e) {
+            console.warn('Failed to delete old cover image:', e?.message || e);
+          }
+        }
+
+        data.cover_image = fileName;
+
+      } catch (e) {
+        console.warn('Cover image upload failed:', e?.message || e);
+      }
+    }
+
+    if (user) {
+      await this.prisma.user.update({
+        where: { id: user_id },
+        data
+      });
+
+      return {
+        success: true,
+        message: 'User updated successfully',
+      };
+    } else {
+      throw new NotFoundException("User not found");
+    }
+
   }
 
   async validateUser(
@@ -408,41 +415,33 @@ export class AuthService {
 
   }
 
-  async forgotPassword(email) {
-    try {
-      const user = await UserRepository.exist({
-        field: 'email',
-        value: email,
+  async forgotPassword(email: string) {
+
+    const user = await UserRepository.exist({
+      field: 'email',
+      value: email,
+    });
+
+    if (user) {
+      const token = await UcodeRepository.createToken({
+        userId: user.id,
+        isOtp: true,
       });
 
-      if (user) {
-        const token = await UcodeRepository.createToken({
-          userId: user.id,
-          isOtp: true,
-        });
+      await this.mailService.sendOtpCodeToEmail({
+        email: email,
+        name: user.name,
+        otp: token,
+      });
 
-        await this.mailService.sendOtpCodeToEmail({
-          email: email,
-          name: user.name,
-          otp: token,
-        });
-
-        return {
-          success: true,
-          message: 'We have sent an OTP code to your email',
-        };
-      } else {
-        return {
-          success: false,
-          message: 'Email not found',
-        };
-      }
-    } catch (error) {
       return {
-        success: false,
-        message: error.message,
+        success: true,
+        message: 'We have sent an OTP code to your email',
       };
+    } else {
+      throw new NotFoundException('Email not found');
     }
+
   }
 
   // // verify otp
@@ -837,8 +836,6 @@ export class AuthService {
         data: {
           email: facebookData.email,
           name: facebookData.name,
-          first_name: facebookData.firstName,
-          last_name: facebookData.lastName,
           email_verified_at: new Date(), // Mark email as verified since it's from Facebook
           type: 'user', // Default type
         },

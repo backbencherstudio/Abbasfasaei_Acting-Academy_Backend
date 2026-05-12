@@ -13,18 +13,16 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Request, Response } from 'express';
+import { Request } from 'express';
 import { memoryStorage } from 'multer';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { CreateUserDto, UserLoginDto } from './dto/create-user.dto';
+import { CreateUserDto, ForgotPasswordDto, UserLoginDto } from './dto/create-user.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import appConfig from '../../config/app.config';
 import { AuthGuard } from '@nestjs/passport';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import { GetUser } from './decorators/get-user.decorator';
 
 @ApiTags('auth')
@@ -154,13 +152,11 @@ export class AuthController {
         { name: 'avatar', maxCount: 1 },
         { name: 'cover_image', maxCount: 1 },
       ],
-      {
-        storage: memoryStorage(),
-      },
+      { storage: memoryStorage() },
     ),
   )
-  async updateUser(
-    @Req() req: Request,
+  updateUser(
+    @GetUser() user: any,
     @Body() data: UpdateUserDto,
     @UploadedFiles()
     files: {
@@ -168,35 +164,23 @@ export class AuthController {
       cover_image?: Express.Multer.File[];
     },
   ) {
-    try {
-      const user_id = req.user.userId;
-      const response = await this.authService.updateUser(user_id, data, avatar, cover_image);
-      return response;
-    } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to update user',
-      };
-    }
+    const avatarFile = files.avatar?.[0];
+    const coverFile = files.cover_image?.[0];
+
+    return this.authService.updateUser(
+      user.userId,
+      data,
+      avatarFile,
+      coverFile
+    );
   }
 
   // --------------change password---------
 
   @ApiOperation({ summary: 'Forgot password' })
   @Post('forgot-password')
-  async forgotPassword(@Body() data: { email: string }) {
-    try {
-      const email = data.email;
-      if (!email) {
-        throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
-      }
-      return await this.authService.forgotPassword(email);
-    } catch (error) {
-      return {
-        success: false,
-        message: 'Something went wrong',
-      };
-    }
+  async forgotPassword(@Body() data: ForgotPasswordDto) {
+    return await this.authService.forgotPassword(data?.email);
   }
 
   // verify email to verify the email

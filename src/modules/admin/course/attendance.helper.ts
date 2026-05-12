@@ -11,7 +11,7 @@ import { AttendanceStatus } from '@prisma/client';
 
 @Injectable()
 export class AttendanceService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async getAllAttendance(query?: {
     status?: string;
@@ -66,7 +66,7 @@ export class AttendanceService {
         include: {
           module: {
             select: {
-              courseId: true,
+              course_id: true,
             },
           },
         },
@@ -80,7 +80,7 @@ export class AttendanceService {
       }
 
       scopedClassIds = [query.classId];
-      scopedCourseId = moduleClass.module.courseId;
+      scopedCourseId = moduleClass.module.course_id;
     }
 
     if (query?.courseId) {
@@ -99,7 +99,7 @@ export class AttendanceService {
       const classes = await this.prisma.moduleClass.findMany({
         where: {
           module: {
-            courseId: query.courseId,
+            course_id: query.courseId,
           },
         },
         select: { id: true },
@@ -113,45 +113,45 @@ export class AttendanceService {
 
     const studentsScope = isOverall
       ? await this.prisma.user.findMany({
-          where: {
-            deleted_at: null,
-            role_users: {
-              some: {
-                role: {
-                  name: {
-                    equals: 'STUDENT',
-                    mode: 'insensitive',
-                  },
+        where: {
+          deleted_at: null,
+          role_users: {
+            some: {
+              role: {
+                name: {
+                  equals: 'STUDENT',
+                  mode: 'insensitive',
                 },
               },
             },
           },
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            email: true,
-            avatar: true,
-          },
-        })
+        },
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          email: true,
+          avatar: true,
+        },
+      })
       : await this.prisma.enrollment.findMany({
-          where: {
-            courseId: scopedCourseId,
-          },
-          select: {
-            user_id: true,
-            full_name: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                username: true,
-                email: true,
-                avatar: true,
-              },
+        where: {
+          course_id: scopedCourseId,
+        },
+        select: {
+          user_id: true,
+          name: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              email: true,
+              avatar: true,
             },
           },
-        });
+        },
+      });
 
     const uniqueStudents = new Map<
       string,
@@ -190,30 +190,30 @@ export class AttendanceService {
 
     const attendanceRows = scopedStudentIds.length
       ? await this.prisma.attendance.findMany({
-          where: attendanceWhere,
-          include: {
-            class: {
-              select: {
-                id: true,
-                class_title: true,
-                class_time: true,
-                module: {
-                  select: {
-                    id: true,
-                    module_title: true,
-                    course: {
-                      select: {
-                        id: true,
-                        title: true,
-                      },
+        where: attendanceWhere,
+        include: {
+          class: {
+            select: {
+              id: true,
+              class_title: true,
+              class_at: true,
+              module: {
+                select: {
+                  id: true,
+                  module_title: true,
+                  course: {
+                    select: {
+                      id: true,
+                      title: true,
                     },
                   },
                 },
               },
             },
           },
-          orderBy: [{ attended_at: 'desc' }, { created_at: 'desc' }],
-        })
+        },
+        orderBy: [{ attended_at: 'desc' }, { created_at: 'desc' }],
+      })
       : [];
 
     const attendanceByStudent = new Map<string, any[]>();
@@ -395,7 +395,7 @@ export class AttendanceService {
     if (
       isTeacher &&
       !isAdmin &&
-      moduleClass.module.course.instructorId !== actorUserId
+      moduleClass.module.course.instructor_id !== actorUserId
     ) {
       throw new ForbiddenException('You are not assigned to this class/course');
     }
@@ -566,7 +566,7 @@ export class AttendanceService {
       throw new NotFoundException('Class not found');
     }
 
-    if (moduleClass.module.course.instructorId !== teacherId) {
+    if (moduleClass.module.course.instructor_id !== teacherId) {
       throw new ForbiddenException('You are not assigned to this course/class');
     }
 
@@ -587,7 +587,7 @@ export class AttendanceService {
           select: {
             id: true,
             class_title: true,
-            class_time: true,
+            class_at: true,
           },
         },
       },

@@ -30,3 +30,19 @@ export class UserLoginDto {
   password: string;
 
 }
+
+export class ForgotPasswordDto {
+  @IsNotEmpty()
+  @ApiProperty()
+  email: string;
+}
+
+export class VerifyEmailDto {
+  @IsNotEmpty()
+  @ApiProperty()
+  email: string;
+
+  @IsNotEmpty()
+  @ApiProperty()
+  token: string;
+}
