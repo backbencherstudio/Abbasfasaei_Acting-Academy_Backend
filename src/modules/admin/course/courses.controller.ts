@@ -39,7 +39,7 @@ import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 @ApiBearerAuth()
 @ApiTags('Courses')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('admin/courses')
+@Controller('admin/course')
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) { }
 
@@ -120,30 +120,30 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a course by ID' })
-  @Get(':id')
-  getCourseById(@GetUser() user: any, @Param('id') id: string) {
-    return this.coursesService.getCourseById(user.userId, id);
+  @Get(':course_id')
+  getCourseById(@GetUser() user: any, @Param('course_id') course_id: string) {
+    return this.coursesService.getCourseById(user.userId, course_id);
   }
 
 
   // updated
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Update a course by ID' })
-  @Patch(':id')
+  @Patch(':course_id')
   updateCourse(
     @GetUser() user: any,
-    @Param('id') id: string,
+    @Param('course_id') course_id: string,
     @Body() updateCourseDto: UpdateCourseDto,
   ) {
-    return this.coursesService.updateCourse(user.userId, id, updateCourseDto);
+    return this.coursesService.updateCourse(user.userId, course_id, updateCourseDto);
   }
 
   // updated
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Delete a course by ID' })
-  @Delete(':id')
-  deleteCourse(@GetUser() user: any, @Param('id') id: string) {
-    return this.coursesService.deleteCourse(user.userId, id);
+  @Delete(':course_id')
+  deleteCourse(@GetUser() user: any, @Param('course_id') course_id: string) {
+    return this.coursesService.deleteCourse(user.userId, course_id);
   }
 
   //---------------------module---------------------//
@@ -229,7 +229,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a class by ID' })
-  @Get('class/:class_id')
+  @Get('module/class/:class_id')
   getClassById(@GetUser('userId') user_id: string, @Param('class_id') class_id: string) {
     return this.coursesService.getClassById(user_id, class_id);
   }
@@ -238,7 +238,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Update a class by ID' })
-  @Patch('class/:class_id')
+  @Patch('module/class/:class_id')
   updateClass(
     @GetUser('userId') user_id: string,
     @Param('class_id') class_id: string,
@@ -249,7 +249,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete a class by ID' })
-  @Delete('class/:class_id')
+  @Delete('module/class/:class_id')
   deleteClass(@GetUser('userId') user_id: string, @Param('class_id') class_id: string) {
     return this.coursesService.deleteClass(user_id, class_id);
   }
@@ -261,7 +261,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Create an assignment for a class' })
-  @Post('class/:class_id/assignment')
+  @Post('module/class/:class_id/assignment')
   @UseInterceptors(
     FilesInterceptor('attachments', 5, {
       storage: memoryStorage(),
@@ -284,7 +284,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all assignments for a class' })
-  @Get('class/:class_id/assignments')
+  @Get('module/class/:class_id/assignments')
   async getAllAssignments(
     @GetUser('userId') user_id: string,
     @Param('class_id') class_id: string,
@@ -296,7 +296,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get an assignment by ID' })
-  @Get('assignment/:assignment_id')
+  @Get('module/class/assignment/:assignment_id')
   async getAssignmentById(
     @GetUser('userId') user_id: string,
     @Param('assignment_id') assignment_id: string,
@@ -308,7 +308,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Update an assignment by ID' })
-  @Patch('assignment/:assignment_id')
+  @Patch('module/class/assignment/:assignment_id')
   @UseInterceptors(
     FilesInterceptor('attachments', 5, {
       storage: memoryStorage(),
@@ -331,7 +331,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete an assignment by ID' })
-  @Delete('assignment/:assignment_id')
+  @Delete('module/class/assignment/:assignment_id')
   async deleteAssignment(
     @GetUser('userId') user_id: string,
     @Param('assignment_id') assignment_id: string,
@@ -344,7 +344,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all submissions for an assignment' })
-  @Get('assignment/:assignment_id/submissions')
+  @Get('module/class/assignment/:assignment_id/submissions')
   async getAllAssignmentsSubmissions(
     @GetUser('userId') user_id: string,
     @Param('assignment_id') assignment_id: string,
@@ -361,7 +361,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Grade a submission by ID' })
-  @Post('submissions/:submission_id/grade')
+  @Post('module/class/assignment/submissions/:submission_id/grade')
   async gradeSubmission(
     @GetUser('userId') user_id: string,
     @Param('submission_id') submission_id: string,
@@ -383,7 +383,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Upload media files for a class' })
-  @Post('class/:class_id/assets')
+  @Post('module/class/:class_id/assets')
   @UseInterceptors(
     FilesInterceptor('attachments', 5, {
       storage: memoryStorage(),
@@ -416,7 +416,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all media assets for a class' })
-  @Get('class/:class_id/assets')
+  @Get('module/class/:class_id/assets')
   async getClassAssets(
     @GetUser('userId') user_id: string,
     @Param('class_id') class_id: string,
@@ -427,13 +427,11 @@ export class CoursesController {
 
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete a media asset from a class' })
-  @Delete('asset/:asset_id')
+  @Delete('module/class/asset/:asset_id')
   async deleteClassAsset(
     @GetUser('userId') user_id: string,
     @Param('asset_id') asset_id: string,
   ) {
     return this.coursesService.deleteClassAsset(user_id, asset_id);
   }
-
-
 }

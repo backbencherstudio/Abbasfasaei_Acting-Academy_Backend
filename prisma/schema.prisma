@@ -247,7 +247,7 @@ model Course {
   start_date DateTime
 
   title               String
-  fee_pence           Decimal      @default(0) @db.Decimal(10, 2) // price in pence e.g 2300 -> 23.00
+  fee_pence           Int          @default(0) // price in pence e.g 2300 -> 23.00
   course_overview     String
   seat_capacity       Int          @default(50)
   installment_process String
@@ -532,11 +532,11 @@ model Enrollment {
   enrolled_by_admin_id String?
   admin_note           String?
 
-  is_accept_rules_regulations    Boolean?          @default(false)
+  rules_regulations_accepted     Boolean?          @default(false)
   rules_regulations_signature_id String?
   rules_regulations_signature    DigitalSignature? @relation("RulesRegulationsSignature", fields: [rules_regulations_signature_id], references: [id], onDelete: SetNull)
 
-  is_accept_digital_contract    Boolean?          @default(false)
+  digital_contract_accepted     Boolean?          @default(false)
   digital_contract_signature_id String?
   digital_contract_signature    DigitalSignature? @relation("DigitalContractSignature", fields: [digital_contract_signature_id], references: [id], onDelete: SetNull)
 

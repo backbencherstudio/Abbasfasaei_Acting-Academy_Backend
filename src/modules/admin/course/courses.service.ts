@@ -56,7 +56,7 @@ export class CoursesService {
     await this.prisma.course.create({
       data: {
         ...courseData,
-        fee_pence: (+courseData?.fee_pence * 100).toString() || 0,
+        fee_pence: courseData?.fee_pence ? courseData?.fee_pence * 100 : 0,
         creator: {
           connect: { id: user_id },
         },
@@ -148,7 +148,7 @@ export class CoursesService {
         delete course._count;
         return {
           ...course,
-          fee: (+course?.fee_pence / 100).toFixed(2) || 0,
+          fee: course.fee_pence > 0 ? course.fee_pence / 100 : 0,
           total_enrollments,
         };
       }),
@@ -219,7 +219,7 @@ export class CoursesService {
       success: true,
       data: {
         ...course,
-        fee: (+course?.fee_pence / 100).toFixed(2) || 0,
+        fee: course.fee_pence > 0 ? course.fee_pence / 100 : 0,
         total_enrollments,
         course_progress,
       },
@@ -827,6 +827,7 @@ export class CoursesService {
           file_path: objectKey,
           mime_type: file.mimetype,
           size_bytes: file.size,
+          type: AttachmentType.FILE
         });
       }
     }
@@ -896,7 +897,7 @@ export class CoursesService {
 
       return {
         ...assignment,
-        due_days: due_days < 0 ? 0 : due_days,
+        due_days: due_days > 0 ? due_days : null,
         submissions: _count.submissions,
         grades: _count.grades,
       };

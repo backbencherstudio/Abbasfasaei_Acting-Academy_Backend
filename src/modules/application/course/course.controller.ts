@@ -1,296 +1,178 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
   Param,
-  UseGuards,
-  InternalServerErrorException,
-  UseInterceptors,
+  Post,
+  Query,
   UploadedFiles,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { CourseService } from './course.service';
-import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
-import { SubmitAssignmentDto } from './dto/submit-assignment.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { AcceptRulesOrContractDto, PInfoDto } from './dto/enroll.dto';
-
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
+import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
+import { CourseService } from './course.service';
+import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
+import { SubmitAssignmentDto } from './dto/submit-assignment.dto';
+import { RolesGuard } from 'src/common/guard/role/roles.guard';
 
 @ApiTags('Course')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @DisAllowDeactivated()
 @Controller('course')
 export class CourseController {
-  constructor(private readonly courseService: CourseService) {}
+  constructor(private readonly courseService: CourseService) { }
 
-  @ApiOperation({ summary: 'Enrollment: get all courses' })
-  @Get('enrollment/courses')
-  async getEnrollmentCourses() {
-    return this.courseService.getEnrollmentCourses();
-  }
+  // -------------------------------------------------
 
-  @Get('enrollment/current-step/:courseId')
-  async getCurrentStep(@GetUser() user, @Param('courseId') courseId: string) {
-    return this.courseService.getCurrentStep(user.userId, courseId);
-  }
-
-  @Post('enrollment/pinfo/:courseId')
-  async enrollUser(
-    @GetUser() user,
-    @Param('courseId') courseId: string,
-    @Body() dto: PInfoDto,
-  ) {
-    return this.courseService.enrollUser(user.userId, courseId, dto);
-  }
-
-  @Post('enrollment/accept-rules/:enrollmentId')
-  async acceptRules(
-    @GetUser() user,
-    @Param('enrollmentId') enrollmentId: string,
-    @Body() dto: AcceptRulesOrContractDto,
-  ) {
-    if (
-      !dto?.digital_signature_date ||
-      isNaN(Date.parse(dto?.digital_signature_date))
-    ) {
-      throw new BadRequestException('Invalid signature date');
-    }
-    return this.courseService.acceptRules(user.userId, enrollmentId, dto);
-  }
-
-  @Post('enrollment/accept-contract/:enrollmentId')
-  async acceptContract(
-    @GetUser() user,
-    @Param('enrollmentId') enrollmentId: string,
-    @Body() dto: AcceptRulesOrContractDto,
-  ) {
-    if (
-      !dto?.digital_signature_date ||
-      isNaN(Date.parse(dto?.digital_signature_date))
-    ) {
-      throw new BadRequestException('Invalid signature date');
-    }
-    return this.courseService.acceptContract(user.userId, enrollmentId, dto);
-  }
-
-  @Get('enrollment/my-courses')
-  async myEnrollmentCourses(@GetUser() user) {
-    return this.courseService.myEnrollmentCourses(user.userId);
-  }
-
-  @Post('attendance/scan-qr')
-  async scanQR(@GetUser() user: any, @Body() body: any) {
-    return this.courseService.scanQr(body?.token, user.userId);
-  }
-
+  //updated
   @ApiOperation({ summary: 'Get all available courses' })
-  @Get('all')
-  async getAllCourses() {
-    try {
-      // console.log('hitted');
-      const result = await this.courseService.getAllCourses();
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching courses');
-    }
+  @Get()
+  getAllCourses(@GetUser('userId') user_id: string, @Query('my_courses') my_courses?: string) {
+    return this.courseService.getAllCourses(user_id, my_courses);
   }
 
-  @ApiOperation({ summary: 'My courses' })
-  @Get('my-courses')
-  async getMyCourses(@GetUser() user) {
-    try {
-      if (!user || !user.userId) {
-        throw new InternalServerErrorException('User not authenticated');
-      }
-      const result = await this.courseService.getMyCourses(user.userId);
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching my courses');
-    }
-  }
-
+  // updated
   @ApiOperation({ summary: 'Course details' })
-  @Get('details/:courseId')
-  async getCourseDetails(@Param('courseId') courseId: string, @GetUser() user) {
-    try {
-      const result = await this.courseService.getCourseDetails(
-        courseId,
-        user.userId,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching course details');
-    }
-  }
-
-  @ApiOperation({ summary: 'My course details' })
-  @Get('my-course-details/:courseId')
-  async getMyCourseDetails(
-    @Param('courseId') courseId: string,
-    @GetUser() user,
+  @Get(':course_id')
+  getCourseDetails(
+    @Param('course_id') course_id: string,
+    @GetUser('userId') user_id: string,
   ) {
-    try {
-      const result = await this.courseService.getMyCourseDetails(
-        courseId,
-        user.userId,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException(
-        'Error fetching my course details',
-      );
+    return this.courseService.getCourseDetails(course_id, user_id);
+  }
+
+
+  // updated
+  @ApiOperation({ summary: 'Get my assignments for a course' })
+  @Get(':course_id/assignment')
+  getAssignmentsForCourse(
+    @Param('course_id') course_id: string,
+    @GetUser('userId') user_id: string,
+  ) {
+    return this.courseService.getAssignmentsForCourse(course_id, user_id);
+  }
+
+  //updated
+  @ApiOperation({ summary: 'Get course assets' })
+  @Get(':course_id/assets')
+  getAllAssetsFromCourse(
+    @Param('course_id') course_id: string,
+    @GetUser('userId') user_id: string,
+    @Query('type') type?: "VIDEO" | 'FILE',
+  ) {
+    return this.courseService.getAllAssetsFromCourse(course_id, user_id, type);
+  }
+
+  private validateSignatureDate(signatureDate: string) {
+    if (!signatureDate || Number.isNaN(Date.parse(signatureDate))) {
+      throw new BadRequestException('Invalid signature date');
     }
   }
 
+
+  // updated
   @ApiOperation({ summary: 'Get module details' })
-  @Get('module/:moduleId')
-  async getModuleDetails(@Param('moduleId') moduleId: string, @GetUser() user) {
-    try {
-      const result = await this.courseService.getModuleDetails(
-        moduleId,
-        user.userId,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching module details');
-    }
+  @Get('module/:module_id')
+  getModuleDetails(
+    @Param('module_id') module_id: string,
+    @GetUser('userId') user_id: string,
+  ) {
+    return this.courseService.getModuleDetails(module_id, user_id);
   }
+
+
+  // updated
 
   @ApiOperation({ summary: 'Get class details' })
-  @Get('class/:classId')
-  async getClassDetails(@Param('classId') classId: string, @GetUser() user) {
-    try {
-      const result = await this.courseService.getClassDetails(
-        classId,
-        user.userId,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching class details');
-    }
-  }
-
-  @Get('assignments/details/:assignmentId')
-  async getAssignmentDetails(
-    @Param('assignmentId') assignmentId: string,
-    @GetUser() user,
+  @Get('module/class/:class_id')
+  getClassDetails(
+    @Param('class_id') class_id: string,
+    @GetUser('userId') user_id: string,
   ) {
-    try {
-      const result = await this.courseService.getAssignmentDetails(
-        assignmentId,
-        user.userId,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException(
-        'Error fetching assignment details',
-      );
-    }
+    return this.courseService.getClassDetails(class_id, user_id);
   }
 
-  @Get('assignments/class/:classId')
-  async getAssignmentsForClass(
-    @Param('classId') classId: string,
-    @GetUser() user,
+  // updated
+  @Get('module/class/assignment/:assignment_id')
+  getAssignmentDetails(
+    @Param('assignment_id') assignment_id: string,
+    @GetUser('userId') user_id: string,
   ) {
-    try {
-      const result = await this.courseService.getAssignmentsForClass(
-        user.userId,
-        classId,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching assignments');
-    }
+    return this.courseService.getAssignmentDetails(assignment_id, user_id);
   }
 
-  @ApiOperation({ summary: 'Get my Assignments for a course' })
-  @Get('assignments/:courseId')
-  async getAssignmentsForCourse(
-    @Param('courseId') courseId: string,
-    @GetUser() user,
+  //updated
+  @ApiOperation({ summary: 'Get all assignments for a class' })
+  @Get('module/class/:class_id/assignments')
+  getAssignmentsForClass(
+    @Param('class_id') class_id: string,
+    @GetUser('userId') userId: string,
   ) {
-    try {
-      const result = await this.courseService.getAssignmentsForCourse(
-        courseId,
-        user.userId,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching assignments');
-    }
+    return this.courseService.getAssignmentsForClass(userId, class_id);
   }
 
+  // updated
   @ApiOperation({ summary: 'Submit assignment' })
-  @Post('assignment/:assignmentId/submit')
+  @Post('module/class/assignment/:assignment_id')
   @UseInterceptors(
-    FilesInterceptor('media', 5, {
+    FilesInterceptor('attachments', 5, {
       storage: memoryStorage(),
     }),
   )
-  async submitAssignment(
-    @Param('assignmentId') assignmentId: string,
-    @Body() submitDto: SubmitAssignmentDto,
-    @GetUser() user,
-    @UploadedFiles() files: Express.Multer.File[],
+  submitAssignment(
+    @Param('assignment_id') assignment_id: string,
+    @Body() submitAssignmentDto: SubmitAssignmentDto,
+    @GetUser('userId') user_id: string,
+    @UploadedFiles() attachments: Express.Multer.File[],
   ) {
-    try {
-      const result = await this.courseService.submitAssignment(
-        assignmentId,
-        user.userId,
-        submitDto,
-        files,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error submitting assignment');
-    }
+    return this.courseService.submitAssignment(
+      assignment_id,
+      user_id,
+      submitAssignmentDto,
+      attachments,
+    );
   }
 
-  @Get('assets/class/:classId')
-  async getAllAssets(@Param('classId') classId: string, @GetUser() user) {
-    try {
-      const result = await this.courseService.getAllAssets(
-        classId,
-        user.userId,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching assets');
-    }
+
+  // updated
+  @ApiOperation({ summary: 'Get all assets for a class' })
+  @Get('module/class/:class_id/assets')
+  getAllAssets(
+    @Param('class_id') class_id: string,
+    @GetUser('userId') user_id: string,
+  ) {
+    return this.courseService.getAllAssets(user_id, class_id);
   }
 
-  @ApiOperation({ summary: 'Get course assets' })
-  @Get('assets/:courseId')
-  async getAllAssetsFromCourse(
+
+  // updated
+  @Get(':course_id/enrollment/current_step')
+  getCurrentStep(
+    @GetUser('userId') user_id: string,
+    @Param('course_id') course_id: string,
+  ) {
+    return this.courseService.getCurrentStep(user_id, course_id);
+  }
+
+  // updated
+  @Post(':course_id/enrollment')
+  enrollUser(
+    @GetUser('userId') userId: string,
     @Param('courseId') courseId: string,
-    @GetUser() user,
+    @Body() createEnrollmentDto: CreateEnrollmentDto,
   ) {
-    try {
-      const result = await this.courseService.getAllAssetsFromCourse(
-        courseId,
-        user.userId,
-      );
-      return result;
-    } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Error fetching course assets');
-    }
+    return this.courseService.enrollUser(userId, courseId, createEnrollmentDto);
+  }
+  // --------------------------------------------------------------
+
+  @Post('attendance/scan-qr')
+  scanQR(@GetUser('userId') userId: string, @Body('token') token: string) {
+    return this.courseService.scanQr(token, userId);
   }
 }
