@@ -4,6 +4,7 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -13,12 +14,12 @@ export class EventController {
   constructor(private eventsService: EventService) { }
 
   @Get()
-  getAllEvents() {
-    return this.eventsService.getAllEvents();
+  getAllEvents(@GetUser('userId') user_id: string) {
+    return this.eventsService.getAllEvents(user_id);
   }
 
-  @Get('/:id')
-  getEventById(@Param('id') id: string) {
-    return this.eventsService.getEventById(id);
+  @Get(':event_id')
+  getEventById(@Param('event_id') event_id: string, @GetUser('userId') user_id: string) {
+    return this.eventsService.getEventById(event_id, user_id);
   }
 }

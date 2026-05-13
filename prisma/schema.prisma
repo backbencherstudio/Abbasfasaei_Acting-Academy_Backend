@@ -849,23 +849,23 @@ model Event {
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
-  start_at   DateTime
+
+  start_at DateTime
+  time     String?
 
   name        String
   description String?
   overview    String?
 
-  time     String?
   location String
 
-  amount_pence Decimal @default(0) @db.Decimal(10, 2) // price in pence e.g 2300 -> 23.00
+  amount_pence Int @default(0) // price in pence e.g 2300 -> 23.00
 
   created_by String?
 
-  creator User? @relation(fields: [created_by], references: [id], onDelete: Cascade)
-
-  registrations EventRegistration[]
   orders        Order[]
+  registrations EventRegistration[]
+  creator       User?               @relation(fields: [created_by], references: [id], onDelete: Cascade)
 
   @@index([created_by])
   @@index([start_at])
@@ -1050,16 +1050,6 @@ enum TransactionStatus {
 }
 
 // updated
-enum OrderStatus {
-  PENDING
-  PARTIALLY_PAID
-  PAID
-  PAYMENT_FAILED
-  CANCELLED
-  REFUNDED
-}
-
-// updated
 enum OrderItemType {
   COURSE_ENROLLMENT
   EVENT_TICKET
@@ -1211,6 +1201,16 @@ model Installment {
   @@index([status])
   @@index([due_date])
   @@map("installments")
+}
+
+// updated
+enum OrderStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  PAYMENT_FAILED
+  CANCELLED
+  REFUNDED
 }
 
 // updated
