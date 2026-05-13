@@ -24,7 +24,7 @@ import { RolesGuard } from 'src/common/guard/role/roles.guard';
 @ApiTags('Course')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @DisAllowDeactivated()
-@Controller('course')
+@Controller('courses')
 export class CourseController {
   constructor(private readonly courseService: CourseService) { }
 
@@ -50,7 +50,7 @@ export class CourseController {
 
   // updated
   @ApiOperation({ summary: 'Get my assignments for a course' })
-  @Get(':course_id/assignment')
+  @Get(':course_id/assignments')
   getAssignmentsForCourse(
     @Param('course_id') course_id: string,
     @GetUser('userId') user_id: string,
@@ -69,16 +69,10 @@ export class CourseController {
     return this.courseService.getAllAssetsFromCourse(course_id, user_id, type);
   }
 
-  private validateSignatureDate(signatureDate: string) {
-    if (!signatureDate || Number.isNaN(Date.parse(signatureDate))) {
-      throw new BadRequestException('Invalid signature date');
-    }
-  }
-
 
   // updated
   @ApiOperation({ summary: 'Get module details' })
-  @Get('module/:module_id')
+  @Get('modules/:module_id')
   getModuleDetails(
     @Param('module_id') module_id: string,
     @GetUser('userId') user_id: string,
@@ -90,7 +84,7 @@ export class CourseController {
   // updated
 
   @ApiOperation({ summary: 'Get class details' })
-  @Get('module/class/:class_id')
+  @Get('modules/classes/:class_id')
   getClassDetails(
     @Param('class_id') class_id: string,
     @GetUser('userId') user_id: string,
@@ -99,7 +93,7 @@ export class CourseController {
   }
 
   // updated
-  @Get('module/class/assignment/:assignment_id')
+  @Get('modules/classes/assignments/:assignment_id')
   getAssignmentDetails(
     @Param('assignment_id') assignment_id: string,
     @GetUser('userId') user_id: string,
@@ -109,7 +103,7 @@ export class CourseController {
 
   //updated
   @ApiOperation({ summary: 'Get all assignments for a class' })
-  @Get('module/class/:class_id/assignments')
+  @Get('modules/classes/:class_id/assignments')
   getAssignmentsForClass(
     @Param('class_id') class_id: string,
     @GetUser('userId') userId: string,
@@ -119,7 +113,7 @@ export class CourseController {
 
   // updated
   @ApiOperation({ summary: 'Submit assignment' })
-  @Post('module/class/assignment/:assignment_id')
+  @Post('modules/classes/assignments/:assignment_id')
   @UseInterceptors(
     FilesInterceptor('attachments', 5, {
       storage: memoryStorage(),
@@ -142,7 +136,7 @@ export class CourseController {
 
   // updated
   @ApiOperation({ summary: 'Get all assets for a class' })
-  @Get('module/class/:class_id/assets')
+  @Get('modules/classes/:class_id/assets')
   getAllAssets(
     @Param('class_id') class_id: string,
     @GetUser('userId') user_id: string,
