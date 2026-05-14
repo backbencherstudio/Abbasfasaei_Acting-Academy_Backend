@@ -47,7 +47,7 @@ export class ProfileService {
   private getFileUrl(filename: string): string {
     if (!filename) return null;
     if (filename.startsWith('http')) return filename; // Legacy support
-    return SazedStorage.url(appConfig().storageUrl.attachment + '/' + filename);
+    return SazedStorage.url(appConfig().storageUrl.media + '/' + filename);
   }
 
   private formatEnrollment(enrollment: any) {
@@ -81,7 +81,7 @@ export class ProfileService {
         name: true,
         email: true,
         phone_number: true,
-        experience_level: true,
+        experience: true,
       },
     });
 
@@ -90,7 +90,7 @@ export class ProfileService {
     }
 
     // Step 2: Count paid payments
-    const paidPaymentCount = await this.prisma.transaction.count({
+    const paidPaymentCount = await this.prisma.paymentTransaction.count({
       where: {
         user_id: userId,
         status: 'SUCCESS',
@@ -127,14 +127,12 @@ export class ProfileService {
       select: {
         id: true,
         name: true,
-        first_name: true,
-        last_name: true,
         email: true,
         phone_number: true,
         date_of_birth: true,
-        experience_level: true,
+        experience: true,
         avatar: true,
-        ActingGoals: true,
+        about: true,
       },
     });
 
@@ -143,13 +141,13 @@ export class ProfileService {
     }
 
     return {
-      fullName: user.name || `${user.first_name} ${user.last_name}`.trim(),
+      fullName: user.name || 'User',
       email: user.email,
       phone: user.phone_number,
       dateOfBirth: user.date_of_birth,
-      experienceLevel: user.experience_level,
+      experienceLevel: user.experience,
       avatar: user.avatar,
-      actingGoals: user?.ActingGoals?.acting_goals || null,
+      actingGoals: user?.about || null,
     };
   }
 
@@ -168,10 +166,7 @@ export class ProfileService {
 
     // প্রত্যেক ফিল্ড চেক করে যোগ করুন
     if (fullName !== undefined) {
-      const nameParts = fullName.split(' ');
       updateFields.name = fullName;
-      updateFields.first_name = nameParts[0];
-      updateFields.last_name = nameParts.slice(1).join(' ');
     }
 
     if (phone !== undefined) {
@@ -183,18 +178,11 @@ export class ProfileService {
     }
 
     if (experienceLevel !== undefined) {
-      updateFields.experience_level = experienceLevel || null;
+      updateFields.experience = experienceLevel || null;
     }
 
     if (actingGoals !== undefined) {
-      const goalsValue = actingGoals || '';
-      updateFields.about = goalsValue;
-      updateFields.ActingGoals = {
-        upsert: {
-          create: { acting_goals: goalsValue },
-          update: { acting_goals: goalsValue },
-        },
-      };
+      updateFields.about = actingGoals || '';
     }
 
     if (address) {
@@ -218,9 +206,8 @@ export class ProfileService {
         email: true,
         phone_number: true,
         date_of_birth: true,
-        experience_level: true,
+        experience: true,
         about: true,
-        ActingGoals: true,
       },
     });
 
@@ -231,8 +218,8 @@ export class ProfileService {
         email: user.email,
         phone: user.phone_number,
         dateOfBirth: user.date_of_birth,
-        experienceLevel: user.experience_level,
-        actingGoals: user?.ActingGoals?.acting_goals || null,
+        experienceLevel: user.experience,
+        actingGoals: user.about || null,
       },
     };
   }
@@ -404,7 +391,7 @@ export class ProfileService {
 
     await this.prisma.user.update({
       where: { id: userId },
-      data: { lastSeenAt: new Date() },
+      data: { last_active_at: new Date() },
     });
 
     const response = await this.revokeRefreshToken(userId);
@@ -414,16 +401,16 @@ export class ProfileService {
 
   // Active User Only Methods
   async getSubscriptionPayment(userId: string) {
-    const payments = await this.prisma.transaction.findMany({
+    const payments = await this.prisma.paymentTransaction.findMany({
       where: { user_id: userId },
       include: {
-        payment: {
+        order: {
           include: {
             course: true,
           },
         },
       },
-      orderBy: { payment_date: 'desc' },
+      orderBy: { paid_at: 'desc' },
     });
 
     const enrollments = await this.prisma.enrollment.findMany({
@@ -442,14 +429,14 @@ export class ProfileService {
         id: payment.id,
         amount: payment.amount,
         currency: payment.currency,
-        paymentDate: payment.payment_date,
+        paymentDate: payment.paid_at,
         status: payment.status,
-        course: payment.payment?.course?.title,
+        course: payment.order?.course?.title,
       })),
       currentSubscriptions: enrollments.map((enrollment) => ({
         course: enrollment.course?.title,
         status: enrollment.status,
-        IsPaymentCompleted: enrollment.IsPaymentCompleted,
+        IsPaymentCompleted: enrollment.step === 'COMPLETED',
         startDate: enrollment.created_at,
       })),
     };
@@ -460,16 +447,8 @@ export class ProfileService {
       where: { user_id: userId },
       include: {
         course: true,
-        digital_contract_signing: {
-          include: {
-            digitalSignature: true,
-          },
-        },
-        rules_regulations_signing: {
-          include: {
-            digitalSignature: true,
-          },
-        },
+        digital_contract_signature: true,
+        rules_regulations_signature: true,
       },
     });
 
@@ -478,19 +457,19 @@ export class ProfileService {
       return {
         course: formatted.course?.title,
         enrolled_documents: formatted.enrolled_documents,
-        digitalContract: formatted.digital_contract_signing,
-        rulesRegulations: formatted.rules_regulations_signing,
+        digitalContract: formatted.digital_contract_signature,
+        rulesRegulations: formatted.rules_regulations_signature,
       };
     });
   }
 
   async getFeedbackCertificates(userId: string) {
     const assignments = await this.prisma.assignmentGrade.findMany({
-      where: { studentId: userId },
+      where: { submission: { student_id: userId } },
       include: {
         assignment: {
           include: {
-            moduleClass: {
+            class: {
               include: {
                 module: {
                   include: {
@@ -513,11 +492,11 @@ export class ProfileService {
 
     return {
       feedback: assignments.map((assignment) => ({
-        course: assignment.assignment.moduleClass.module.course.title,
+        course: assignment.assignment.class.module.course.title,
         assignment: assignment.assignment.title,
         grade: assignment.grade,
         feedback: assignment.feedback,
-        gradedAt: assignment.gradedAt,
+        gradedAt: assignment.graded_at,
       })),
       certificates: enrollments.map((enrollment) => ({
         course: enrollment.course?.title,

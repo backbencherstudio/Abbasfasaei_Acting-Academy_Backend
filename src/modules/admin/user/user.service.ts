@@ -347,7 +347,7 @@ export class UserService {
           phone_number: true,
           address: true,
           avatar: true,
-          ActingGoals: true,
+          about: true,
         },
       });
       return {

@@ -112,7 +112,7 @@ export class RealtimeGateway
       // Mark online (use updateMany to avoid throwing if race condition deletes user)
       await this.prisma.user.updateMany({
         where: { id: payload.sub },
-        data: { lastSeenAt: null },
+        data: { last_active_at: null },
       });
 
       socket.emit('connection:ok', { userId: payload.sub });
@@ -131,7 +131,7 @@ export class RealtimeGateway
       try {
         await this.prisma.user.updateMany({
           where: { id: userId },
-          data: { lastSeenAt: new Date() },
+          data: { last_active_at: new Date() },
         });
       } catch (_) {
         // swallow; user might have been deleted concurrently

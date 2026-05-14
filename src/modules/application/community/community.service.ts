@@ -76,13 +76,11 @@ export class CommunityService {
 
     return this.prisma.communityPost.create({
       data: {
-        author_Id: author.id,
+        author_id: author.id,
         content: body.content,
-        media_Url: mediaUrl,
-        mediaType: body.mediaType,
         visibility: body.visibility,
-        post_type: body.postType,
-        status, // Admin posts are approved immediately; others go to request queue
+        post_type: body.postType as any,
+        status: status as any, // Admin posts are approved immediately; others go to request queue
         poll_options:
           body.postType === 'POLL' && body.pollOptions
             ? {
@@ -91,6 +89,12 @@ export class CommunityService {
                 })),
               }
             : undefined,
+        attachments: mediaUrl ? {
+          create: {
+            file_path: mediaUrl,
+            type: body.mediaType as any,
+          }
+        } : undefined
       },
       select: {
         id: true,
@@ -103,14 +107,13 @@ export class CommunityService {
           },
         },
         content: true,
-        media_Url: true,
-        mediaType: true,
         post_type: true,
         visibility: true,
         status: true,
         poll_options: true,
-        createdAt: true,
-        updatedAt: true,
+        created_at: true,
+        updated_at: true,
+        attachments: true,
       },
     });
   }
@@ -138,14 +141,14 @@ export class CommunityService {
 
       const existingPost = await this.prisma.communityPost.findUnique({
         where: { id: postId },
-        include: { poll_options: true },
+        include: { poll_options: true, attachments: true },
       });
 
       if (!existingPost) {
         return { success: false, message: 'Post not found' };
       }
 
-      if (existingPost.author_Id !== userId) {
+      if (existingPost.author_id !== userId) {
         return { success: false, message: 'Unauthorized' };
       }
 
@@ -157,15 +160,16 @@ export class CommunityService {
         return { success: false, message: 'Cannot change post type' };
       }
 
-      let mediaUrl = existingPost.media_Url;
+      let mediaUrl = existingPost.attachments?.[0]?.file_path;
 
       // Only handle media updates for POST type
       if (existingPost.post_type === 'POST') {
         if (file) {
           // Delete old file from storage
-          if (existingPost.media_Url) {
+          if (existingPost.attachments?.length > 0) {
             try {
-              const urlParts = existingPost.media_Url.split('/');
+              const oldPath = existingPost.attachments[0].file_path;
+              const urlParts = oldPath.split('/');
               const key = urlParts.slice(3).join('/');
               await SazedStorage.delete(key);
             } catch (error) {
@@ -175,7 +179,7 @@ export class CommunityService {
 
           // Upload new file
           const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
-          const mediaType = body.mediaType || existingPost.mediaType;
+          const mediaType = body.mediaType || (existingPost.attachments?.[0]?.type as any);
 
           if (mediaType === 'PHOTO') {
             await SazedStorage.put(
@@ -197,7 +201,7 @@ export class CommunityService {
       let pollOptionsUpdate = undefined;
       if (existingPost.post_type === 'POLL' && body.pollOptions) {
         await this.prisma.communityPollOption.deleteMany({
-          where: { postId },
+          where: { post_id: postId },
         });
         pollOptionsUpdate = {
           create: body.pollOptions.map((option) => ({
@@ -211,8 +215,6 @@ export class CommunityService {
         where: { id: postId },
         data: {
           content: body.content !== undefined ? body.content : undefined,
-          media_Url: mediaUrl,
-          mediaType: body.mediaType !== undefined ? body.mediaType : undefined,
           visibility:
             body.visibility !== undefined ? body.visibility : undefined,
           // Update status to REQUEST unless it's an admin edit
@@ -249,9 +251,9 @@ export class CommunityService {
       ],
     };
     if (userId) {
-      where.author_Id = userId;
+      where.author_id = userId;
     } else {
-      where.OR.push({ author_Id: myId });
+      where.OR.push({ author_id: myId });
     }
     const posts = await this.prisma.communityPost.findMany({
       where,
@@ -272,8 +274,9 @@ export class CommunityService {
             votes: true,
           },
         },
+        attachments: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { created_at: 'desc' },
     });
 
     // Add counts for likes, comments, shares
@@ -288,7 +291,7 @@ export class CommunityService {
   async likePost(postId: string, userId: string) {
     try {
       const existingLike = await this.prisma.communityLike.findFirst({
-        where: { postId, userId },
+        where: { post_id: postId, user_id: userId },
       });
 
       if (existingLike) {
@@ -313,12 +316,9 @@ export class CommunityService {
 
         await this.prisma.communityLike.create({
           data: {
-            postId,
-            userId,
-            name: user?.name,
-            username: user?.username,
-            avatar: user?.avatar,
-            createdAt: new Date(),
+            post_id: postId,
+            user_id: userId,
+            created_at: new Date(),
           },
         });
         return {
@@ -333,18 +333,18 @@ export class CommunityService {
 
   async voteOnAPoll(postId: string, optionId: string, userId: string) {
     const vote = await this.prisma.communityPollVote.findFirst({
-      where: { userId, option: { postId } },
+      where: { user_id: userId, option: { post_id: postId } },
     });
 
     try {
       if (!vote) {
         await this.prisma.communityPollVote.create({
-          data: { userId, optionId },
+          data: { user_id: userId, option_id: optionId },
         });
         return { success: true, message: 'Voted successfully' };
       }
 
-      if (vote.optionId === optionId) {
+      if (vote.option_id === optionId) {
         await this.prisma.communityPollVote.delete({
           where: { id: vote.id },
         });
@@ -353,7 +353,7 @@ export class CommunityService {
 
       await this.prisma.communityPollVote.update({
         where: { id: vote.id },
-        data: { optionId },
+        data: { option_id: optionId },
       });
 
       return { success: true, message: 'Voted successfully' };
@@ -361,7 +361,7 @@ export class CommunityService {
       return {
         success: false,
         message:
-          vote?.optionId === optionId
+          vote?.option_id === optionId
             ? 'Error unvoting on poll'
             : 'Error voting on poll',
       };
@@ -370,11 +370,11 @@ export class CommunityService {
   // get like count and users who liked a post
   async getLikes(postId: string) {
     const likes = await this.prisma.communityLike.findMany({
-      where: { postId },
+      where: { post_id: postId },
       select: {
         id: true,
-        postId: true,
-        createdAt: true,
+        post_id: true,
+        created_at: true,
         user: {
           select: {
             id: true,
@@ -401,11 +401,8 @@ export class CommunityService {
 
       await this.prisma.communityComment.create({
         data: {
-          postId,
-          userId,
-          name: user.name,
-          username: user.username ?? '',
-          avatar: user.avatar ?? '',
+          post_id: postId,
+          user_id: userId,
           content,
         },
       });
@@ -421,12 +418,12 @@ export class CommunityService {
 
   // Like a comment or reply (toggle)
   async likeCommentOrReply(commentId: string, userId: string) {
-    const existingLike = await this.prisma.communityCommentLike.findFirst({
-      where: { commentId, userId },
+    const existingLike = await this.prisma.communityLike.findFirst({
+      where: { comment_id: commentId, user_id: userId },
     });
 
     if (existingLike) {
-      await this.prisma.communityCommentLike.delete({
+      await this.prisma.communityLike.delete({
         where: { id: existingLike.id },
       });
       return { liked: false };
@@ -455,14 +452,11 @@ export class CommunityService {
       }
 
       // Create the like for the comment or reply
-      await this.prisma.communityCommentLike.create({
+      await this.prisma.communityLike.create({
         data: {
-          commentId,
-          userId,
-          name: user.name,
-          username: user.username ?? '',
-          avatar: user.avatar ?? '',
-          createdAt: new Date(),
+          comment_id: commentId,
+          user_id: userId,
+          created_at: new Date(),
         },
       });
 
@@ -502,14 +496,11 @@ export class CommunityService {
 
     return this.prisma.communityComment.create({
       data: {
-        postId,
-        userId,
-        parentId,
-        name: user.name,
-        username: user.username,
-        avatar: user.avatar,
+        post_id: postId,
+        user_id: userId,
+        parent_id: parentId,
         content,
-        createdAt: new Date(),
+        created_at: new Date(),
       },
     });
   }
@@ -518,9 +509,9 @@ export class CommunityService {
   async getComments(postId: string) {
     const comments = await this.prisma.communityComment.findMany({
       where: {
-        postId,
-        parentId: null,
-        user: { status: UserStatus.ACTIVE }, // Only show comments from active users
+        post_id: postId,
+        parent_id: null,
+        user: { status: 1 }, // Only show comments from active users
       },
       include: {
         user: {
@@ -535,11 +526,11 @@ export class CommunityService {
             likes: { select: { id: true } }, // Fetch likes for the replies
           },
           where: {
-            user: { status: UserStatus.ACTIVE }, // Only show replies from active users
+            user: { status: 1 }, // Only show replies from active users
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { created_at: 'desc' },
     });
 
     // Return formatted data with like counts
@@ -566,11 +557,8 @@ export class CommunityService {
 
       await this.prisma.communityShare.create({
         data: {
-          postId,
-          userId,
-          name: user.name,
-          username: user.username ?? '',
-          avatar: user.avatar ?? '',
+          post_id: postId,
+          user_id: userId,
         },
       });
 
@@ -593,7 +581,7 @@ export class CommunityService {
         return { success: false, message: 'Post not found' };
       }
 
-      if (post.author_Id !== userId) {
+      if (post.author_id !== userId) {
         return { success: false, message: 'Unauthorized' };
       }
 
@@ -622,7 +610,6 @@ export class CommunityService {
           avatar: true,
           cover_image: true,
           about: true,
-          ActingGoals: true,
         },
       });
 
@@ -654,7 +641,7 @@ export class CommunityService {
           name: profile.name,
           username: profile.username,
           email: profile.email,
-          about: profile?.ActingGoals?.acting_goals || profile?.about,
+          about: profile?.about,
           avatar: profile.avatar,
           cover_image: profile.cover_image,
         },
@@ -695,12 +682,6 @@ export class CommunityService {
       }
       if (dto.about !== undefined) {
         data.about = dto.about;
-        data.ActingGoals = {
-          upsert: {
-            update: { acting_goals: dto.about },
-            create: { acting_goals: dto.about },
-          },
-        };
       }
 
       // Handle file uploads with helper
@@ -761,7 +742,6 @@ export class CommunityService {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
-        include: { ActingGoals: true },
       });
 
       if (!user) {
@@ -794,7 +774,7 @@ export class CommunityService {
         username: user.username,
         email: user.email,
         avatar: user.avatar,
-        about: user?.ActingGoals?.acting_goals || user?.about,
+        about: user?.about,
         cover_image: user.cover_image,
       };
 
@@ -839,8 +819,8 @@ export class CommunityService {
       // if user already reported then the user can't report again.
       const existingReport = await this.prisma.userReport.findFirst({
         where: {
-          reporterId: userId,
-          reportedUserId: reportedUserId,
+          reporter_id: userId,
+          reported_id: reportedUserId,
         },
       });
 
@@ -853,11 +833,11 @@ export class CommunityService {
 
       await this.prisma.userReport.create({
         data: {
-          reporterId: userId,
-          reportedUserId,
+          reporter_id: userId,
+          reported_id: reportedUserId,
           reason,
           description,
-          createdAt: new Date(),
+          created_at: new Date(),
         },
       });
 
@@ -876,9 +856,9 @@ export class CommunityService {
   async getAllReports(userId: string) {
     try {
       const reports = await this.prisma.userReport.findMany({
-        where: { reporterId: userId },
+        where: { reporter_id: userId },
         include: {
-          reportedUser: {
+          reported_user: {
             select: {
               id: true,
               name: true,

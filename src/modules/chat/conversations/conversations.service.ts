@@ -113,8 +113,8 @@ export class ConversationsService {
       data: {
         type: ConversationType.DM,
         dmKey: key,
-        senderTitle,
-        receiverTitle,
+        senderTitle: senderTitle,
+        receiverTitle: receiverTitle,
         createdBy: currentUserId,
         avatarUrl: otherUserId,
         creator_id: currentUserId,
@@ -195,7 +195,7 @@ export class ConversationsService {
       data: {
         type: ConversationType.GROUP,
         title,
-        avatarUrl,
+        avatarUrl: avatarUrl,
         createdBy: currentUserId,
         memberships: {
           create: uniqueMembers.map((uid) => ({

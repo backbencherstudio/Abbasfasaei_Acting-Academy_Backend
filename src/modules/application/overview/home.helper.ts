@@ -232,32 +232,28 @@ export class HomeService {
     const [user, enrollment] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
-        select: { name: true, first_name: true, last_name: true },
+        select: { name: true },
       }),
       this.prisma.enrollment.findFirst({
         where: {
           user_id: userId,
           step: EnrollmentStep.COMPLETED,
-          IsPaymentCompleted: true,
         },
         orderBy: { created_at: 'desc' },
       }),
     ]);
 
     const userProfile = {
-      name:
-        user?.name ||
-        `${user?.first_name || ''} ${user?.last_name || ''}`.trim() ||
-        'User',
+      name: user?.name || 'User',
     };
 
     const now = new Date();
-    if (enrollment?.IsPaymentCompleted) {
+    if (enrollment) {
       const [rawClasses, rawAssignments, rawEvents] = await Promise.all([
         // Upcoming Classes (strictly in the future)
         this.prisma.moduleClass.findFirst({
           where: {
-            start_date: { gt: now },
+            start_at: { gt: now },
             module: {
               course: {
                 status: 'ACTIVE',
@@ -275,8 +271,7 @@ export class HomeService {
             class_title: true,
             class_name: true,
             duration: true,
-            start_date: true,
-            class_time: true,
+            start_at: true,
             module: {
               select: {
                 module_name: true,
@@ -293,28 +288,28 @@ export class HomeService {
                 },
               },
             },
-            classAssets: {
+            class_assets: {
               select: {
                 id: true,
-                asset_type: true,
-                asset_url: true,
+                type: true,
+                file_path: true,
               },
             },
           },
-          orderBy: { start_date: 'asc' },
+          orderBy: { start_at: 'asc' },
         }),
 
         // Upcoming Assignments (future due date AND not yet submitted)
         this.prisma.assignment.findFirst({
           where: {
-            due_date: { gt: now },
+            submission_date: { gt: now },
             submissions: {
               none: {
-                studentId: userId,
-                submitted: true,
+                student_id: userId,
+                status: 'SUBMITTED',
               },
             },
-            moduleClass: {
+            class: {
               module: {
                 course: {
                   status: 'ACTIVE',
@@ -331,15 +326,14 @@ export class HomeService {
           select: {
             id: true,
             title: true,
-            due_date: true,
-            submission_Date: true,
+            submission_date: true,
             total_marks: true,
-            teacher: {
+            creator: {
               select: {
                 name: true,
               },
             },
-            moduleClass: {
+            class: {
               select: {
                 module: {
                   select: {
@@ -353,36 +347,36 @@ export class HomeService {
               },
             },
           },
-          orderBy: { due_date: 'asc' },
+          orderBy: { submission_date: 'asc' },
         }),
 
         // Upcoming Events (strictly in the future, next one only)
         this.prisma.event.findFirst({
           where: {
-            date: { gt: now },
+            start_at: { gt: now },
           },
           select: {
             id: true,
             name: true,
             description: true,
             overview: true,
-            date: true,
+            start_at: true,
             time: true,
             location: true,
-            amount: true,
+            amount_pence: true,
             creator: {
               select: {
                 name: true,
               },
             },
-            members: {
+            registrations: {
               where: { user_id: userId },
               select: {
                 user_id: true,
               },
             },
           },
-          orderBy: { date: 'asc' },
+          orderBy: { start_at: 'asc' },
         }),
       ]);
 
@@ -392,13 +386,12 @@ export class HomeService {
             class_title: rawClasses.class_title,
             class_name: rawClasses.class_name,
             duration: rawClasses.duration,
-            start_date: rawClasses.start_date,
-            class_time: rawClasses.class_time,
+            start_date: rawClasses.start_at,
             module_name: rawClasses.module?.module_name,
             module_title: rawClasses.module?.module_title,
             course_title: rawClasses.module?.course?.title,
             instructor_name: rawClasses.module?.course?.instructor?.name,
-            materials: rawClasses.classAssets,
+            materials: rawClasses.class_assets,
           }
         : null;
 
@@ -406,11 +399,10 @@ export class HomeService {
         ? {
             id: rawAssignments.id,
             title: rawAssignments.title,
-            due_date: rawAssignments.due_date,
-            submission_Date: rawAssignments.submission_Date,
+            due_date: rawAssignments.submission_date,
             total_marks: rawAssignments.total_marks,
-            teacher_name: rawAssignments.teacher?.name,
-            course_title: rawAssignments.moduleClass?.module?.course?.title,
+            teacher_name: rawAssignments.creator?.name,
+            course_title: rawAssignments.class?.module?.course?.title,
           }
         : null;
 
@@ -420,12 +412,12 @@ export class HomeService {
             name: rawEvents.name,
             description: rawEvents.description,
             overview: rawEvents.overview,
-            date: rawEvents.date,
+            date: rawEvents.start_at,
             time: rawEvents.time,
             location: rawEvents.location,
-            amount: rawEvents.amount,
+            amount: rawEvents.amount_pence,
             creator_name: rawEvents.creator?.name,
-            is_member: rawEvents.members.length > 0,
+            is_member: rawEvents.registrations.length > 0,
           }
         : null;
 
@@ -445,7 +437,7 @@ export class HomeService {
           select: {
             id: true,
             title: true,
-            fee: true,
+            fee_pence: true,
             duration: true,
             start_date: true,
             class_time: true,
@@ -461,30 +453,30 @@ export class HomeService {
         // Upcoming Events for non-paid/new users (strictly in the future, next one only)
         this.prisma.event.findFirst({
           where: {
-            date: { gt: now },
+            start_at: { gt: now },
           },
           select: {
             id: true,
             name: true,
             description: true,
             overview: true,
-            date: true,
+            start_at: true,
             time: true,
             location: true,
-            amount: true,
+            amount_pence: true,
             creator: {
               select: {
                 name: true,
               },
             },
-            members: {
+            registrations: {
               where: { user_id: userId },
               select: {
                 user_id: true,
               },
             },
           },
-          orderBy: { date: 'asc' },
+          orderBy: { start_at: 'asc' },
         }),
       ]);
 
@@ -492,7 +484,7 @@ export class HomeService {
         ? {
             id: rawCourse.id,
             title: rawCourse.title,
-            fee: rawCourse.fee,
+            fee: rawCourse.fee_pence,
             duration: rawCourse.duration,
             start_date: rawCourse.start_date,
             class_time: rawCourse.class_time,
@@ -507,12 +499,12 @@ export class HomeService {
             name: rawEvents.name,
             description: rawEvents.description,
             overview: rawEvents.overview,
-            date: rawEvents.date,
+            date: rawEvents.start_at,
             time: rawEvents.time,
             location: rawEvents.location,
-            amount: rawEvents.amount,
+            amount: rawEvents.amount_pence,
             creator_name: rawEvents.creator?.name,
-            is_member: rawEvents.members.length > 0,
+            is_member: rawEvents.registrations.length > 0,
           }
         : null;
 

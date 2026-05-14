@@ -47,7 +47,7 @@ export class CreateManualPaymentDto {
   @IsEnum(PaymentType)
   paymentType?: PaymentType;
 
-  @ApiPropertyOptional({ enum: OrderStatus, example: OrderStatus.COMPLETED })
+  @ApiPropertyOptional({ enum: OrderStatus, example: OrderStatus.PAID })
   @IsOptional()
   @IsEnum(OrderStatus)
   paymentStatus?: OrderStatus;

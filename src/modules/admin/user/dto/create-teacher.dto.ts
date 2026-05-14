@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ExperienceLevel } from '@prisma/client';
+
 import {
   IsNotEmpty,
   IsOptional,
@@ -42,9 +42,9 @@ export class CreateTeacherDto {
   password?: string;
 
   @IsNotEmpty()
-  @IsEnum(ExperienceLevel)
+  @IsString()
   @ApiProperty({ example: 'BEGINNER | INTERMEDIATE | ADVANCED' })
-  experienceLevel: ExperienceLevel;
+  experienceLevel: string;
 
   @IsOptional()
   @IsString()

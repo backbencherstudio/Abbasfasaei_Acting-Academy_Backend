@@ -1,4 +1,4 @@
-import { ExperienceLevel } from '@prisma/client';
+
 import {
   IsEmail,
   IsEnum,
@@ -35,8 +35,8 @@ export class CombinedEnrollmentDto {
   date_of_birth?: string;
 
   @IsNotEmpty()
-  @IsEnum(ExperienceLevel)
-  experience_level: ExperienceLevel;
+  @IsString()
+  experience_level: string;
 
   @IsNotEmpty()
   @IsString()

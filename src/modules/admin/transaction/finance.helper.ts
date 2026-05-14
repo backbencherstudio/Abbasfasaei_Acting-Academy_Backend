@@ -209,7 +209,7 @@ export class FinanceService {
   //     const previousMonth = this.getPreviousMonthDateRange();
 
   //     const [currentRevenue, previousRevenue] = await Promise.all([
-  //       this.prisma.transaction.aggregate({
+  //       this.prisma.paymentTransaction.aggregate({
   //         _sum: { amount: true },
   //         where: {
   //           status: 'SUCCESS',
@@ -219,7 +219,7 @@ export class FinanceService {
   //           },
   //         },
   //       }),
-  //       this.prisma.transaction.aggregate({
+  //       this.prisma.paymentTransaction.aggregate({
   //         _sum: { amount: true },
   //         where: {
   //           status: 'SUCCESS',
@@ -359,7 +359,7 @@ export class FinanceService {
           name: body.name,
           email: body.email,
           phone_number: body.phone,
-          experience_level: body.experienceLevel,
+          experience: body.experienceLevel,
           joined_at: body.joined_at,
           type: 'finance',
           password: hashedPassword,
@@ -369,7 +369,7 @@ export class FinanceService {
           name: true,
           email: true,
           phone_number: true,
-          experience_level: true,
+          experience: true,
           joined_at: true,
           type: true,
         },
@@ -430,7 +430,7 @@ export class FinanceService {
           name: true,
           email: true,
           phone_number: true,
-          experience_level: true,
+          experience: true,
           joined_at: true,
           type: true,
         },
@@ -477,10 +477,10 @@ export class FinanceService {
     const where: any = {
       ...(payment_type !== 'MONTHLY' && payment_type !== 'ONE_TIME'
         ? {}
-        : { payment_type }),
+        : { metadata: { path: ['payment_type'], equals: payment_type } }),
       ...(date
         ? {
-            payment_date: {
+            paid_at: {
               gte: new Date(new Date(date).setHours(0, 0, 0, 0)),
               lte: new Date(new Date(date).setHours(23, 59, 59, 999)),
             },
@@ -509,7 +509,7 @@ export class FinanceService {
           },
         },
         {
-          paymentId: {
+          order_id: {
             contains: normalizedSearch,
             mode: 'insensitive',
           },
@@ -536,14 +536,13 @@ export class FinanceService {
     }
 
     const [transactions, total] = await Promise.all([
-      this.prisma.transaction.findMany({
+      this.prisma.paymentTransaction.findMany({
         where,
         select: {
           id: true,
           transaction_ref: true,
-          payment_type: true,
           amount: true,
-          payment_date: true,
+          paid_at: true,
           receipt_url: true,
           created_at: true,
           gateway: true,
@@ -554,39 +553,39 @@ export class FinanceService {
               username: true,
             },
           },
-          payment: {
+          order: {
             select: {
               item_type: true,
             },
           },
         },
         orderBy: {
-          payment_date: 'desc',
+          paid_at: 'desc',
         },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.transaction.count({ where }),
+      this.prisma.paymentTransaction.count({ where }),
     ]);
 
     return {
       success: true,
-      data: transactions.map((transaction) => ({
+      data: transactions.map((transaction: any) => ({
         userId: transaction.user.id,
         username: transaction.user.name || transaction.user.username || 'N/A',
         transactionId: transaction.transaction_ref || `TRX-${transaction.id}`,
         amount: transaction.amount?.toNumber() || 0,
-        date: transaction.payment_date || transaction.created_at,
+        date: transaction.paid_at || transaction.created_at,
         paymentType:
-          transaction.payment?.item_type === 'EVENT_TICKET'
+          transaction.order?.item_type === 'EVENT_TICKET'
             ? 'Event Booking'
             : 'Course Enrollment',
         paymentPlan:
-          transaction.payment_type == 'MONTHLY'
+          transaction.metadata?.payment_type == 'MONTHLY'
             ? 'Monthly Instalment'
             : 'One Time',
         source:
-          transaction.gateway === PaymentGateway.STRIPE_MANUAL_ENTRY
+          transaction.gateway === PaymentGateway.MANUAL
             ? 'Manual Entry'
             : 'Stripe',
         invoiceFile: transaction.receipt_url || undefined,
@@ -614,7 +613,7 @@ export class FinanceService {
 
     const itemType = body.itemType || ItemType.COURSE_ENROLLMENT;
     const paymentType = body.paymentType || 'ONE_TIME';
-    const paymentStatus = body.paymentStatus || OrderStatus.COMPLETED;
+    const paymentStatus = body.paymentStatus || OrderStatus.PAID;
     const transactionStatus =
       body.transactionStatus || TransactionStatus.SUCCESS;
     const currency = (body.currency || 'USD').toUpperCase();
@@ -664,7 +663,7 @@ export class FinanceService {
     }
 
     if (body.transactionRef) {
-      const existingTransaction = await this.prisma.transaction.findUnique({
+      const existingTransaction = await this.prisma.paymentTransaction.findUnique({
         where: { transaction_ref: body.transactionRef },
         select: { id: true },
       });
@@ -681,18 +680,17 @@ export class FinanceService {
       `MANUAL-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.create({
+      const order = await tx.order.create({
         data: {
           order_number: orderNumber,
           user_id: student.id,
           total_amount: amount,
-          paid_amount: paymentStatus === OrderStatus.COMPLETED ? amount : 0,
-          due_amount: paymentStatus === OrderStatus.COMPLETED ? 0 : amount,
+          paid_amount: paymentStatus === OrderStatus.PAID ? amount : 0,
+          due_amount: paymentStatus === OrderStatus.PAID ? 0 : amount,
           currency,
-          status: paymentStatus,
+          status: paymentStatus === OrderStatus.PAID ? 'PAID' : 'PENDING',
           item_type: itemType,
-          payment_type: paymentType,
-          installment_amount: paymentType === 'MONTHLY' ? amount : null,
+          payment_mode: paymentType === 'MONTHLY' ? 'INSTALLMENT' : 'FULL',
           notes:
             body.notes ||
             (itemType === ItemType.COURSE_ENROLLMENT
@@ -700,21 +698,21 @@ export class FinanceService {
               : `Manual event payment${event ? ` for ${event.name}` : ''}`),
           course_id: course?.id,
           event_id: event?.id,
+          subtotal_amount: amount,
         },
       });
 
-      const transaction = await tx.transaction.create({
+      const transaction = await tx.paymentTransaction.create({
         data: {
           transaction_ref: transactionRef,
-          paymentId: payment.id,
+          order_id: order.id,
           user_id: student.id,
           amount,
           currency,
           status: transactionStatus,
-          gateway: PaymentGateway.STRIPE_MANUAL_ENTRY,
+          gateway: PaymentGateway.MANUAL,
           payment_method: paymentMethod,
-          payment_type: paymentType,
-          payment_date: body.paymentDate
+          paid_at: body.paymentDate
             ? new Date(body.paymentDate)
             : new Date(),
           metadata: {
@@ -725,12 +723,13 @@ export class FinanceService {
             courseId: course?.id,
             eventId: event?.id,
             paymentStatus,
+            payment_type: paymentType,
             notes: body.notes,
           },
         },
       });
 
-      return { payment, transaction };
+      return { order, transaction };
     });
 
     return {
@@ -755,10 +754,10 @@ export class FinanceService {
 
       const [currentYearRevenue, lastYearRevenue] = await Promise.all([
         // All payments from current year
-        this.prisma.transaction.aggregate({
+        this.prisma.paymentTransaction.aggregate({
           where: {
             status: 'SUCCESS',
-            payment_date: {
+            paid_at: {
               gte: currentYearStart,
               lte: currentYearEnd,
             },
@@ -766,10 +765,10 @@ export class FinanceService {
           _sum: { amount: true },
         }),
         // All payments from last year
-        this.prisma.transaction.aggregate({
+        this.prisma.paymentTransaction.aggregate({
           where: {
             status: 'SUCCESS',
-            payment_date: {
+            paid_at: {
               gte: lastYearStart,
               lte: lastYearEnd,
             },
@@ -814,22 +813,22 @@ export class FinanceService {
       );
 
       const [currentMonthRevenue, lastMonthRevenue] = await Promise.all([
-        this.prisma.transaction.aggregate({
+        this.prisma.paymentTransaction.aggregate({
           where: {
             status: 'SUCCESS',
-            payment: { item_type: 'COURSE_ENROLLMENT' },
-            payment_date: {
+            order: { item_type: 'COURSE_ENROLLMENT' },
+            paid_at: {
               gte: currentMonthStart,
               lte: now,
             },
           },
           _sum: { amount: true },
         }),
-        this.prisma.transaction.aggregate({
+        this.prisma.paymentTransaction.aggregate({
           where: {
             status: 'SUCCESS',
-            payment: { item_type: 'COURSE_ENROLLMENT' },
-            payment_date: {
+            order: { item_type: 'COURSE_ENROLLMENT' },
+            paid_at: {
               gte: lastMonthStart,
               lte: lastMonthEnd,
             },
@@ -873,22 +872,22 @@ export class FinanceService {
       );
 
       const [currentMonthRevenue, lastMonthRevenue] = await Promise.all([
-        this.prisma.transaction.aggregate({
+        this.prisma.paymentTransaction.aggregate({
           where: {
             status: 'SUCCESS',
-            payment: { item_type: 'EVENT_TICKET' },
-            payment_date: {
+            order: { item_type: 'EVENT_TICKET' },
+            paid_at: {
               gte: currentMonthStart,
               lte: now,
             },
           },
           _sum: { amount: true },
         }),
-        this.prisma.transaction.aggregate({
+        this.prisma.paymentTransaction.aggregate({
           where: {
             status: 'SUCCESS',
-            payment: { item_type: 'EVENT_TICKET' },
-            payment_date: {
+            order: { item_type: 'EVENT_TICKET' },
+            paid_at: {
               gte: lastMonthStart,
               lte: lastMonthEnd,
             },
@@ -932,20 +931,20 @@ export class FinanceService {
       );
 
       const [currentMonthRevenue, lastMonthRevenue] = await Promise.all([
-        this.prisma.transaction.aggregate({
+        this.prisma.paymentTransaction.aggregate({
           where: {
             status: 'SUCCESS',
-            payment_date: {
+            paid_at: {
               gte: currentMonthStart,
               lte: now,
             },
           },
           _sum: { amount: true },
         }),
-        this.prisma.transaction.aggregate({
+        this.prisma.paymentTransaction.aggregate({
           where: {
             status: 'SUCCESS',
-            payment_date: {
+            paid_at: {
               gte: lastMonthStart,
               lte: lastMonthEnd,
             },

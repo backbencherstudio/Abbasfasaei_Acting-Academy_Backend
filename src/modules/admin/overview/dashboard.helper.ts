@@ -263,7 +263,7 @@ export class DashboardService {
               some: {
                 classes: {
                   some: {
-                    start_date: {
+                    start_at: {
                       lte: currentMonth.end,
                       gte: currentMonth.start,
                     },
@@ -280,7 +280,7 @@ export class DashboardService {
               some: {
                 classes: {
                   some: {
-                    start_date: {
+                    start_at: {
                       lte: previousMonth.end,
                       gte: previousMonth.start,
                     },
@@ -311,21 +311,21 @@ export class DashboardService {
       const previousMonth = this.getPreviousMonthDateRange();
 
       const [currentRevenue, previousRevenue] = await Promise.all([
-        this.prisma.transaction.aggregate({
+        this.prisma.paymentTransaction.aggregate({
           _sum: { amount: true },
           where: {
             status: 'SUCCESS',
-            payment_date: {
+            paid_at: {
               gte: currentMonth.start,
               lte: currentMonth.end,
             },
           },
         }),
-        this.prisma.transaction.aggregate({
+        this.prisma.paymentTransaction.aggregate({
           _sum: { amount: true },
           where: {
             status: 'SUCCESS',
-            payment_date: {
+            paid_at: {
               gte: previousMonth.start,
               lte: previousMonth.end,
             },
@@ -391,7 +391,7 @@ export class DashboardService {
       return enrollments.map((enroll) => ({
         id: enroll.id,
         userName: enroll?.user?.name,
-        full_name: enroll.user.first_name + ' ' + enroll.user.last_name,
+        full_name: enroll.user.name,
         avatar: enroll?.user?.avatar
           ? enroll.user.avatar.startsWith('http')
             ? enroll.user.avatar
@@ -413,7 +413,7 @@ export class DashboardService {
     try {
       return await this.prisma.moduleClass.findMany({
         where: {
-          start_date: {
+          start_at: {
             gte: new Date(),
             lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           },
@@ -429,7 +429,7 @@ export class DashboardService {
             },
           },
         },
-        orderBy: { start_date: 'asc' },
+        orderBy: { start_at: 'asc' },
         take: limit,
       });
     } catch (error) {
@@ -442,7 +442,7 @@ export class DashboardService {
     try {
       const recentClasses = await this.prisma.moduleClass.findMany({
         where: {
-          start_date: { lte: new Date() },
+          start_at: { lte: new Date() },
         },
         include: {
           attendances: {
@@ -463,7 +463,7 @@ export class DashboardService {
             },
           },
         },
-        orderBy: { start_date: 'desc' },
+        orderBy: { start_at: 'desc' },
         take: 6,
       });
 
@@ -472,7 +472,7 @@ export class DashboardService {
         course: cls.module.course.title,
         totalStudents: cls.attendances.length,
         totalEnrollments: cls.module.course.enrollments.length,
-        date: cls.start_date,
+        date: cls.start_at,
       }));
     } catch (error) {
       this.logger.error(`Error getting attendance tracking: ${error.message}`);
@@ -485,7 +485,7 @@ export class DashboardService {
     try {
       return await this.prisma.enrollment.count({
         where: {
-          course: { instructorId: teacherId },
+          course: { instructor_id: teacherId },
           status: 'ACTIVE',
         },
       });
@@ -501,7 +501,7 @@ export class DashboardService {
     try {
       return await this.prisma.course.count({
         where: {
-          instructorId: teacherId,
+          instructor_id: teacherId,
           status: 'ACTIVE',
         },
       });
@@ -517,8 +517,8 @@ export class DashboardService {
     try {
       return await this.prisma.assignment.count({
         where: {
-          teacherId: teacherId,
-          due_date: { gte: new Date() },
+          creator_id: teacherId,
+          submission_date: { gte: new Date() },
         },
       });
     } catch (error) {
@@ -537,9 +537,9 @@ export class DashboardService {
       return await this.prisma.moduleClass.findMany({
         where: {
           module: {
-            course: { instructorId: teacherId },
+            course: { instructor_id: teacherId },
           },
-          start_date: {
+          start_at: {
             gte: new Date(),
             lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           },
@@ -551,7 +551,7 @@ export class DashboardService {
             },
           },
         },
-        orderBy: { start_date: 'asc' },
+        orderBy: { start_at: 'asc' },
         take: limit,
       });
     } catch (error) {
@@ -567,9 +567,9 @@ export class DashboardService {
       const recentClasses = await this.prisma.moduleClass.findMany({
         where: {
           module: {
-            course: { instructorId: teacherId },
+            course: { instructor_id: teacherId },
           },
-          start_date: { lte: new Date() },
+          start_at: { lte: new Date() },
         },
         include: {
           attendances: {
@@ -581,7 +581,7 @@ export class DashboardService {
             },
           },
         },
-        orderBy: { start_date: 'desc' },
+        orderBy: { start_at: 'desc' },
         take: 5,
       });
 
@@ -589,7 +589,7 @@ export class DashboardService {
         classTitle: cls.class_title,
         course: cls.module.course.title,
         totalStudents: cls.attendances.length,
-        date: cls.start_date,
+        date: cls.start_at,
       }));
     } catch (error) {
       this.logger.error(
@@ -601,19 +601,19 @@ export class DashboardService {
 
   private async getRecentTransactions(limit: number = 6) {
     try {
-      const recentTransactions = await this.prisma.transaction.findMany({
+      const recentTransactions = await this.prisma.paymentTransaction.findMany({
         include: {
           user: true,
         },
         take: limit,
-        orderBy: { payment_date: 'desc' },
+        orderBy: { paid_at: 'desc' },
       });
       return recentTransactions.map((trans) => ({
         id: trans.id,
         userId: trans.user.id || trans.user_id,
         userName: trans.user.name || trans.user.username || 'N/A',
-        amount: trans.amount,
-        paymentDate: trans.payment_date || trans.created_at,
+        amount: Number(trans.amount),
+        paymentDate: trans.paid_at || trans.created_at,
         paymentStatus: trans.status,
       }));
     } catch (error) {

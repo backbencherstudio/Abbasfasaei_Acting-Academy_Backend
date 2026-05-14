@@ -59,13 +59,13 @@ export class InstructorsService {
           email: true,
           phone_number: true,
           avatar: true,
-          experience_level: true,
+          experience: true,
           status: true,
           joined_at: true,
           created_at: true,
           _count: {
             select: {
-              Course: true,
+              assigned_courses: true,
             },
           },
         },
@@ -87,7 +87,7 @@ export class InstructorsService {
                 )
             : null,
           status: t.status == UserStatus.ACTIVE ? 'ACTIVE' : 'INACTIVE',
-          class_count: _count.Course,
+          class_count: _count.assigned_courses,
         };
       }),
       meta_data: {
@@ -154,7 +154,7 @@ export class InstructorsService {
             phone_number: createTeacherDto.phone_number,
             type: 'teacher',
             status: UserStatus.ACTIVE,
-            experience_level: createTeacherDto.experienceLevel,
+            experience: createTeacherDto.experienceLevel,
             joined_at: createTeacherDto.joined_at,
           },
         });
@@ -196,8 +196,8 @@ export class InstructorsService {
       let courseUpdate = null;
       if (existingCourse) {
         if (
-          existingCourse.instructorId &&
-          existingCourse.instructorId !== teacher.id
+          existingCourse.instructor_id &&
+          existingCourse.instructor_id !== teacher.id
         ) {
           return {
             success: false,
@@ -208,7 +208,7 @@ export class InstructorsService {
         courseUpdate = await this.prisma.course.update({
           where: { id: createTeacherDto.courseId },
           data: {
-            instructorId: teacher.id,
+            instructor_id: teacher.id,
           },
         });
       }
@@ -362,16 +362,16 @@ export class InstructorsService {
         email: true,
         phone_number: true,
         avatar: true,
-        experience_level: true,
+        experience: true,
         status: true,
         joined_at: true,
         created_at: true,
-        Course: {
+        assigned_courses: {
           select: {
             id: true,
             title: true,
             course_overview: true,
-            fee: true,
+            fee_pence: true,
             status: true,
             duration: true,
             start_date: true,

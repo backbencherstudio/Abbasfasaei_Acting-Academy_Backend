@@ -24,7 +24,7 @@ export class StripeService {
       const event = await this.prisma.event.findUnique({
         where: { id: eventId },
       });
-      if (!event || !event.amount) {
+      if (!event || !event.amount_pence) {
         throw new BadRequestException(
           'Invalid event or no ticket price available',
         );
@@ -33,7 +33,7 @@ export class StripeService {
       const data = await this.createOneTimeEventPaymentIntent({
         userId,
         eventId,
-        amount: Number(event.amount),
+        amount: Number(event.amount_pence),
         currency,
         name: user.name,
         email: user.email,
@@ -55,15 +55,15 @@ export class StripeService {
 
       if (
         enrollment.status === EnrollmentStatus.ACTIVE ||
-        enrollment.IsPaymentCompleted
+        enrollment.step === EnrollmentStep.COMPLETED
       ) {
         throw new BadRequestException(
           'You are already enrolled in this course',
         );
       }
 
-      let amount = Number(enrollment.course?.fee ?? 0);
-      const courseId = enrollment.courseId;
+      let amount = Number(enrollment.course?.fee_pence ?? 0);
+      const courseId = enrollment.course_id;
 
       if (!courseId) {
         throw new BadRequestException('Enrollment has no course assigned');
@@ -146,11 +146,11 @@ export class StripeService {
     const { userId, enrollmentId, courseId, amount, currency } = params;
 
     // Check for existing pending transaction to resume
-    const existingPayment = await this.prisma.payment.findFirst({
+    const existingPayment = await this.prisma.order.findFirst({
       where: {
         user_id: userId,
         course_id: courseId,
-        payment_type: 'ONE_TIME',
+        payment_mode: 'ONE_TIME' as any,
         status: 'PENDING',
       },
       include: {
@@ -190,7 +190,7 @@ export class StripeService {
     let payment: any = existingPayment;
     if (!payment) {
       const orderNumber = `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      payment = await this.prisma.payment.create({
+      payment = await this.prisma.order.create({
         data: {
           order_number: orderNumber,
           user_id: userId,
@@ -199,22 +199,23 @@ export class StripeService {
           currency: currency.toUpperCase(),
           status: 'PENDING',
           item_type: 'COURSE_ENROLLMENT',
-          payment_type: 'ONE_TIME',
+          payment_mode: 'ONE_TIME' as any,
           notes: `One-Time Enrollment ID: ${enrollmentId}`,
           course_id: courseId,
+          subtotal_amount: amount,
         },
       });
     } else {
-      await this.prisma.payment.update({
+      await this.prisma.order.update({
         where: { id: payment.id },
         data: { total_amount: amount, due_amount: amount },
       });
     }
 
-    await this.prisma.transaction.create({
+    await this.prisma.paymentTransaction.create({
       data: {
         transaction_ref: paymentIntent.id,
-        paymentId: payment.id,
+        order_id: payment.id,
         user_id: userId,
         amount,
         currency: currency.toUpperCase(),
@@ -250,11 +251,11 @@ export class StripeService {
     const { userId, enrollmentId, courseId, amount, currency } = params;
 
     // Check for existing pending subscription checkout session
-    const existingPayment = await this.prisma.payment.findFirst({
+    const existingPayment = await this.prisma.order.findFirst({
       where: {
         user_id: userId,
         course_id: courseId,
-        payment_type: 'MONTHLY',
+        payment_mode: 'MONTHLY' as any,
         status: 'PENDING',
       },
       include: {
@@ -319,35 +320,35 @@ export class StripeService {
 
     let payment: any = existingPayment;
     if (!payment) {
-      const courseFee = Number(enrollment?.course?.fee ?? 0);
+      const courseFee = Number(enrollment?.course?.fee_pence ?? 0);
       const orderNumber = `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      payment = await this.prisma.payment.create({
+      payment = await this.prisma.order.create({
         data: {
           order_number: orderNumber,
           user_id: userId,
           total_amount: courseFee,
           due_amount: courseFee,
-          installment_amount: amount,
+          subtotal_amount: courseFee,
           currency: currency.toUpperCase(),
           status: 'PENDING',
           item_type: 'COURSE_ENROLLMENT',
-          payment_type: 'MONTHLY',
-          stripe_subscription_id: subscription.id,
+          payment_mode: 'MONTHLY' as any,
           notes: `Monthly Enrollment ID: ${enrollmentId}`,
           course_id: courseId,
         },
       });
+      // Handle subscription ID elsewhere or if needed in InstallmentPlan
     } else {
-      await this.prisma.payment.update({
+      await this.prisma.order.update({
         where: { id: payment.id },
-        data: { stripe_subscription_id: subscription.id },
+        data: { status: 'PENDING' },
       });
     }
 
-    await this.prisma.transaction.create({
+    await this.prisma.paymentTransaction.create({
       data: {
         transaction_ref: subscription.id,
-        paymentId: payment.id,
+        order_id: payment.id,
         user_id: userId,
         amount,
         currency: currency.toUpperCase(),
@@ -381,11 +382,11 @@ export class StripeService {
   }) {
     const { userId, eventId, amount, currency } = params;
 
-    const existingPayment = await this.prisma.payment.findFirst({
+    const existingPayment = await this.prisma.order.findFirst({
       where: {
         user_id: userId,
         event_id: eventId,
-        payment_type: 'ONE_TIME',
+        payment_mode: 'ONE_TIME' as any,
         status: 'PENDING',
       },
       include: {
@@ -425,26 +426,27 @@ export class StripeService {
     let payment: any = existingPayment;
     if (!payment) {
       const orderNumber = `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      payment = await this.prisma.payment.create({
+      payment = await this.prisma.order.create({
         data: {
           order_number: orderNumber,
           user_id: userId,
           total_amount: amount,
           due_amount: amount,
+          subtotal_amount: amount,
           currency: currency.toUpperCase(),
           status: 'PENDING',
           item_type: 'EVENT_TICKET',
-          payment_type: 'ONE_TIME',
+          payment_mode: 'ONE_TIME' as any,
           notes: `Event ID: ${eventId}`,
           event_id: eventId,
         },
       });
     }
 
-    await this.prisma.transaction.create({
+    await this.prisma.paymentTransaction.create({
       data: {
         transaction_ref: paymentIntent.id,
-        paymentId: payment.id,
+        order_id: payment.id,
         user_id: userId,
         amount,
         currency: currency.toUpperCase(),
@@ -483,11 +485,11 @@ export class StripeService {
     if (!userId) return;
 
     // Update Transaction
-    const updatedTransaction = await this.prisma.transaction.update({
+    const updatedTransaction = await this.prisma.paymentTransaction.update({
       where: { transaction_ref: paymentIntent.id },
       data: {
         status: 'SUCCESS',
-        payment_date: new Date(),
+        paid_at: new Date(),
         card_last4: card?.last4,
         metadata: {
           ...(typeof paymentIntent.metadata === 'object'
@@ -502,10 +504,10 @@ export class StripeService {
       },
     });
 
-    if (updatedTransaction && updatedTransaction.paymentId) {
+    if (updatedTransaction && updatedTransaction.order_id) {
       // Find Payment
-      const payment = await this.prisma.payment.findUnique({
-        where: { id: updatedTransaction.paymentId },
+      const payment = await this.prisma.order.findUnique({
+        where: { id: updatedTransaction.order_id },
       });
 
       if (payment) {
@@ -516,10 +518,10 @@ export class StripeService {
           Number(payment.total_amount) - newPaidAmount,
         );
 
-        await this.prisma.payment.update({
+        await this.prisma.order.update({
           where: { id: payment.id },
           data: {
-            status: newDueAmount <= 0 ? 'COMPLETED' : 'PARTIAL_PAID',
+            status: newDueAmount <= 0 ? 'PAID' : 'PARTIALLY_PAID',
             paid_amount: newPaidAmount,
             due_amount: newDueAmount,
           },
@@ -531,7 +533,6 @@ export class StripeService {
       await this.prisma.enrollment.update({
         where: { id: enrollmentId },
         data: {
-          IsPaymentCompleted: true,
           status: EnrollmentStatus.ACTIVE,
           step: EnrollmentStep.COMPLETED,
         },
@@ -540,17 +541,17 @@ export class StripeService {
 
     if (eventId) {
       // If event ticketing logic is needed
-      const existingMember = await this.prisma.eventMember.findFirst({
+      const existingMember = await this.prisma.eventRegistration.findFirst({
         where: { user_id: userId, event_id: eventId },
       });
       if (!existingMember) {
         // Generate a 6-digit unique alphanumeric or timestamp ticket number
         const uniqueTicket = `TKT-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Date.now().toString().slice(-4)}`;
-        await this.prisma.eventMember.create({
+        await this.prisma.eventRegistration.create({
           data: {
             user: { connect: { id: userId } },
             event: { connect: { id: eventId } },
-            payment: { connect: { id: updatedTransaction.paymentId } },
+            order: { connect: { id: updatedTransaction.order_id } },
             ticket_number: uniqueTicket,
           },
         });
@@ -559,19 +560,19 @@ export class StripeService {
   }
 
   async handlePaymentIntentFailed(paymentIntent: any) {
-    const transaction = await this.prisma.transaction.findFirst({
+    const transaction = await this.prisma.paymentTransaction.findFirst({
       where: { transaction_ref: paymentIntent.id },
     });
 
     if (transaction) {
-      await this.prisma.transaction.update({
+      await this.prisma.paymentTransaction.update({
         where: { id: transaction.id },
         data: { status: 'FAILED' },
       });
 
-      if (transaction.paymentId) {
-        await this.prisma.payment.update({
-          where: { id: transaction.paymentId },
+      if (transaction.order_id) {
+        await this.prisma.order.update({
+          where: { id: transaction.order_id },
           data: { status: 'CANCELLED' }, // Cancelling the payment to act as rollback
         });
       }
@@ -596,53 +597,71 @@ export class StripeService {
       include: { course: true },
     });
 
-    if (!enrollment?.courseId) return;
+    if (!enrollment?.course_id) return;
 
     // Find the master Payment record for this enrollment
-    let payment = await this.prisma.payment.findFirst({
+    let payment = await this.prisma.order.findFirst({
       where: {
         user_id: userId,
-        course_id: enrollment.courseId,
-        payment_type: 'MONTHLY',
+        course_id: enrollment.course_id,
+        payment_mode: 'MONTHLY' as any,
       },
     });
 
     if (!payment) {
       const orderNumber = `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      payment = await this.prisma.payment.create({
+      payment = await this.prisma.order.create({
         data: {
           order_number: orderNumber,
           user_id: userId,
           total_amount: amount, // will be updated later if course fee is found
           paid_amount: 0,
           due_amount: amount,
+          subtotal_amount: amount,
           currency: currency,
-          status: 'PARTIAL_PAID',
+          status: 'PARTIALLY_PAID',
           item_type: 'COURSE_ENROLLMENT',
-          payment_type: 'MONTHLY',
-          stripe_subscription_id: subscriptionId,
-          course_id: enrollment.courseId,
+          payment_mode: 'MONTHLY' as any,
+          course_id: enrollment.course_id,
         },
       });
-    } else if (!payment.stripe_subscription_id && subscriptionId) {
-      payment = await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: { stripe_subscription_id: subscriptionId },
-      });
+      if (subscriptionId) {
+        await this.prisma.installmentPlan.create({
+          data: {
+            order_id: payment.id,
+            stripe_subscription_id: subscriptionId,
+            total_amount: amount,
+            installment_count: 1, // Placeholder
+            start_date: new Date(),
+          },
+        });
+      }
+    } else if (subscriptionId) {
+       await this.prisma.installmentPlan.upsert({
+         where: { order_id: payment.id },
+         update: { stripe_subscription_id: subscriptionId },
+         create: {
+           order_id: payment.id,
+           stripe_subscription_id: subscriptionId,
+           total_amount: payment.total_amount,
+           installment_count: 1,
+           start_date: new Date(),
+         }
+       });
     }
 
     // Create a new Transaction for this specific invoice
-    await this.prisma.transaction.create({
+    await this.prisma.paymentTransaction.create({
       data: {
         transaction_ref: payment_intent || invoice.id || `inv_${Date.now()}`,
-        paymentId: payment.id,
+        order_id: payment.id,
         user_id: userId,
         amount: amount,
         currency: currency,
         status: 'SUCCESS',
         gateway: 'STRIPE',
         receipt_url: invoice.hosted_invoice_url ?? undefined,
-        payment_date: new Date(),
+        paid_at: new Date(),
         metadata: {
           enrollmentId,
           subscriptionId,
@@ -659,17 +678,17 @@ export class StripeService {
       Number(payment.total_amount) - newPaidAmount,
     );
 
-    if (enrollment?.course?.fee) {
-      const courseFee = Number(enrollment.course.fee);
+    if (enrollment?.course?.fee_pence) {
+      const courseFee = Number(enrollment.course.fee_pence);
       newDueAmount = Math.max(0, courseFee - newPaidAmount);
 
-      await this.prisma.payment.update({
+      await this.prisma.order.update({
         where: { id: payment.id },
         data: {
           total_amount: courseFee,
           paid_amount: newPaidAmount,
           due_amount: newDueAmount,
-          status: newDueAmount <= 0 ? 'COMPLETED' : 'PARTIAL_PAID',
+          status: newDueAmount <= 0 ? 'PAID' : 'PARTIALLY_PAID',
         },
       });
 
@@ -686,12 +705,12 @@ export class StripeService {
         }
       }
     } else {
-      await this.prisma.payment.update({
+      await this.prisma.order.update({
         where: { id: payment.id },
         data: {
           paid_amount: newPaidAmount,
           due_amount: newDueAmount,
-          status: newDueAmount <= 0 ? 'COMPLETED' : 'PARTIAL_PAID',
+          status: newDueAmount <= 0 ? 'PAID' : 'PARTIALLY_PAID',
         },
       });
     }
@@ -699,7 +718,6 @@ export class StripeService {
     await this.prisma.enrollment.update({
       where: { id: enrollmentId },
       data: {
-        IsPaymentCompleted: true,
         status: EnrollmentStatus.ACTIVE,
         step: EnrollmentStep.COMPLETED,
       },
@@ -721,33 +739,33 @@ export class StripeService {
     // Fetch courseId from enrollment
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { id: enrollmentId },
-      select: { courseId: true },
+      select: { course_id: true },
     });
 
-    if (!enrollment?.courseId) return;
+    if (!enrollment?.course_id) return;
 
     // Find the master Payment record for this enrollment
-    const payment = await this.prisma.payment.findFirst({
+    const payment = await this.prisma.order.findFirst({
       where: {
         user_id: userId,
-        course_id: enrollment.courseId,
-        payment_type: 'MONTHLY',
+        course_id: enrollment.course_id,
+        payment_mode: 'MONTHLY' as any,
       },
     });
 
     if (payment) {
       // Create a failed Transaction record for this invoice attempt
-      await this.prisma.transaction.create({
+      await this.prisma.paymentTransaction.create({
         data: {
           transaction_ref:
             payment_intent || invoice.id || `inv_fail_${Date.now()}`,
-          paymentId: payment.id,
+          order_id: payment.id,
           user_id: userId,
           amount: amount,
           currency: currency,
           status: 'FAILED',
           gateway: 'STRIPE',
-          payment_date: new Date(),
+          paid_at: new Date(),
           metadata: {
             enrollmentId,
             subscriptionId,
@@ -766,10 +784,10 @@ export class StripeService {
   }
 
   async verifyPaymentByReference(reference: string, userId: string) {
-    const transaction = await this.prisma.transaction.findUnique({
+    const transaction = await this.prisma.paymentTransaction.findUnique({
       where: { transaction_ref: reference },
       include: {
-        payment: {
+        order: {
           include: {
             course: true,
             event: true,
@@ -817,15 +835,15 @@ export class StripeService {
           stripe_status: stripeStatus, // Real-time status from Stripe
           amount: transaction.amount,
           currency: transaction.currency,
-          date: transaction.payment_date,
+          date: transaction.paid_at,
         },
-        payment: transaction.payment
+        payment: transaction.order
           ? {
-              status: transaction.payment.status,
-              item_type: transaction.payment.item_type,
-              order_number: transaction.payment.order_number,
-              course: transaction.payment.course?.title,
-              event: transaction.payment.event?.name,
+              status: transaction.order.status,
+              item_type: transaction.order.item_type,
+              order_number: transaction.order.order_number,
+              course: transaction.order.course?.title,
+              event: transaction.order.event?.name,
             }
           : null,
       },
@@ -839,11 +857,11 @@ export class StripeService {
     if (!enrollmentId || !userId) return;
 
     // Logic for handling subscription updates/cancellations
-    // We could update the 'next_billing_date' on the Payment model here
+    // We could update the 'next_due_date' on the InstallmentPlan model here
     if (sub.current_period_end) {
-      await this.prisma.payment.updateMany({
+      await this.prisma.installmentPlan.updateMany({
         where: { stripe_subscription_id: sub.id },
-        data: { next_billing_date: new Date(sub.current_period_end * 1000) },
+        data: { next_due_date: new Date(sub.current_period_end * 1000) },
       });
     }
   }

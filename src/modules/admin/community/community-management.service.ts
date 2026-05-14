@@ -61,13 +61,13 @@ export class CommunityManagementService {
 
       const posts = await this.prisma.communityPost.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { created_at: 'desc' },
         select: {
           id: true,
           content: true,
           status: true,
-          createdAt: true,
-          updatedAt: true,
+          created_at: true,
+          updated_at: true,
           author: {
             select: {
               id: true,
@@ -156,13 +156,13 @@ export class CommunityManagementService {
 
       const posts = await this.prisma.communityPost.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { created_at: 'desc' },
         select: {
           id: true,
           content: true,
           status: true,
-          createdAt: true,
-          updatedAt: true,
+          created_at: true,
+          updated_at: true,
           author: {
             select: {
               id: true,
@@ -302,8 +302,8 @@ export class CommunityManagementService {
           id: true,
           content: true,
           status: true,
-          createdAt: true,
-          updatedAt: true,
+          created_at: true,
+          updated_at: true,
           author: {
             select: {
               id: true,

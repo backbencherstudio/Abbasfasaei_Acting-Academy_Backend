@@ -16,8 +16,8 @@ export class UsersService {
         deleted_at: null,
         id: { not: currentUserId },
         AND: [
-          { blocksInitiated: { none: { blockedId: currentUserId } } },
-          { blockedBy: { none: { blockerId: currentUserId } } },
+          { blocks_initiated: { none: { blockedId: currentUserId } } },
+          { blocked_by: { none: { blockerId: currentUserId } } },
         ],
         OR: [
           { name: { contains: term, mode: 'insensitive' } },

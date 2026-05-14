@@ -101,7 +101,7 @@ export class MessagesService {
         .replace(/\s+/g, '_')
         .replace(/[^a-zA-Z0-9._-]/g, '');
       const filename = `${StringHelper.randomString(10)}_${safeOriginalName}`;
-      const attachmentPrefix = appConfig().storageUrl.attachment.replace(
+      const attachmentPrefix = appConfig().storageUrl.media.replace(
         /^\/+/,
         '',
       );
@@ -508,7 +508,7 @@ export class MessagesService {
 
     const report = await this.prisma.report.create({
       data: {
-        messageId,
+        messageId: messageId,
         reporterId: byUserId,
         reason: reason?.trim()?.slice(0, 500) || 'Reported by user',
       },
