@@ -5,7 +5,7 @@ import appConfig from 'src/config/app.config';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { UserStatus } from 'src/common/constants/user-status.enum';
-import { PostType, Prisma } from '@prisma/client';
+import { PostStatus, PostType, PostVisibility, Prisma } from '@prisma/client';
 import { QueryCommunityFeedDto, QueryCommunityPostLikesDto } from './dto/query-community.dto';
 
 @Injectable()
@@ -234,30 +234,36 @@ export class CommunityService {
     const { user_id, search, cursor, limit } = query
 
     const where: Prisma.CommunityPostWhereInput = {
-      OR: [
+      status: { in: [PostStatus.APPROVED, PostStatus.ANNOUNCEMENT] },
+      author: { status: UserStatus.ACTIVE },
+      AND: [
         {
-          status: 'APPROVED',
-          visibility: 'PUBLIC',
-          author: { status: UserStatus.ACTIVE },
+          OR: [
+            { visibility: PostVisibility.PUBLIC },
+            { author_id: my_id },
+            { allowed_friends: { some: { id: my_id } } },
+          ],
         },
       ],
     };
 
     if (search) {
-      where.OR.push({
-        content: { contains: search, mode: 'insensitive' },
-        poll_options: {
-          some: {
-            title: { contains: search, mode: 'insensitive' },
+      (where.AND as Prisma.CommunityPostWhereInput[]).push({
+        OR: [
+          { content: { contains: search, mode: 'insensitive' } },
+          {
+            poll_options: {
+              some: {
+                title: { contains: search, mode: 'insensitive' },
+              }
+            }
           }
-        }
+        ]
       });
     }
 
     if (user_id) {
       where.author_id = user_id;
-    } else {
-      where.OR.push({ author_id: my_id });
     }
 
     const posts = await this.prisma.communityPost.findMany({
@@ -672,7 +678,7 @@ export class CommunityService {
   async getUserProfile(user_id: string) {
     if (!user_id) throw new BadRequestException("invalid user id");
     const user = await this.prisma.user.findUnique({
-      where: { id: user_id },
+      where: { id: user_id, status: UserStatus.ACTIVE },
       select: {
         id: true,
         name: true,
@@ -707,7 +713,7 @@ export class CommunityService {
     description?: string,
   ) {
     const reportedUser = await this.prisma.user.findUnique({
-      where: { id: reported_id },
+      where: { id: reported_id, status: UserStatus.ACTIVE },
       select: {
         id: true,
       },
@@ -719,17 +725,6 @@ export class CommunityService {
 
     if (reporter_id === reported_id) {
       throw new UnprocessableEntityException("You cannot report yourself");
-    }
-
-    const existingReport = await this.prisma.userReport.findFirst({
-      where: {
-        reporter_id: reporter_id,
-        reported_id: reported_id,
-      },
-    });
-
-    if (existingReport) {
-      throw new ConflictException("You have already reported this user");
     }
 
     await this.prisma.userReport.create({

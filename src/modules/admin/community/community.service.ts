@@ -1,18 +1,74 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { PostStatus, Prisma } from '@prisma/client';
+import { BadRequestException, Injectable, UnauthorizedException, InternalServerErrorException } from '@nestjs/common';
+import { PostStatus, PostType, PostVisibility, Prisma } from '@prisma/client';
 import { CreateCommunityDto } from './dto/create-community.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { QueryCommunityDto } from './dto/query-community.dto';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
+import appConfig from 'src/config/app.config';
 
 @Injectable()
 export class CommunityService {
   constructor(private prisma: PrismaService) { }
 
-  async create(createCommunityDto: CreateCommunityDto) {
-    // return this.prisma.communityPost.create({
-    //   data: createCommunityDto,
-    // });
+  async create(
+    user_id: string,
+    dto: CreateCommunityDto,
+    attachments?: Express.Multer.File[],
+  ) {
+    if (!user_id) throw new UnauthorizedException("user not found")
+
+    const { post_type, poll_options, ...postData } = dto;
+
+    const attachmentsData: Prisma.AttachmentCreateInput[] = []
+
+    for (const attachment of (attachments ?? [])) {
+      try {
+        const filename = NajimStorage.generateFileName(attachment.originalname)
+        const objectKey = `${appConfig().storageUrl.community}/${filename}`
+
+        await NajimStorage.put(objectKey, attachment.buffer)
+
+        attachmentsData.push({
+          file_name: attachment.originalname,
+          file_path: objectKey,
+          type: attachment.mimetype.startsWith('video/') ? 'VIDEO' : 'IMAGE',
+          mime_type: attachment.mimetype,
+          size_bytes: attachment.size,
+        })
+
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    const pollOptions = poll_options?.map((option) => ({
+      title: option,
+    }))
+
+    if (post_type === PostType.POLL && (pollOptions?.length ?? 0) < 2) {
+      throw new BadRequestException("poll options are required")
+    }
+
+    const post = await this.prisma.communityPost.create({
+      data: {
+        author_id: user_id,
+        ...postData,
+        post_type,
+        status: PostStatus.ANNOUNCEMENT,
+        visibility: PostVisibility.PUBLIC,
+        ...(post_type === PostType.POLL && { poll_options: { create: pollOptions } }),
+        attachments: {
+          create: attachmentsData
+        },
+      },
+    });
+
+    if (!post) throw new InternalServerErrorException('error in create post')
+
+    return {
+      success: true,
+      message: 'Post created successfully',
+    };
   }
 
   async getAllPosts(user_id: string, query: QueryCommunityDto) {
