@@ -7,7 +7,7 @@ export class OverviewService {
 
   constructor(private readonly prisma: PrismaService) { }
 
-  async getHome(userId: string) {
+  async getOverview(userId: string) {
     const [user, enrollment] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
