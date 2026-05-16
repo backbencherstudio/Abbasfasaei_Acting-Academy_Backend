@@ -95,9 +95,7 @@ export default () => ({
     websiteInfo: '/website-info',
     assignment: 'course/class/assignment',
     class_assets: 'course/class/assets',
-    communityVideo: '/community/video',
-    communityPhoto: '/community/photo',
-    communityDocument: '/community/document',
+    community: '/community',
     media: '/media',
   },
 

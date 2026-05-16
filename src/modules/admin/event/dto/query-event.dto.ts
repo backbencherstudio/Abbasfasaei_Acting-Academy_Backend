@@ -1,5 +1,5 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { IsEnum, IsNumber, IsOptional, IsString } from "class-validator";
+import { ApiProperty, OmitType } from "@nestjs/swagger";
+import { IsDate, IsEnum, IsNumber, IsOptional, IsString } from "class-validator";
 import { Transform, Type } from "class-transformer";
 
 export enum EventStatus {
@@ -47,4 +47,28 @@ export class QueryEventDto {
     @Transform(({ value }) => (value === '' || value === null || value === undefined) ? undefined : value.toUpperCase())
     @IsOptional()
     status?: EventStatus;
+}
+
+export class QueryEventMembersDto extends OmitType(QueryEventDto, ["status"]) {
+
+    @ApiProperty({
+        description: 'Start date',
+        required: false,
+        example: '2022-01-01',
+    })
+    @IsOptional()
+    @Type(() => Date)
+    @IsDate()
+    startDate: Date;
+
+    @ApiProperty({
+        description: 'End date',
+        required: false,
+        example: '2022-12-31',
+    })
+    @IsOptional()
+    @Type(() => Date)
+    @IsDate()
+    endDate: Date;
+
 }

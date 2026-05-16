@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, NotFoundException, BadRequestExcepti
 import { PrismaService } from 'src/prisma/prisma.service';
 import { addEventDto } from './dto/addevent.dto';
 import { updateEventDto } from './dto/updateEventDto';
-import { EventStatus, QueryEventDto } from './dto/query-event.dto';
+import { EventStatus, QueryEventDto, QueryEventMembersDto } from './dto/query-event.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -128,6 +128,96 @@ export class EventsService {
         status: eventStatus,
       },
     };
+  }
+
+  async getEventMembers(event_id: string, user_id: string, query: QueryEventMembersDto) {
+    if (!user_id) throw new UnauthorizedException('User not found');
+    if (!event_id) throw new BadRequestException('Invalid Event Id');
+
+    const { search, page, limit, startDate, endDate } = query;
+    let where: Prisma.EventRegistrationWhereInput = {
+      event_id: event_id
+    };
+
+    if (search) {
+      where.OR = [
+        { user: { name: { contains: search, mode: 'insensitive' } } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
+        { user: { phone_number: { contains: search, mode: 'insensitive' } } },
+        { user: { username: { contains: search, mode: 'insensitive' } } },
+        { ticket_number: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    if (startDate) {
+      where.created_at = { gte: startDate };
+    }
+
+    if (endDate) {
+      where.created_at = { lte: endDate };
+    }
+
+    const [members, total] = await Promise.all([
+      this.prisma.eventRegistration.findMany({
+        where,
+        select: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          },
+          created_at: true,
+          order: {
+            select: {
+              paid_amount: true,
+              transactions: {
+                select: {
+                  transaction_ref: true,
+                },
+                take: 1,
+                orderBy: { created_at: 'desc' },
+              }
+            }
+          }
+        },
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.eventRegistration.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      message: "Event members fetched successfully",
+      data: members.map((member) => {
+        const paid_amount = member.order?.paid_amount;
+        const transaction_ref = member.order?.transactions?.[0].transaction_ref || null;
+        const user = member.user;
+        delete member.user;
+        delete member.order.paid_amount;
+        delete member.order.transactions;
+
+        return {
+          ...member,
+          user_name: user.name,
+          user_email: user.email,
+          paid_amount,
+          transaction_ref
+        };
+      }),
+      meta_data: {
+        page,
+        limit,
+        total,
+        search,
+        startDate,
+        endDate,
+      },
+    };
+
   }
 
   async addEvent(dto: addEventDto, user_id: string) {

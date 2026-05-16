@@ -121,8 +121,9 @@ model User {
   created_module_classes    ModuleClass[]
   courseModules             CourseModule[]
 
-  created_assignments Assignment[] @relation
-  created_courses     Course[]     @relation("creator")
+  created_assignments   Assignment[]    @relation
+  created_courses       Course[]        @relation("creator")
+  allowed_friends_posts CommunityPost[] @relation("VisibilityAllowedFriends")
 
   @@map("users")
 }
@@ -599,10 +600,12 @@ model CommunityPost {
   author_id String
   content   String
 
+  visibility      PostVisibility @default(PUBLIC)
+  allowed_friends User[]         @relation("VisibilityAllowedFriends")
+
   status       PostStatus            @default(REQUEST)
   attachments  Attachment[]
   post_type    PostType              @default(POST)
-  visibility   PostVisibility        @default(PUBLIC)
   comments     CommunityComment[]
   likes        CommunityLike[]
   poll_options CommunityPollOption[]

@@ -14,7 +14,7 @@ import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { addEventDto } from './dto/addevent.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { updateEventDto } from './dto/updateEventDto';
-import { QueryEventDto } from './dto/query-event.dto';
+import { QueryEventDto, QueryEventMembersDto } from './dto/query-event.dto';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -30,6 +30,13 @@ export class EventsController {
   async getEventById(@Param('event_id') event_id: string, @GetUser('userId') user_id: string) {
     return this.eventsService.getEventById(user_id, event_id);
   }
+
+
+  @Get(':event_id/members')
+  async getEventMembers(@Param('event_id') event_id: string, @GetUser('userId') user_id: string, @Query() query: QueryEventMembersDto) {
+    return this.eventsService.getEventMembers(event_id, user_id, query);
+  }
+
   @Post()
   async addEvent(@GetUser('userId') user_id: string, @Body() addEventDto: addEventDto) {
     return this.eventsService.addEvent(addEventDto, user_id);

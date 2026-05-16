@@ -4,13 +4,15 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  ValidateIf,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { PostType, PostVisibility } from '@prisma/client';
 
 export class CreatePostDto {
   @IsOptional()
-  @IsEnum(['POST', 'POLL'])
-  postType: 'POST' | 'POLL' = 'POST';
+  @IsEnum(PostType)
+  post_type: PostType = PostType.POST;
 
   @ApiProperty({ example: 'This is my first post!' })
   @IsNotEmpty()
@@ -18,19 +20,19 @@ export class CreatePostDto {
   content: string;
 
   @IsOptional()
-  @IsString()
-  mediaUrl?: string;
-
-  @IsOptional()
-  @IsEnum(['PHOTO', 'VIDEO'])
-  mediaType?: 'PHOTO' | 'VIDEO';
-
-  @IsOptional()
+  @IsArray()
+  @ValidateIf((object) => object.postType === PostType.POLL)
   @IsArray()
   @IsString({ each: true })
-  pollOptions?: string[];
+  poll_options?: string[];
 
   @IsOptional()
-  @IsEnum(['PUBLIC', 'PRIVATE', 'FRIENDS'])
-  visibility?: 'PUBLIC' | 'PRIVATE' | 'FRIENDS' = 'PUBLIC';
+  @IsEnum(PostVisibility)
+  visibility?: PostVisibility = PostVisibility.PUBLIC;
+
+  @IsOptional()
+  @ValidateIf((object) => object.visibility === PostVisibility.FRIENDS)
+  @IsArray()
+  @IsString({ each: true })
+  friends_ids?: string[];
 }

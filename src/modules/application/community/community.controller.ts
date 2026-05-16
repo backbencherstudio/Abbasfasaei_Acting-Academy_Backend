@@ -24,7 +24,7 @@ import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import {
   FileFieldsInterceptor,
-  FileInterceptor,
+  FilesInterceptor,
 } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
@@ -32,46 +32,44 @@ import { EditProfileDto } from './dto/update-community-profile.dto';
 
 @Controller('community')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.STUDENT)
 @DisAllowDeactivated()
 export class CommunityController {
-  constructor(private service: CommunityService) {}
+  constructor(private service: CommunityService) { }
 
+
+  // updated
   @Post('post')
   @UseInterceptors(
-    FileInterceptor('media', {
+    FilesInterceptor('attachments', 5, {
       storage: memoryStorage(),
     }),
   )
   async createPost(
-    @GetUser() user: any,
-    @UploadedFile() file: Express.Multer.File,
-    @Body() dto: CreatePostDto,
+    @GetUser('userId') user_id: string,
+    @UploadedFiles() attachments: Express.Multer.File[],
+    @Body() createPostDto: CreatePostDto,
   ) {
-    if (!user || !user.userId) {
-      return { success: false, message: 'User not authenticated' };
-    }
-
-    return this.service.createPost(user.userId, dto, file);
+    return this.service.createPost(user_id, createPostDto, attachments);
   }
 
-  // @ApiOperation({ summary: 'Create poll' })
-  // @Post('poll')
-  // createPoll(@GetUser() user: any, @Body() dto: CreatePostDto) {
-  //   try {
-  //     return this.service.createPoll(user.userId, dto);
-  //   } catch (error) {
-  //     throw new Error('Error creating poll');
-  //   }
-  // }
+  // updated
+  @Patch('post/:post_id')
+  async updatePost(
+    @Param('post_id') post_id: string,
+    @GetUser('userId') user_id: string,
+    @Body() updatePostDto: UpdatePostDto,
+  ) {
+    return this.service.updatePost(post_id, user_id, updatePostDto);
+  }
 
+  // updated
   @Get('feed')
-  getFeed(@GetUser() user: any, @Query('userId') userId?: string) {
-    try {
-      return this.service.getFeed(user.userId, userId);
-    } catch (error) {
-      throw new Error('Error fetching feed');
-    }
+  getFeed(@GetUser("userId") user_id: string, @Query('user_id') user_id_q?: string) {
+    return this.service.getFeed(user_id, user_id_q);
   }
+
+
   @Get('my-posts')
   geMyPosts(@GetUser() user: any) {
     try {
@@ -87,26 +85,6 @@ export class CommunityController {
       return this.service.deletePost(postId, user.userId);
     } catch (error) {
       throw new Error('Error deleting post');
-    }
-  }
-
-  // Update post
-  @Patch('post/:postId')
-  @UseInterceptors(
-    FileInterceptor('media', {
-      storage: memoryStorage(),
-    }),
-  )
-  async updatePost(
-    @Param('postId') postId: string,
-    @GetUser() user: any,
-    @UploadedFile() file: Express.Multer.File,
-    @Body() dto: UpdatePostDto,
-  ) {
-    try {
-      return this.service.updatePost(postId, user.userId, dto, file);
-    } catch (error) {
-      throw new Error('Error updating post');
     }
   }
   @Get('like')
