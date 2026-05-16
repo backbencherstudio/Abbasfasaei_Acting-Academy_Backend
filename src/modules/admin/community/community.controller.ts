@@ -19,6 +19,7 @@ import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { QueryCommunityDto } from './dto/query-community.dto';
+import { PostStatus } from '@prisma/client';
 
 @ApiBearerAuth()
 @ApiTags('Community')
@@ -41,45 +42,20 @@ export class CommunityController {
     return this.communityService.getAllPosts(user_id, query);
   }
 
-  @ApiOperation({ summary: 'Get all requested posts' })
-  @Get('requested-posts')
-  async getAllRequestedPost(
-    @GetUser() user: any,
-    @Query() query: QueryCommunityDto,
-  ) {
-    return this.communityService.getAllRequestedPost(
-      user.userId,
-      query,
-    );
-  }
-
   @ApiOperation({ summary: 'Get a community post by ID' })
-  @Get('requested-posts/:id')
-  getPostById(@Param('id') id: string, @GetUser() user: any) {
-    return this.communityService.getPostById(user.userId, id);
+  @Get('posts/:post_id')
+  getPostById(@Param('post_id') post_id: string, @GetUser('userId') user_id: string) {
+    return this.communityService.getPostById(user_id, post_id);
   }
 
-  @ApiOperation({ summary: 'Approve a post' })
-  @Patch('approve-post/:id')
-  approvePost(@Param('id') id: string, @GetUser() user: any) {
-    return this.communityService.approvePost(user.userId, id);
-  }
-
-  @ApiOperation({ summary: 'Reject a post' })
-  @Patch('reject-post/:id')
-  rejectPost(@Param('id') id: string, @GetUser() user: any) {
-    return this.communityService.rejectPost(user.userId, id);
-  }
-
-  @ApiOperation({ summary: 'Flag or unflag a post' })
-  @Patch('flag-unflag-post/:id')
-  flagUnflagPost(@Param('id') id: string, @GetUser() user: any) {
-    return this.communityService.flagUnflagPost(user.userId, id);
+  @Patch('post/:post_id/status')
+  updatePostStatus(@Param('post_id') post_id: string, @GetUser('userId') user_id: string, @Body('status') status: PostStatus) {
+    return this.communityService.changePostStatus(user_id, post_id, status);
   }
 
   @ApiOperation({ summary: 'Delete a post' })
-  @Delete('delete-post/:id')
-  deletePost(@Param('id') id: string, @GetUser() user: any) {
-    return this.communityService.deletePost(user.userId, id);
+  @Delete('post/:post_id')
+  deletePost(@Param('post_id') post_id: string, @GetUser('userId') user_id: string) {
+    return this.communityService.deletePost(user_id, post_id);
   }
 }
