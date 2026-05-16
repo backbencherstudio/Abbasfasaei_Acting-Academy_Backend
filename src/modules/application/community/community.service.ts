@@ -1,13 +1,12 @@
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
-import { StringHelper } from 'src/common/helper/string.helper';
 import appConfig from 'src/config/app.config';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { UserStatus } from 'src/common/constants/user-status.enum';
 import { PostType, Prisma } from '@prisma/client';
-import { EditProfileDto } from './dto/update-community-profile.dto';
+import { QueryCommunityFeedDto, QueryCommunityPostLikesDto } from './dto/query-community.dto';
 
 @Injectable()
 export class CommunityService {
@@ -207,7 +206,33 @@ export class CommunityService {
 
   }
 
-  async getFeed(myId: string, user_id?: string) {
+
+  async deletePost(post_id: string, user_id: string) {
+    if (!user_id) throw new UnauthorizedException("user not found")
+    if (!post_id) throw new BadRequestException("Invalid post id")
+
+    const post = await this.prisma.communityPost.findUnique({
+      where: { id: post_id, author_id: user_id },
+    });
+
+    if (!post) throw new NotFoundException("post not found")
+
+    await this.prisma.communityPost.delete({
+      where: { id: post_id },
+    });
+
+    return {
+      success: true,
+      message: 'Post deleted successfully',
+    };
+
+  }
+
+  async getFeed(my_id: string, query: QueryCommunityFeedDto) {
+    if (!my_id) throw new UnauthorizedException("user not found");
+
+    const { user_id, search, cursor, limit } = query
+
     const where: Prisma.CommunityPostWhereInput = {
       OR: [
         {
@@ -217,14 +242,40 @@ export class CommunityService {
         },
       ],
     };
+
+    if (search) {
+      where.OR.push({
+        content: { contains: search, mode: 'insensitive' },
+        poll_options: {
+          some: {
+            title: { contains: search, mode: 'insensitive' },
+          }
+        }
+      });
+    }
+
     if (user_id) {
       where.author_id = user_id;
     } else {
-      where.OR.push({ author_id: myId });
+      where.OR.push({ author_id: my_id });
     }
+
     const posts = await this.prisma.communityPost.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        content: true,
+        post_type: true,
+        visibility: true,
+        status: true,
+        allowed_friends: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            avatar: true,
+          },
+        },
         author: {
           select: {
             id: true,
@@ -233,114 +284,117 @@ export class CommunityService {
             avatar: true,
           },
         },
-        likes: true,
-        comments: true,
-        shares: true,
         poll_options: {
-          include: {
-            votes: true,
+          select: {
+            votes: {
+              take: 4,
+              orderBy: {
+                created_at: 'desc'
+              },
+              select: {
+                user: {
+                  select: {
+                    avatar: true,
+                  }
+                }
+              }
+            },
+            _count: {
+              select: {
+                votes: true
+              }
+            }
+          }
+        },
+
+        likes: {
+          where: {
+            user_id: my_id,
+          },
+          select: {
+            id: true,
           },
         },
-        attachments: true,
+
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+            shares: true
+          }
+        },
+
+        attachments: {
+          select: {
+            file_path: true,
+            type: true,
+            mime_type: true,
+          },
+        },
       },
       orderBy: { created_at: 'desc' },
+      cursor: cursor ? { id: cursor } : undefined,
+      take: limit + 1,
     });
 
-    // Add counts for likes, comments, shares
-    return posts.map((post) => ({
-      ...post,
-      likeCount: post.likes.length,
-      commentCount: post.comments.length,
-      shareCount: post.shares.length,
-    }));
-  }
+    const nextCursor = posts.length > limit ? posts[posts.length - 1].id : null;
+    if (posts.length > limit) posts.pop();
 
-  async likePost(postId: string, userId: string) {
-    try {
-      const existingLike = await this.prisma.communityLike.findFirst({
-        where: { post_id: postId, user_id: userId },
-      });
-
-      if (existingLike) {
-        await this.prisma.communityLike.delete({
-          where: { id: existingLike.id },
-        });
+    return {
+      success: true,
+      message: 'Feed fetched successfully',
+      data: posts.map((post) => {
+        const { likes, comments, shares } = post?._count
+        const is_liked = post.likes.length > 0;
+        delete post._count;
+        delete post.likes;
 
         return {
-          success: false,
-          message: 'Post unliked successfully',
+          ...post,
+          is_liked,
+          total_likes: likes,
+          total_comments: comments,
+          total_shares: shares,
+          attachments: post.attachments.map((attachment) => ({
+            ...attachment,
+            file_path: attachment.file_path ? SazedStorage.url(attachment.file_path) : null,
+          })),
+          poll_options: post.poll_options.map((poll_option) => {
+            const total_votes = poll_option._count.votes
+            delete poll_option._count
+            return {
+              ...poll_option,
+              total_votes,
+              votes: poll_option.votes.map((vote) => ({
+                ...vote,
+                avatar: vote.user?.avatar ? SazedStorage.url(vote.user.avatar) : null,
+              })),
+            }
+          })
         };
-      } else {
-        // Fetch user details
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: { name: true, username: true, avatar: true },
-        });
-
-        if (!user) {
-          return { success: false, message: 'User not found' };
-        }
-
-        await this.prisma.communityLike.create({
-          data: {
-            post_id: postId,
-            user_id: userId,
-            created_at: new Date(),
-          },
-        });
-        return {
-          success: true,
-          message: 'Post liked successfully',
-        };
-      }
-    } catch (error) {
-      throw new Error('Error toggling like');
+      }),
+      meta_data: {
+        limit,
+        next_cursor: nextCursor,
+        search,
+        user_id
+      },
     }
   }
 
-  async voteOnAPoll(postId: string, optionId: string, userId: string) {
-    const vote = await this.prisma.communityPollVote.findFirst({
-      where: { user_id: userId, option: { post_id: postId } },
-    });
+  async getLikes(post_id: string, user_id: string, query: QueryCommunityPostLikesDto) {
+    if (!user_id) throw new UnauthorizedException("user not found");
+    if (!post_id) throw new BadRequestException("Invalid post id");
 
-    try {
-      if (!vote) {
-        await this.prisma.communityPollVote.create({
-          data: { user_id: userId, option_id: optionId },
-        });
-        return { success: true, message: 'Voted successfully' };
-      }
-
-      if (vote.option_id === optionId) {
-        await this.prisma.communityPollVote.delete({
-          where: { id: vote.id },
-        });
-        return { success: true, message: 'Unvoted successfully' };
-      }
-
-      await this.prisma.communityPollVote.update({
-        where: { id: vote.id },
-        data: { option_id: optionId },
-      });
-
-      return { success: true, message: 'Voted successfully' };
-    } catch {
-      return {
-        success: false,
-        message:
-          vote?.option_id === optionId
-            ? 'Error unvoting on poll'
-            : 'Error voting on poll',
-      };
+    const { cursor, limit } = query
+    const where: Prisma.CommunityLikeWhereInput = {
+      post_id: post_id,
+      post: { status: 'APPROVED' },
     }
-  }
-  // get like count and users who liked a post
-  async getLikes(postId: string) {
     const likes = await this.prisma.communityLike.findMany({
-      where: { post_id: postId },
+      where,
       select: {
         id: true,
-        post_id: true,
         created_at: true,
         user: {
           select: {
@@ -351,128 +405,205 @@ export class CommunityService {
           },
         },
       },
+      orderBy: { created_at: 'desc' },
+      cursor: cursor ? { id: cursor } : undefined,
+      take: limit + 1,
     });
-    return { likes, likesCount: likes.length };
-  }
-  // Add a comment to a post
-  async commentPost(postId: string, userId: string, content: string) {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { name: true, username: true, avatar: true },
-      });
+    const nextCursor = likes.length > limit ? likes[likes.length - 1].id : null;
+    if (likes.length > limit) likes.pop();
+    return {
+      success: true,
+      message: 'Likes fetched successfully',
+      data: likes.map((like) => {
+        const user = like.user;
+        delete like.user;
+        return {
+          ...like,
+          user_id: user?.id,
+          user_name: user?.name,
+          user_username: user?.username,
+          avatar: user?.avatar ? SazedStorage.url(user.avatar) : null,
 
-      if (!user) {
-        return { success: false, message: 'User not found' };
-      }
-
-      await this.prisma.communityComment.create({
-        data: {
-          post_id: postId,
-          user_id: userId,
-          content,
-        },
-      });
-
-      return {
-        success: true,
-        message: 'Comment added successfully',
-      };
-    } catch (error) {
-      throw new Error(error.message || 'Error adding comment');
+        }
+      }),
+      meta_data: {
+        limit,
+        next_cursor: nextCursor,
+      },
     }
   }
 
-  // Like a comment or reply (toggle)
-  async likeCommentOrReply(commentId: string, userId: string) {
+  async likePost(post_id: string, user_id: string) {
+
     const existingLike = await this.prisma.communityLike.findFirst({
-      where: { comment_id: commentId, user_id: userId },
+      where: { post_id: post_id, user_id: user_id },
     });
 
     if (existingLike) {
       await this.prisma.communityLike.delete({
         where: { id: existingLike.id },
       });
-      return { liked: false };
+
+      return {
+        success: true,
+        message: 'Post unliked successfully',
+      };
     } else {
       const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          name: true,
-          username: true,
-          avatar: true,
-        },
+        where: { id: user_id },
+        select: { id: true, },
       });
 
       if (!user) {
-        return { success: false, message: 'User not found' };
+        throw new UnauthorizedException("user not found");
       }
 
-      // Ensure the comment or reply exists
+      await this.prisma.communityLike.create({
+        data: { post_id, user_id },
+      });
+      return {
+        success: true,
+        message: 'Post liked successfully',
+      };
+    }
+
+  }
+
+  async voteOnAPoll(post_id: string, option_id: string, user_id: string) {
+    if (!user_id) throw new UnauthorizedException("user not found");
+    if (!post_id) throw new BadRequestException("invalid post id");
+    if (!option_id) throw new BadRequestException("invalid option id");
+
+
+    const vote = await this.prisma.communityPollVote.findFirst({
+      where: { user_id: user_id, option: { post_id: post_id } },
+    });
+    if (!vote) {
+      await this.prisma.communityPollVote.create({
+        data: { user_id: user_id, option_id: option_id },
+      });
+      return { success: true, message: 'Voted successfully' };
+    }
+
+    if (vote.option_id === option_id) {
+      await this.prisma.communityPollVote.delete({
+        where: { id: vote.id },
+      });
+      return { success: true, message: 'Unvoted successfully' };
+    }
+
+    await this.prisma.communityPollVote.update({
+      where: { id: vote.id },
+      data: { option_id: option_id },
+    });
+
+    return { success: true, message: 'You changed your vote successfully' };
+
+  }
+
+  async commentPost(post_id: string, user_id: string, content: string, parent_id?: string) {
+    if (!user_id) throw new UnauthorizedException("user not found");
+    if (!post_id) throw new BadRequestException("invalid post id");
+    if (!content) throw new BadRequestException("invalid content");
+
+    if (parent_id) {
+      const parentComment = await this.prisma.communityComment.findUnique({
+        where: { id: parent_id },
+        select: { id: true },
+      });
+      if (!parentComment) {
+        throw new BadRequestException("parent comment not found");
+      }
+    }
+
+    await this.prisma.communityComment.create({
+      data: { post_id, user_id, content, parent_id },
+    });
+
+    return {
+      success: true,
+      message: 'Comment added successfully',
+    };
+
+  }
+
+  async likeCommentOrReply(comment_id: string, user_id: string) {
+    if (!user_id) throw new UnauthorizedException("user not found");
+    if (!comment_id) throw new BadRequestException("invalid comment id");
+
+    const existingLike = await this.prisma.communityLike.findFirst({
+      where: { comment_id: comment_id, user_id: user_id },
+    });
+
+    if (existingLike) {
+      await this.prisma.communityLike.delete({
+        where: { id: existingLike.id },
+      });
+      return {
+        success: true,
+        message: "Like removed successfully"
+      }
+    } else {
       const comment = await this.prisma.communityComment.findFirst({
-        where: { id: commentId },
+        where: { id: comment_id },
         select: { id: true },
       });
 
       if (!comment) {
-        return { success: false, message: 'Comment or reply not found' };
+        throw new BadRequestException("comment or reply not found");
       }
 
-      // Create the like for the comment or reply
       await this.prisma.communityLike.create({
         data: {
-          comment_id: commentId,
-          user_id: userId,
-          created_at: new Date(),
+          comment_id: comment_id,
+          user_id: user_id,
         },
       });
 
-      return { liked: true, message: 'Like added successfully' }; // Return success message
+      return { success: true, message: 'Like added successfully' };
     }
   }
 
-  async replyToCommentOrReply(
-    postId: string,
-    parentId: string,
-    userId: string,
-    content: string,
-  ) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { name: true, username: true, avatar: true },
+  async deleteComment(comment_id: string, user_id: string) {
+    if (!user_id) throw new UnauthorizedException("user not found");
+    if (!comment_id) throw new BadRequestException("invalid comment id");
+
+    const comment = await this.prisma.communityComment.findUnique({
+      where: { id: comment_id },
+      select: { user_id: true },
     });
 
-    if (!user) {
-      return { success: false, message: 'User not found' };
+    if (!comment) {
+      throw new BadRequestException("comment not found");
     }
 
-    // Validate parentId if provided
-    if (parentId) {
-      const parentComment = await this.prisma.communityComment.findUnique({
-        where: { id: parentId },
-        select: { id: true },
+    if (comment.user_id !== user_id) {
+      throw new UnauthorizedException("user not authorized to delete this comment");
+    }
+
+    try {
+      await this.prisma.communityComment.delete({
+        where: { id: comment_id },
       });
-      if (!parentComment) {
-        return {
-          success: false,
-          message: 'Parent comment or reply not found',
-          error: 'INVALID_PARENT_ID',
-        };
+    } catch (error) {
+      try {
+        await this.prisma.communityComment.update({
+          where: { id: comment_id },
+          data: {
+            deleted_at: new Date(),
+          }
+        })
+      } catch (error) {
+        throw new InternalServerErrorException("error deleting comment");
       }
     }
 
-    return this.prisma.communityComment.create({
-      data: {
-        post_id: postId,
-        user_id: userId,
-        parent_id: parentId,
-        content,
-        created_at: new Date(),
-      },
-    });
+    return {
+      success: true,
+      message: 'Comment deleted successfully',
+    };
   }
 
-  // Get comments with replies and like count
   async getComments(postId: string) {
     const comments = await this.prisma.communityComment.findMany({
       where: {
@@ -511,341 +642,108 @@ export class CommunityService {
     }));
   }
 
-  async sharePost(postId: string, userId: string) {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { name: true, username: true, avatar: true },
-      });
+  async sharePost(user_id: string, post_id: string, medium?: string) {
+    if (!user_id) throw new UnauthorizedException("user not found");
+    if (!post_id) throw new BadRequestException("invalid post id");
 
-      if (!user) {
-        return { success: false, message: 'User not found' };
-      }
-
-      await this.prisma.communityShare.create({
-        data: {
-          post_id: postId,
-          user_id: userId,
-        },
-      });
-
-      return {
-        success: true,
-        message: 'Post shared successfully',
-      };
-    } catch (error) {
-      throw new Error(error.message || 'Error sharing post');
+    const post = await this.prisma.communityPost.findUnique({
+      where: { id: post_id },
+      select: { id: true },
+    });
+    if (!post) {
+      throw new NotFoundException("post not found");
     }
+
+    await this.prisma.communityShare.create({
+      data: {
+        post_id,
+        user_id,
+        medium: medium,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Post shared successfully',
+    };
+
   }
 
-  async deletePost(postId: string, userId: string) {
-    try {
-      const post = await this.prisma.communityPost.findUnique({
-        where: { id: postId },
-      });
+  async getUserProfile(user_id: string) {
+    if (!user_id) throw new BadRequestException("invalid user id");
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        avatar: true,
+        cover_image: true,
+        about: true,
 
-      if (!post) {
-        return { success: false, message: 'Post not found' };
       }
+    });
 
-      if (post.author_id !== userId) {
-        return { success: false, message: 'Unauthorized' };
-      }
-
-      await this.prisma.communityPost.delete({
-        where: { id: postId },
-      });
-
-      return {
-        success: true,
-        message: 'Post deleted successfully',
-      };
-    } catch (error) {
-      throw new Error(error.message || 'Error deleting post');
+    if (!user) {
+      throw new NotFoundException("user not found");
     }
-  }
 
-  async getMyProfile(userId: string) {
-    try {
-      const profile = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          email: true,
-          avatar: true,
-          cover_image: true,
-          about: true,
-        },
-      });
-
-      if (profile.avatar) {
-        // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
-        const isAbsolute = /^https?:\/\//i.test(profile.avatar);
-        const normalizedAvatar = String(profile.avatar).replace(/^\/+/, '');
-        profile['avatar'] = isAbsolute
-          ? profile.avatar
-          : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
+    return {
+      success: true,
+      data: {
+        ...user,
+        avatar: user.avatar ? SazedStorage.url(user.avatar) : null,
+        cover_image: user.cover_image ? SazedStorage.url(user.cover_image) : null,
       }
-
-      if (profile.cover_image) {
-        // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
-        const isAbsolute = /^https?:\/\//i.test(profile.cover_image);
-        const normalizedAvatar = String(profile.cover_image).replace(
-          /^\/+/,
-          '',
-        );
-        profile['cover_image'] = isAbsolute
-          ? profile.cover_image
-          : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
-      }
-      return {
-        success: true,
-        message: 'Profile fetch successfully',
-        data: {
-          id: profile.id,
-          name: profile.name,
-          username: profile.username,
-          email: profile.email,
-          about: profile?.about,
-          avatar: profile.avatar,
-          cover_image: profile.cover_image,
-        },
-      };
-    } catch (error) {
-      throw new Error('Error fetching user profile');
     }
-  }
 
-  async editUserProfile(
-    userId: string,
-    dto: EditProfileDto,
-    files?: {
-      avatar?: Express.Multer.File[];
-      cover_image?: Express.Multer.File[];
-    },
-  ) {
-    try {
-      const existing = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true, avatar: true, cover_image: true },
-      });
-
-      if (!existing) return { success: false, message: 'User not found' };
-
-      const data: Prisma.UserUpdateInput = {};
-
-      // Update basic fields
-      if (dto.name !== undefined) data.name = dto.name;
-      if (dto.username !== undefined) {
-        const existing = await this.prisma.user.findUnique({
-          where: { username: dto.username },
-        });
-        if (existing) {
-          return { success: false, message: 'Username already exists' };
-        }
-        data.username = dto.username;
-      }
-      if (dto.about !== undefined) {
-        data.about = dto.about;
-      }
-
-      // Handle file uploads with helper
-      const uploadFile = async (
-        file: Express.Multer.File,
-        field: 'avatar' | 'cover_image',
-        oldUrl?: string,
-      ) => {
-        const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
-        const path = `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${filename}`;
-
-        await SazedStorage.put(path, file.buffer);
-        data[field] =
-          `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}${path}`;
-
-        // Delete old file
-        if (oldUrl) {
-          try {
-            const oldKey = oldUrl.split(process.env.AWS_S3_BUCKET)[1];
-            if (oldKey) await SazedStorage.delete(oldKey);
-          } catch (e) {
-            console.error(`Error deleting old ${field}:`, e);
-          }
-        }
-      };
-
-      if (files?.avatar?.[0])
-        await uploadFile(files.avatar[0], 'avatar', existing.avatar);
-      if (files?.cover_image?.[0])
-        await uploadFile(
-          files.cover_image[0],
-          'cover_image',
-          existing.cover_image,
-        );
-
-      await this.prisma.user.update({ where: { id: userId }, data });
-
-      return { success: true, message: 'User profile updated successfully' };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message || 'Error updating user profile',
-      };
-    }
-  }
-  private avatarObjectKey(fileName: string): string {
-    const prefix = appConfig()
-      .storageUrl.avatar.replace(/^\/+/, '')
-      .replace(/\/+$/, '');
-    const name = String(fileName || 'avatar')
-      .trim()
-      .replace(/^\/+/, '')
-      .replace(/\s+/g, '_')
-      .replace(/[^a-zA-Z0-9._-]/g, '');
-    return `${prefix}/${name}`;
-  }
-  async getUserProfile(userId: string) {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        return {
-          success: false,
-          message: 'User not found',
-        };
-      }
-      if (user.avatar) {
-        // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
-        const isAbsolute = /^https?:\/\//i.test(user.avatar);
-        const normalizedAvatar = String(user.avatar).replace(/^\/+/, '');
-        user['avatar'] = isAbsolute
-          ? user.avatar
-          : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
-      }
-
-      if (user.cover_image) {
-        // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
-        const isAbsolute = /^https?:\/\//i.test(user.cover_image);
-        const normalizedAvatar = String(user.cover_image).replace(/^\/+/, '');
-        user['cover_image'] = isAbsolute
-          ? user.cover_image
-          : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
-      }
-
-      const userProfile = {
-        id: user.id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        avatar: user.avatar,
-        about: user?.about,
-        cover_image: user.cover_image,
-      };
-
-      return {
-        success: true,
-        data: userProfile,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message || 'Error fetching user profile',
-      };
-    }
   }
 
   async reportUser(
-    userId: string,
-    reportedUserId: string,
+    reporter_id: string,
+    reported_id: string,
     reason: string,
     description?: string,
   ) {
-    try {
-      const reportedUser = await this.prisma.user.findUnique({
-        where: { id: reportedUserId },
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          email: true,
-          avatar: true,
-        },
-      });
+    const reportedUser = await this.prisma.user.findUnique({
+      where: { id: reported_id },
+      select: {
+        id: true,
+      },
+    });
 
-      if (!reportedUser) {
-        return { success: false, message: 'Reported user not found' };
-      }
-
-      if (userId === reportedUserId) {
-        return { success: false, message: 'You cannot report yourself' };
-      }
-
-      // if user already reported then the user can't report again.
-      const existingReport = await this.prisma.userReport.findFirst({
-        where: {
-          reporter_id: userId,
-          reported_id: reportedUserId,
-        },
-      });
-
-      if (existingReport) {
-        return {
-          success: false,
-          message: 'You have already reported this user',
-        };
-      }
-
-      await this.prisma.userReport.create({
-        data: {
-          reporter_id: userId,
-          reported_id: reportedUserId,
-          reason,
-          description,
-          created_at: new Date(),
-        },
-      });
-
-      return {
-        success: true,
-        message: 'User reported successfully',
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message || 'Error reporting user',
-      };
+    if (!reportedUser) {
+      throw new NotFoundException("Reported user not found");
     }
-  }
 
-  async getAllReports(userId: string) {
-    try {
-      const reports = await this.prisma.userReport.findMany({
-        where: { reporter_id: userId },
-        include: {
-          reported_user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              email: true,
-              avatar: true,
-            },
-          },
-        },
-      });
-
-      return {
-        success: true,
-        data: reports,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message || 'Error fetching all reports',
-      };
+    if (reporter_id === reported_id) {
+      throw new UnprocessableEntityException("You cannot report yourself");
     }
+
+    const existingReport = await this.prisma.userReport.findFirst({
+      where: {
+        reporter_id: reporter_id,
+        reported_id: reported_id,
+      },
+    });
+
+    if (existingReport) {
+      throw new ConflictException("You have already reported this user");
+    }
+
+    await this.prisma.userReport.create({
+      data: {
+        reporter_id: reporter_id,
+        reported_id: reported_id,
+        reason,
+        description,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'User reported successfully',
+    };
   }
 }

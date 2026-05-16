@@ -425,6 +425,7 @@ export class CoursesController {
   }
 
 
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete a media asset from a class' })
   @Delete('modules/classes/assets/:asset_id')

@@ -8,14 +8,12 @@ import {
   Delete,
   Patch,
   UseInterceptors,
-  UploadedFile,
   UploadedFiles,
   Query,
 } from '@nestjs/common';
 import { CommunityService } from './community.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
-import { CommentPostDto } from './dto/comment-post.dto';
 import { SharePostDto } from './dto/share-post.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
@@ -23,12 +21,11 @@ import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { Roles } from 'src/common/guard/role/roles.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import {
-  FileFieldsInterceptor,
   FilesInterceptor,
 } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
-import { EditProfileDto } from './dto/update-community-profile.dto';
+import { QueryCommunityFeedDto, QueryCommunityPostLikesDto } from './dto/query-community.dto';
 
 @Controller('community')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -65,200 +62,105 @@ export class CommunityController {
 
   // updated
   @Get('feed')
-  getFeed(@GetUser("userId") user_id: string, @Query('user_id') user_id_q?: string) {
-    return this.service.getFeed(user_id, user_id_q);
+  getFeed(
+    @GetUser("userId") user_id: string,
+    @Query() query: QueryCommunityFeedDto,
+
+  ) {
+    return this.service.getFeed(user_id, query);
+  }
+
+  // updated
+  @Delete('post/:post_id')
+  deletePost(@Param('post_id') post_id: string, @GetUser('userId') user_id: string) {
+    return this.service.deletePost(post_id, user_id);
   }
 
 
-  @Get('my-posts')
-  geMyPosts(@GetUser() user: any) {
-    try {
-      return this.service.getFeed(user.userId, user.userId);
-    } catch (error) {
-      throw new Error('Error fetching feed');
-    }
+  // updated
+  @Get('posts/:post_id/likes')
+  getLikes(@Param('post_id') post_id: string, @GetUser('userId') user_id: string,
+    @Query() query: QueryCommunityPostLikesDto
+  ) {
+    return this.service.getLikes(post_id, user_id, query);
   }
 
-  @Delete('post/:postId')
-  deletePost(@Param('postId') postId: string, @GetUser() user: any) {
-    try {
-      return this.service.deletePost(postId, user.userId);
-    } catch (error) {
-      throw new Error('Error deleting post');
-    }
-  }
-  @Get('like')
-  getLikes(@Body('postId') postId: string) {
-    try {
-      return this.service.getLikes(postId);
-    } catch (error) {
-      throw new Error('Error fetching likes');
-    }
+  // updated
+  @Post('posts/:post_id/like')
+  likePost(@GetUser('userId') user_id: string, @Param('post_id') post_id: string) {
+    return this.service.likePost(post_id, user_id);
   }
 
-  @Post('like')
-  likePost(@GetUser() user: any, @Body('postId') postId: string) {
-    try {
-      return this.service.likePost(postId, user.userId);
-    } catch (error) {
-      throw new Error('Error liking post');
-    }
-  }
-
-  @Patch('vote/:postId/:optionId')
+  // updated
+  @Patch('post/:post_id/vote/:option_id')
   voteOnAPoll(
-    @GetUser() user: any,
-    @Param('postId') postId: string,
-    @Param('optionId') optionId: string,
+    @GetUser('userId') user_id: string,
+    @Param('post_id') post_id: string,
+    @Param('option_id') option_id: string,
   ) {
-    try {
-      return this.service.voteOnAPoll(postId, optionId, user.userId);
-    } catch (error) {
-      throw new Error('Error voting on poll');
-    }
+    return this.service.voteOnAPoll(post_id, option_id, user_id);
   }
 
-  @Post('comment/:postId')
+
+  // updated
+  @Post('post/:post_id/comment')
   async commentPost(
-    @GetUser() user: any,
-    @Param('postId') postId: string,
-    @Body() dto: CommentPostDto,
-  ) {
-    try {
-      console.log(
-        'user id',
-        user.userId,
-        'postId',
-        postId,
-        'content',
-        dto.content,
-      );
-      return this.service.commentPost(postId, user.userId, dto.content);
-    } catch (error) {
-      throw new Error('Error commenting on post');
-    }
-  }
-
-  @Get('comment/:postId')
-  getComments(@Param('postId') postId: string) {
-    try {
-      return this.service.getComments(postId);
-    } catch (error) {
-      throw new Error('Error fetching comments');
-    }
-  }
-
-  @Post('comment/reply/:commentId')
-  async replyToCommentOrReply(
-    @GetUser() user: any,
-    @Param('commentId') parentId: string,
-    @Body('postId') postId: string,
+    @GetUser('userId') user_id: string,
+    @Param('post_id') post_id: string,
     @Body('content') content: string,
+    @Body('comment_id') comment_id?: string,
   ) {
-    return this.service.replyToCommentOrReply(
-      postId,
-      parentId,
-      user.userId,
-      content,
-    );
+    return this.service.commentPost(post_id, user_id, content, comment_id);
   }
 
-  // Controller for liking a comment or reply
-  @Post('comments')
-  async likeCommentOrReply(
-    @GetUser() user: any,
-    @Body('commentId') commentId: string,
+
+  // updated
+  @Get('post/:post_id/comments')
+  getComments(@Param('post_id') post_id: string) {
+    return this.service.getComments(post_id);
+  }
+
+  // updated
+  @Post('posts/comments/:comment_id/like')
+  likeCommentOrReply(
+    @GetUser('userId') user_id: string,
+    @Param('comment_id') comment_id: string,
   ) {
-    try {
-      // Call the service method to like/unlike the comment or reply
-      return await this.service.likeCommentOrReply(commentId, user.userId);
-    } catch (error) {
-      // Return a generic error message
-      throw new Error('Error liking comment or reply');
-    }
+    return this.service.likeCommentOrReply(comment_id, user_id);
   }
 
-  @Post('share')
-  sharePost(@GetUser() user: any, @Body() dto: SharePostDto) {
-    try {
-      return this.service.sharePost(dto.postId, user.userId);
-    } catch (error) {
-      throw new Error('Error sharing post');
-    }
+  // updated
+  @Patch('posts/comments/:comment_id/delete')
+  deleteComment(@Param('comment_id') comment_id: string, @GetUser('userId') user_id: string) {
+    return this.service.deleteComment(comment_id, user_id);
   }
 
-  @Get('my-profile')
-  getMyProfile(@GetUser() user: any) {
-    try {
-      return this.service.getMyProfile(user.userId);
-    } catch (error) {
-      throw new Error('Error fetching user profile');
-    }
+
+  @Post('posts/:post_id/share')
+  sharePost(@GetUser('userId') user_id: string, @Param('post_id') post_id: string, @Body('medium') medium?: string) {
+    return this.service.sharePost(user_id, post_id, medium);
   }
 
-  @Patch('edit-profile')
-  @UseInterceptors(
-    FileFieldsInterceptor(
-      [
-        { name: 'avatar', maxCount: 1 },
-        { name: 'cover_image', maxCount: 1 },
-      ],
-      {
-        storage: memoryStorage(),
-      },
-    ),
-  )
-  editProfile(
-    @GetUser() user: any,
-    @Body() dto: EditProfileDto,
-    @UploadedFiles()
-    files: {
-      avatar?: Express.Multer.File[];
-      cover_image?: Express.Multer.File[];
-    },
-  ) {
-    try {
-      return this.service.editUserProfile(user.userId, dto, files);
-    } catch (error) {
-      throw new Error('Error updating user profile');
-    }
+
+  // updated
+  @Get('profile/:user_id')
+  getUserProfile(@Param('user_id') user_id: string) {
+    return this.service.getUserProfile(user_id);
   }
 
-  @Get('profile/:userId')
-  getUserProfile(@Param('userId') userId: string) {
-    try {
-      return this.service.getUserProfile(userId);
-    } catch (error) {
-      throw new Error('Error fetching user profile');
-    }
-  }
-
-  @Post('report/:userId')
+  // updated
+  @Post('report/:reported_user_id')
   reportUser(
-    @GetUser() user: any,
-    @Param('userId') reportedUserId: string,
+    @GetUser('userId') user_id: string,
+    @Param('reported_user_id') reported_user_id: string,
     @Body('reason') reason: string,
     @Body('description') description: string,
   ) {
-    try {
-      return this.service.reportUser(
-        user.userId,
-        reportedUserId,
-        reason,
-        description,
-      );
-    } catch (error) {
-      throw new Error('Error reporting user');
-    }
-  }
-
-  @Roles(Role.ADMIN)
-  @Get('report')
-  getAllReports(@GetUser() user: any) {
-    try {
-      return this.service.getAllReports(user.userId);
-    } catch (error) {
-      throw new Error('Error fetching all reports');
-    }
+    return this.service.reportUser(
+      user_id,
+      reported_user_id,
+      reason,
+      description,
+    );
   }
 }

@@ -629,9 +629,10 @@ model CommunityLike {
 
 // updated
 model CommunityComment {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
 
   post_id String
   user_id String
@@ -644,7 +645,7 @@ model CommunityComment {
   replies CommunityComment[] @relation("CommentReplies")
   user    User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
   post    CommunityPost      @relation(fields: [post_id], references: [id], onDelete: Cascade)
-  parent  CommunityComment?  @relation("CommentReplies", fields: [parent_id], references: [id], onDelete: Cascade)
+  parent  CommunityComment?  @relation("CommentReplies", fields: [parent_id], references: [id], onDelete: Restrict)
 }
 
 // updated
@@ -654,8 +655,10 @@ model CommunityShare {
 
   post_id String
   user_id String
-  user    User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  post    CommunityPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  medium  String?
+
+  user User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  post CommunityPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
 
   @@map("community_shares")
 }

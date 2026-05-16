@@ -15,9 +15,13 @@ import { addEventDto } from './dto/addevent.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { updateEventDto } from './dto/updateEventDto';
 import { QueryEventDto, QueryEventMembersDto } from './dto/query-event.dto';
+import { RolesGuard } from 'src/common/guard/role/roles.guard';
+import { Roles } from 'src/common/guard/role/roles.decorator';
+import { Role } from 'src/common/guard/role/role.enum';
 
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ADMIN)
 @Controller('admin/events')
 export class EventsController {
   constructor(private readonly eventsService: EventsService) { }
@@ -41,6 +45,8 @@ export class EventsController {
   async addEvent(@GetUser('userId') user_id: string, @Body() addEventDto: addEventDto) {
     return this.eventsService.addEvent(addEventDto, user_id);
   }
+
+
   @Patch(':event_id')
   async editEvent(
     @GetUser('userId') user_id: string,
