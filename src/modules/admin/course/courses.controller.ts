@@ -168,7 +168,7 @@ export class CoursesController {
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all modules for a course' })
   @Get(':course_id/modules')
-  getAllModules(@GetUser("user_id") user_id: string, @Param('course_id') course_id: string) {
+  getAllModules(@GetUser('userId') user_id: string, @Param('course_id') course_id: string) {
     return this.coursesService.getAllModules(user_id, course_id);
   }
 
@@ -176,7 +176,7 @@ export class CoursesController {
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a module by ID' })
   @Get('modules/:module_id')
-  getModuleById(@GetUser("user_id") user_id: string, @Param('module_id') module_id: string) {
+  getModuleById(@GetUser('userId') user_id: string, @Param('module_id') module_id: string) {
     return this.coursesService.getModuleById(user_id, module_id);
   }
 

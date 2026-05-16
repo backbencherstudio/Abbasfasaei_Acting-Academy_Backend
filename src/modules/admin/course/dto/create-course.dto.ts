@@ -1,11 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { CourseStatus } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsNotEmpty,
   IsString,
   IsNumber,
   IsOptional,
-  IsDateString,
+  IsDate,
+  IsEnum,
 } from 'class-validator';
 
 export class CreateCourseDto {
@@ -19,6 +21,12 @@ export class CreateCourseDto {
   @ApiProperty({ example: 'Course Overview' })
   course_overview: string;
 
+
+  @IsOptional()
+  @ApiProperty({ example: CourseStatus.DRAFT })
+  @IsEnum(CourseStatus, { each: true })
+  status?: CourseStatus = CourseStatus.ACTIVE;
+
   @IsNotEmpty()
   @Type(() => Number)
   @IsNumber()
@@ -27,7 +35,7 @@ export class CreateCourseDto {
 
   @IsNotEmpty()
   @Type(() => Date)
-  @IsDateString()
+  @IsDate()
   @ApiProperty({ example: '2027-01-01' })
   start_date: Date;
 

@@ -343,7 +343,7 @@ export class AuthService {
     const user = await UserRepository.createUser({
       email: email,
       password: password,
-      type: type,
+      type: type ?? 'student',
     });
 
     if (user == null && user.success == false) {

@@ -216,7 +216,7 @@ export class CourseService {
       message: 'Courses fetched successfully',
       data: courses.map((course) => {
         const modules = course?._count?.modules || 0
-        delete course._count.modules;
+        delete course._count;
         const enrollment = course?.enrollments?.[0]
         delete course.enrollments;
         const course_progress = Math.max(0, Math.min(100, course?.duration ? ((Date.now() - new Date(course.start_date).getTime()) / (Number(course.duration) * 86400000)) * 100 : 0));
@@ -324,7 +324,7 @@ export class CourseService {
         fee: course.fee_pence > 0 ? course.fee_pence / 100 : 0,
         instructor: {
           ...course.instructor,
-          avatar: SazedStorage.url(course.instructor.avatar),
+          avatar: course.instructor?.avatar ? SazedStorage.url(course.instructor.avatar) : null,
         },
         ...(nextClass && { next_class: nextClass })
       },

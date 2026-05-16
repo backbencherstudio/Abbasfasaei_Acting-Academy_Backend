@@ -42,17 +42,18 @@ export class CoursesService {
 
     const { instructor_id, ...courseData } = createCourseDto;
 
-    const instructor = await this.prisma.user.findUnique({
-      where: {
-        id: instructor_id,
-        type: Role.TEACHER,
-      },
-    });
+    if (instructor_id) {
+      const instructor = await this.prisma.user.findUnique({
+        where: {
+          id: instructor_id,
+          type: Role.TEACHER,
+        },
+      });
 
-    if (!instructor) {
-      throw new NotFoundException('Instructor not found');
+      if (!instructor) {
+        throw new NotFoundException('Instructor not found');
+      }
     }
-
     await this.prisma.course.create({
       data: {
         ...courseData,
@@ -60,9 +61,11 @@ export class CoursesService {
         creator: {
           connect: { id: user_id },
         },
-        instructor: {
-          connect: { id: instructor_id },
-        },
+        ...(instructor_id && {
+          instructor: {
+            connect: { id: instructor_id },
+          },
+        })
       },
     });
 
@@ -273,6 +276,7 @@ export class CoursesService {
         installment_process: updateCourseDto.installment_process ?? course.installment_process,
         rules_regulations: updateCourseDto.rules_regulations ?? course.rules_regulations,
         contract: updateCourseDto.contract ?? course.contract,
+        status: updateCourseDto.status ?? course.status,
       },
     });
 
