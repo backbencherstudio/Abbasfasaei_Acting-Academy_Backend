@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { StringHelper } from 'src/common/helper/string.helper';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import {
   EnrollmentStatus,
@@ -18,7 +18,7 @@ export class StudentManagementService {
   private getFileUrl(filename: string): string {
     if (!filename) return null;
     if (filename.startsWith('http')) return filename; // Legacy support
-    return SazedStorage.url(appConfig().storageUrl.media + `/${filename}`);
+    return NajimStorage.url(appConfig().storageUrl.media + `/${filename}`);
   }
 
   private formatEnrollment(enrollment: any) {
@@ -191,7 +191,7 @@ export class StudentManagementService {
     if (files) {
       const uploadFile = async (file: Express.Multer.File) => {
         const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
-        await SazedStorage.put(
+        await NajimStorage.put(
           appConfig().storageUrl.media + `/${filename}`,
           file.buffer,
         );
@@ -386,7 +386,7 @@ export class StudentManagementService {
 
     const uploadFile = async (file: Express.Multer.File) => {
       const filename = `${StringHelper.randomString(10)}_${file.originalname}`;
-      await SazedStorage.put(
+      await NajimStorage.put(
         appConfig().storageUrl.media + `/${filename}`,
         file.buffer,
       );

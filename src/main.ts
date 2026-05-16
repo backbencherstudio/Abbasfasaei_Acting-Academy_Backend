@@ -10,7 +10,7 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 import appConfig from './config/app.config';
 import { CustomExceptionFilter } from './common/exception/custom-exception.filter';
-import { SazedStorage } from './common/lib/Disk/SazedStorage';
+import { NajimStorage } from './common/lib/Disk/NajimStorage';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -64,7 +64,7 @@ async function bootstrap() {
   const storageDriver = process.env.STORAGE_DRIVER?.toLowerCase() || 'local';
   if (storageDriver === 's3') {
     // MinIO/S3
-    SazedStorage.config({
+    NajimStorage.config({
       driver: 's3',
       connection: {
         rootUrl: appConfig().storageUrl.rootUrl,
@@ -85,7 +85,7 @@ async function bootstrap() {
     });
   } else {
     // Local
-    SazedStorage.config({
+    NajimStorage.config({
       driver: 'local',
       connection: {
         rootUrl: appConfig().storageUrl.rootUrl, // ./public/storage

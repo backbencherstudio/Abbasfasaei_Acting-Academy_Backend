@@ -9,7 +9,7 @@ import { Prisma, MessageKind, ConversationType } from '@prisma/client';
 import { ConversationsService } from '../conversations/conversations.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UsersService } from '../users/users.service';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { StringHelper } from 'src/common/helper/string.helper';
 
@@ -28,7 +28,7 @@ export class MessagesService {
     }
     const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
     const name = avatar.replace(/^\/+/, '');
-    return SazedStorage.url(`${base}/${name}`);
+    return NajimStorage.url(`${base}/${name}`);
   }
 
   /**
@@ -107,7 +107,7 @@ export class MessagesService {
       );
       const objectKey = `${attachmentPrefix}/${filename}`;
 
-      await SazedStorage.put(objectKey, file.buffer);
+      await NajimStorage.put(objectKey, file.buffer);
 
       mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}/${objectKey}`;
     }

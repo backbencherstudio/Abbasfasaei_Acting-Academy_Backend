@@ -6,11 +6,11 @@ import { IStorage } from './drivers/iStorage';
 import { StringHelper } from '../../helper/string.helper';
 
 /**
- * SazedStorage for handling storage (local storage, aws s3 storage)
- * @class SazedStorage
+ * NajimStorage for handling storage (local storage, aws s3 storage)
+ * @class NajimStorage
  * @author Sazedul Islam <sazedulislam9126@gmail.com>
  */
-export class SazedStorage {
+export class NajimStorage {
   private static _config: DiskOption;
 
   /**

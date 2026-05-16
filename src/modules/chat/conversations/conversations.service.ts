@@ -7,7 +7,7 @@ import {
 import { ConversationType, MemberRole, Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UsersService } from '../users/users.service';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { extname } from 'path';
 
@@ -29,7 +29,7 @@ export class ConversationsService {
     }
     const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
     const name = avatar.replace(/^\/+/, '');
-    return SazedStorage.url(`${base}/${name}`);
+    return NajimStorage.url(`${base}/${name}`);
   }
 
   private async validateExistingUsers(userIds: string[]) {
@@ -166,8 +166,8 @@ export class ConversationsService {
             : '.jpg');
       const fileKey = `${avatarFolder}/group-${Date.now()}-${currentUserId}${safeExt}`;
 
-      await SazedStorage.put(fileKey, avatar.buffer);
-      avatarUrl = SazedStorage.url(fileKey);
+      await NajimStorage.put(fileKey, avatar.buffer);
+      avatarUrl = NajimStorage.url(fileKey);
     }
 
     const currentUser = await this.prisma.user.findUnique({
@@ -286,7 +286,7 @@ export class ConversationsService {
           if (otherUser.avatar.startsWith('http')) {
             otherUserAvatar = otherUser.avatar;
           } else {
-            otherUserAvatar = SazedStorage.url(
+            otherUserAvatar = NajimStorage.url(
               `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(otherUser.avatar).replace(/^\/+/, '')}`,
             );
           }

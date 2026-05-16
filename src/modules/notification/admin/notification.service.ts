@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { UserRepository } from 'src/common/repository/user/user.repository';
 import { Role } from 'src/common/guard/role/role.enum';
@@ -73,7 +73,7 @@ export class NotificationService {
               notification.sender['avatar_url'] = sAvatar;
             } else {
               const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
-              notification.sender['avatar_url'] = SazedStorage.url(`${base}/${sAvatar.replace(/^\/+/, '')}`);
+              notification.sender['avatar_url'] = NajimStorage.url(`${base}/${sAvatar.replace(/^\/+/, '')}`);
             }
           }
 
@@ -83,7 +83,7 @@ export class NotificationService {
               notification.receiver['avatar_url'] = rAvatar;
             } else {
               const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
-              notification.receiver['avatar_url'] = SazedStorage.url(`${base}/${rAvatar.replace(/^\/+/, '')}`);
+              notification.receiver['avatar_url'] = NajimStorage.url(`${base}/${rAvatar.replace(/^\/+/, '')}`);
             }
           }
         }

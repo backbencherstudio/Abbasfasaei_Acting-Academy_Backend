@@ -11,7 +11,7 @@ import { UserRepository } from '../../common/repository/user/user.repository';
 import { MailService } from '../../mail/mail.service';
 import { UcodeRepository } from '../../common/repository/ucode/ucode.repository';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { SazedStorage } from '../../common/lib/Disk/SazedStorage';
+import { NajimStorage } from '../../common/lib/Disk/NajimStorage';
 
 @Injectable()
 export class AuthService {
@@ -45,7 +45,7 @@ export class AuthService {
     }
 
     if (user.avatar) {
-      user['avatar'] = SazedStorage.url(user?.avatar);
+      user['avatar'] = NajimStorage.url(user?.avatar);
     }
 
     return { success: true, data: user };
@@ -92,10 +92,10 @@ export class AuthService {
     }
 
     if (avatar) {
-      const fileName = appConfig().storageUrl.avatar + '/' + SazedStorage.generateFileName(avatar.originalname);
+      const fileName = appConfig().storageUrl.avatar + '/' + NajimStorage.generateFileName(avatar.originalname);
       try {
         // Attempt upload first to avoid deleting old before success
-        await SazedStorage.put(fileName, avatar.buffer, {
+        await NajimStorage.put(fileName, avatar.buffer, {
           contentType: avatar.mimetype,
           contentDisposition: 'inline',
         });
@@ -108,7 +108,7 @@ export class AuthService {
 
         if (oldAvatar?.avatar) {
           try {
-            await SazedStorage.delete(oldAvatar?.avatar);
+            await NajimStorage.delete(oldAvatar?.avatar);
           } catch (e) {
             console.warn('Failed to delete old avatar:', e?.message || e);
           }
@@ -122,10 +122,10 @@ export class AuthService {
     }
 
     if (cover_image) {
-      const fileName = appConfig().storageUrl.cover_image + '/' + SazedStorage.generateFileName(cover_image.originalname);
+      const fileName = appConfig().storageUrl.cover_image + '/' + NajimStorage.generateFileName(cover_image.originalname);
       try {
         // Attempt upload first to avoid deleting old before success
-        await SazedStorage.put(fileName, cover_image.buffer, {
+        await NajimStorage.put(fileName, cover_image.buffer, {
           contentType: cover_image.mimetype,
           contentDisposition: 'inline',
         });
@@ -138,7 +138,7 @@ export class AuthService {
 
         if (oldCoverImage?.cover_image) {
           try {
-            await SazedStorage.delete(oldCoverImage?.cover_image);
+            await NajimStorage.delete(oldCoverImage?.cover_image);
           } catch (e) {
             console.warn('Failed to delete old cover image:', e?.message || e);
           }

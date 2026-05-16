@@ -380,7 +380,7 @@ Recommended env for chat debugging:
 - CHAT_DEBUG=1 (optional)
 
 Storage behavior for chat attachments:
-- Message upload stores media via SazedStorage and returns media_Url.
+- Message upload stores media via NajimStorage and returns media_Url.
 - For s3/minio mode, ensure endpoint and bucket are valid.
 
 ## 8. Known Caveats

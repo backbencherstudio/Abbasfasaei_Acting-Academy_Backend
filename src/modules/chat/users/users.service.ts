@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { PrismaService } from 'src/prisma/prisma.service';
 
@@ -44,7 +44,7 @@ export class UsersService {
       avatar_url: u.avatar
         ? /^https?:\/\//i.test(String(u.avatar))
           ? String(u.avatar)
-          : SazedStorage.url(
+          : NajimStorage.url(
               `${appConfig().storageUrl.avatar.replace(/^\/+/, '').replace(/\/+$/, '')}/${String(u.avatar).replace(/^\/+/, '')}`,
             )
         : null,

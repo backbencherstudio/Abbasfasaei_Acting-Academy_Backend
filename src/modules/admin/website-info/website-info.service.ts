@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateWebsiteInfoDto } from './dto/create-website-info.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { StringHelper } from 'src/common/helper/string.helper';
 
@@ -40,13 +40,13 @@ export class WebsiteInfoService {
         // delete old logo from storage
         const logo = await this.prisma.websiteInfo.findFirst();
         if (logo) {
-          await SazedStorage.delete(
+          await NajimStorage.delete(
             `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${String(logo.logo).replace(/^\/+/, '')}`,
           );
         }
         // upload file
         const fileName = `${StringHelper.randomString()}${files.logo.originalname}`;
-        await SazedStorage.put(
+        await NajimStorage.put(
           `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${fileName}`,
           files.logo.buffer,
         );
@@ -56,13 +56,13 @@ export class WebsiteInfoService {
         // delete old favicon from storage
         const favicon = await this.prisma.websiteInfo.findFirst();
         if (favicon) {
-          await SazedStorage.delete(
+          await NajimStorage.delete(
             `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${String(favicon.favicon).replace(/^\/+/, '')}`,
           );
         }
         // upload file
         const fileName = `${StringHelper.randomString()}${files.favicon.originalname}`;
-        await SazedStorage.put(
+        await NajimStorage.put(
           `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${fileName}`,
           files.favicon.buffer,
         );
@@ -133,13 +133,13 @@ export class WebsiteInfoService {
       });
 
       if (websiteInfo.logo) {
-        websiteInfo['logo_url'] = SazedStorage.url(
+        websiteInfo['logo_url'] = NajimStorage.url(
           `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${String(websiteInfo.logo).replace(/^\/+/, '')}`,
         );
       }
 
       if (websiteInfo.favicon) {
-        websiteInfo['favicon_url'] = SazedStorage.url(
+        websiteInfo['favicon_url'] = NajimStorage.url(
           `${appConfig().storageUrl.websiteInfo.replace(/\/+$/, '')}/${String(websiteInfo.favicon).replace(/^\/+/, '')}`,
         );
       }

@@ -10,7 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import appConfig from 'src/config/app.config';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import { UserStatus } from 'src/common/constants/user-status.enum';
 
 @Injectable()
@@ -47,7 +47,7 @@ export class ProfileService {
   private getFileUrl(filename: string): string {
     if (!filename) return null;
     if (filename.startsWith('http')) return filename; // Legacy support
-    return SazedStorage.url(appConfig().storageUrl.media + '/' + filename);
+    return NajimStorage.url(appConfig().storageUrl.media + '/' + filename);
   }
 
   private formatEnrollment(enrollment: any) {

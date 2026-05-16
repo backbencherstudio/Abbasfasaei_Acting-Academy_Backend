@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -25,10 +25,10 @@ export class CommunityService {
 
     for (const attachment of (attachments ?? [])) {
       try {
-        const filename = SazedStorage.generateFileName(attachment.originalname)
+        const filename = NajimStorage.generateFileName(attachment.originalname)
         const objectKey = `${appConfig().storageUrl.community}/${filename}`
 
-        await SazedStorage.put(objectKey, attachment.buffer)
+        await NajimStorage.put(objectKey, attachment.buffer)
 
         attachmentsData.push({
           file_name: attachment.originalname,
@@ -101,11 +101,11 @@ export class CommunityService {
         ...post,
         author: {
           ...post.author,
-          avatar: post.author.avatar ? SazedStorage.url(post.author.avatar) : null
+          avatar: post.author.avatar ? NajimStorage.url(post.author.avatar) : null
         },
         allowed_friends: post.allowed_friends?.map(friend => ({
           ...friend,
-          avatar: friend.avatar ? SazedStorage.url(friend.avatar) : null
+          avatar: friend.avatar ? NajimStorage.url(friend.avatar) : null
         }))
       },
     }
@@ -195,11 +195,11 @@ export class CommunityService {
         ...post,
         author: {
           ...post.author,
-          avatar: post.author.avatar ? SazedStorage.url(post.author.avatar) : null
+          avatar: post.author.avatar ? NajimStorage.url(post.author.avatar) : null
         },
         allowed_friends: post.allowed_friends?.map(friend => ({
           ...friend,
-          avatar: friend.avatar ? SazedStorage.url(friend.avatar) : null
+          avatar: friend.avatar ? NajimStorage.url(friend.avatar) : null
         }))
       },
     };
@@ -357,7 +357,7 @@ export class CommunityService {
           total_shares: shares,
           attachments: post.attachments.map((attachment) => ({
             ...attachment,
-            file_path: attachment.file_path ? SazedStorage.url(attachment.file_path) : null,
+            file_path: attachment.file_path ? NajimStorage.url(attachment.file_path) : null,
           })),
           poll_options: post.poll_options.map((poll_option) => {
             const total_votes = poll_option._count.votes
@@ -367,7 +367,7 @@ export class CommunityService {
               total_votes,
               votes: poll_option.votes.map((vote) => ({
                 ...vote,
-                avatar: vote.user?.avatar ? SazedStorage.url(vote.user.avatar) : null,
+                avatar: vote.user?.avatar ? NajimStorage.url(vote.user.avatar) : null,
               })),
             }
           })
@@ -422,7 +422,7 @@ export class CommunityService {
           user_id: user?.id,
           user_name: user?.name,
           user_username: user?.username,
-          avatar: user?.avatar ? SazedStorage.url(user.avatar) : null,
+          avatar: user?.avatar ? NajimStorage.url(user.avatar) : null,
 
         }
       }),
@@ -693,8 +693,8 @@ export class CommunityService {
       success: true,
       data: {
         ...user,
-        avatar: user.avatar ? SazedStorage.url(user.avatar) : null,
-        cover_image: user.cover_image ? SazedStorage.url(user.cover_image) : null,
+        avatar: user.avatar ? NajimStorage.url(user.avatar) : null,
+        cover_image: user.cover_image ? NajimStorage.url(user.cover_image) : null,
       }
     }
 

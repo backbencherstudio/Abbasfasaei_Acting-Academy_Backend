@@ -4,7 +4,7 @@ import { CreateCommunityDto } from './dto/create-community.dto';
 import { UpdateCommunityDto } from './dto/update-community.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { QueryCommunityDto } from './dto/query-community.dto';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 
 @Injectable()
@@ -41,18 +41,12 @@ export class CommunityService {
       where.status = status;
     }
     if (role) {
-      where.author = {
-        role_users: {
-          some: {
-            role: {
-              name: {
-                contains: role,
-                mode: 'insensitive',
-              },
-            },
-          },
-        },
-      };
+      where.author = role === 'ADMIN' ? {
+        OR: [
+          { type: { equals: 'admin' } },
+          { type: { equals: 'su_admin' } },
+        ]
+      } : role === 'STUDENT' ? { type: { equals: 'student' } } : { type: { equals: 'user' } }
     }
 
     const posts = await this.prisma.communityPost.findMany({
@@ -68,7 +62,8 @@ export class CommunityService {
           select: {
             id: true,
             name: true,
-            role_users: { select: { role: true } },
+            username: true,
+            type: true,
             avatar: true,
           },
         },
@@ -94,11 +89,7 @@ export class CommunityService {
           author: {
             ...post.author,
             avatar: post.author.avatar
-              ? post.author.avatar.startsWith('http')
-                ? post.author.avatar
-                : SazedStorage.url(
-                  `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
-                )
+              ? NajimStorage.url(post.author.avatar)
               : null,
           },
           comments: post._count.comments,
@@ -178,7 +169,7 @@ export class CommunityService {
             avatar: post.author.avatar
               ? post.author.avatar.startsWith('http')
                 ? post.author.avatar
-                : SazedStorage.url(
+                : NajimStorage.url(
                   `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
                 )
               : null,
@@ -248,7 +239,7 @@ export class CommunityService {
           avatar: post.author.avatar
             ? post.author.avatar.startsWith('http')
               ? post.author.avatar
-              : SazedStorage.url(
+              : NajimStorage.url(
                 `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
               )
             : null,

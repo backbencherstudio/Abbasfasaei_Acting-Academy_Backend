@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { SazedStorage } from './common/lib/Disk/SazedStorage';
+import { NajimStorage } from './common/lib/Disk/NajimStorage';
 
 @Injectable()
 export class AppService {
@@ -14,13 +14,13 @@ export class AppService {
       const fileSize = image.size;
       const fileBuffer = image.buffer;
 
-      const result = await SazedStorage.put(fileName, fileBuffer);
+      const result = await NajimStorage.put(fileName, fileBuffer);
 
       return {
         success: true,
         message: 'Image uploaded successfully',
         data: result,
-        url: SazedStorage.url('tony1.jpg'),
+        url: NajimStorage.url('tony1.jpg'),
       };
     } catch (error) {
       throw new Error(`Failed to upload image: ${error}`);

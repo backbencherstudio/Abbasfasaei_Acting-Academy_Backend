@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { AssignmentSubmissionStatus, AttachmentType, CourseStatus, EnrollmentStatus, EnrollmentStep, Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { AttendanceService } from './attendance.helper';
 import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
@@ -324,7 +324,7 @@ export class CourseService {
         fee: course.fee_pence > 0 ? course.fee_pence / 100 : 0,
         instructor: {
           ...course.instructor,
-          avatar: course.instructor?.avatar ? SazedStorage.url(course.instructor.avatar) : null,
+          avatar: course.instructor?.avatar ? NajimStorage.url(course.instructor.avatar) : null,
         },
         ...(nextClass && { next_class: nextClass })
       },
@@ -659,7 +659,7 @@ export class CourseService {
         attachments: assignment.attachments.map((attachment) => {
           return {
             file_name: attachment.file_name,
-            file_path: attachment.file_path ? SazedStorage.url(attachment.file_path) : null,
+            file_path: attachment.file_path ? NajimStorage.url(attachment.file_path) : null,
             mime_type: attachment.mime_type,
           }
         }),
@@ -674,7 +674,7 @@ export class CourseService {
             attachments: submission.attachments.map((attachment) => {
               return {
                 file_name: attachment.file_name,
-                file_path: attachment.file_path ? SazedStorage.url(attachment.file_path) : null,
+                file_path: attachment.file_path ? NajimStorage.url(attachment.file_path) : null,
                 mime_type: attachment.mime_type,
               }
             }),
@@ -746,9 +746,9 @@ export class CourseService {
     const attachments: Prisma.AttachmentCreateInput[] = [];
 
     for (const file of files) {
-      const filename = SazedStorage.generateFileName(file.originalname)
+      const filename = NajimStorage.generateFileName(file.originalname)
       const objectKey = appConfig().storageUrl.assignment + '/' + filename
-      await SazedStorage.put(objectKey, file)
+      await NajimStorage.put(objectKey, file)
       attachments.push({
         file_name: filename,
         file_path: objectKey,
@@ -934,7 +934,7 @@ export class CourseService {
             ...classItem,
             class_assets: classItem?.class_assets?.map((asset) => ({
               ...asset,
-              file_path: asset.file_path ? SazedStorage.url(asset.file_path) : null
+              file_path: asset.file_path ? NajimStorage.url(asset.file_path) : null
             })) ?? [],
           })),
         })),
@@ -981,7 +981,7 @@ export class CourseService {
           if (asset.type === AttachmentType.VIDEO) {
             return {
               ...asset,
-              file_path: asset.file_path ? SazedStorage.url(asset.file_path) : null
+              file_path: asset.file_path ? NajimStorage.url(asset.file_path) : null
             }
           }
         }) ?? [],
@@ -989,7 +989,7 @@ export class CourseService {
           if (asset.type !== AttachmentType.VIDEO) {
             return {
               ...asset,
-              file_path: asset.file_path ? SazedStorage.url(asset.file_path) : null
+              file_path: asset.file_path ? NajimStorage.url(asset.file_path) : null
             }
           }
         }) ?? [],

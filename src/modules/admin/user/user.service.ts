@@ -4,7 +4,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UserRepository } from '../../../common/repository/user/user.repository';
 import appConfig from '../../../config/app.config';
-import { SazedStorage } from '../../../common/lib/Disk/SazedStorage';
+import { NajimStorage } from '../../../common/lib/Disk/NajimStorage';
 import { DateHelper } from '../../../common/helper/date.helper';
 import { InstructorsService } from './instructors.helper';
 import { StudentManagementService } from './student-management.helper';
@@ -126,7 +126,7 @@ export class UserService {
           user['avatar_url'] = user.avatar;
         } else {
           const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
-          user['avatar_url'] = SazedStorage.url(`${base}/${String(user.avatar).replace(/^\/+/, '')}`);
+          user['avatar_url'] = NajimStorage.url(`${base}/${String(user.avatar).replace(/^\/+/, '')}`);
         }
       }
 

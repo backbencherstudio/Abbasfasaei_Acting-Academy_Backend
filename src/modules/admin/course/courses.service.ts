@@ -4,7 +4,7 @@ import { UpdateCourseDto } from './dto/update-course.dto';
 import { CreateModuleDto } from './dto/create-module.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateModuleDto } from './dto/update-module.dto';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { AttendanceService } from './attendance.helper';
 import { Role } from 'src/common/guard/role/role.enum';
@@ -821,10 +821,10 @@ export class CoursesService {
 
     if (attachments && attachments.length > 0) {
       for (const file of attachments) {
-        const filename = SazedStorage.generateFileName(file.originalname);
+        const filename = NajimStorage.generateFileName(file.originalname);
         const objectKey = `${appConfig().storageUrl.assignment}/${filename}`;
 
-        await SazedStorage.put(objectKey, file.buffer);
+        await NajimStorage.put(objectKey, file.buffer);
 
         attachmentsData.push({
           file_name: filename,
@@ -980,7 +980,7 @@ export class CoursesService {
         attachments: assignment.attachments.map((attachment) => {
           return {
             file_name: attachment.file_name,
-            file_path: attachment.file_path ? SazedStorage.url(attachment.file_path) : null,
+            file_path: attachment.file_path ? NajimStorage.url(attachment.file_path) : null,
             mime_type: attachment.mime_type,
           };
         }),
@@ -1020,9 +1020,9 @@ export class CoursesService {
 
     if (attachments && attachments.length > 0) {
       for (const file of attachments) {
-        const filename = SazedStorage.generateFileName(file.originalname);
+        const filename = NajimStorage.generateFileName(file.originalname);
         const objectKey = `${appConfig().storageUrl.assignment}/${filename}`;
-        await SazedStorage.put(objectKey, file.buffer);
+        await NajimStorage.put(objectKey, file.buffer);
 
         attachmentsInput.push({
           file_name: filename,
@@ -1173,14 +1173,14 @@ export class CoursesService {
           attachments: submission?.attachments?.map((attachment) => {
             return {
               file_name: attachment.file_name,
-              file_path: attachment.file_path ? SazedStorage.url(attachment.file_path) : null,
+              file_path: attachment.file_path ? NajimStorage.url(attachment.file_path) : null,
               mime_type: attachment.mime_type,
             };
           }),
 
           student: {
             ...submission.student,
-            avatar: submission.student?.avatar ? SazedStorage.url(submission.student?.avatar) : null,
+            avatar: submission.student?.avatar ? NajimStorage.url(submission.student?.avatar) : null,
           },
           grade
         };
@@ -1292,10 +1292,10 @@ export class CoursesService {
 
     const uploadPromises = files.map(async (file) => {
       try {
-        const filename = SazedStorage.generateFileName(file.originalname);
+        const filename = NajimStorage.generateFileName(file.originalname);
         const objectKey = `${appConfig().storageUrl.class_assets}/${filename}`;
 
-        await SazedStorage.put(objectKey, file);
+        await NajimStorage.put(objectKey, file);
 
         let fileType: AttachmentType = 'FILE';
         if (file.mimetype.startsWith('video/')) fileType = 'VIDEO';
@@ -1366,7 +1366,7 @@ export class CoursesService {
           return {
             id: a.id,
             type: a.type,
-            file_path: SazedStorage.url(a.file_path),
+            file_path: NajimStorage.url(a.file_path),
             file_name: a.file_name,
             mime_type: a.mime_type,
           };
@@ -1375,7 +1375,7 @@ export class CoursesService {
           return {
             id: a.id,
             type: a.type,
-            file_path: SazedStorage.url(a.file_path),
+            file_path: NajimStorage.url(a.file_path),
             file_name: a.file_name,
             mime_type: a.mime_type,
           };
@@ -1409,7 +1409,7 @@ export class CoursesService {
       throw new ForbiddenException('You are not the instructor of this course');
     }
 
-    await SazedStorage.delete(asset.file_path);
+    await NajimStorage.delete(asset.file_path);
 
     await this.prisma.attachment.delete({
       where: { id: asset_id },

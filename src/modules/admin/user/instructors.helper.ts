@@ -4,7 +4,7 @@ import { CreateTeacherDto } from './dto/create-teacher.dto';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client'; // Import for Decimal
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
-import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
+import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { UserStatus } from 'src/common/constants/user-status.enum';
 
@@ -82,7 +82,7 @@ export class InstructorsService {
           avatar: t.avatar
             ? t.avatar.startsWith('http')
               ? t.avatar
-              : SazedStorage.url(
+              : NajimStorage.url(
                   `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(t.avatar).replace(/^\/+/, '')}`,
                 )
             : null,
@@ -334,7 +334,7 @@ export class InstructorsService {
   //       teacher_details: {
   //         ...teacherDetails,
   //         avatar: teacherDetails?.avatar
-  //           ? SazedStorage.url(
+  //           ? NajimStorage.url(
   //               appConfig().storageUrl.avatar + teacherDetails.avatar,
   //             )
   //           : null,
@@ -396,7 +396,7 @@ export class InstructorsService {
         avatar: teacherDetails?.avatar
           ? teacherDetails.avatar.startsWith('http')
             ? teacherDetails.avatar
-            : SazedStorage.url(
+            : NajimStorage.url(
                 `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(teacherDetails.avatar).replace(/^\/+/, '')}`,
               )
           : null,
