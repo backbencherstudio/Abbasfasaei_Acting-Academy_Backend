@@ -5,19 +5,14 @@ import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
 import { OverviewService } from './overview.service';
 
-@Controller()
+@Controller('overview')
 @DisAllowDeactivated()
 export class OverviewController {
-  constructor(private readonly overviewService: OverviewService) {}
-
-  @Get('dashboard')
-  getDashboard() {
-    return this.overviewService.getDashboard();
-  }
+  constructor(private readonly overviewService: OverviewService) { }
 
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Get('home')
+  @Get()
   async getHome(@GetUser() user: any) {
     return this.overviewService.getHome(user.userId);
   }
