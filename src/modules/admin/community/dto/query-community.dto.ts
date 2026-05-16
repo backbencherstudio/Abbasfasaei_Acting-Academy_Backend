@@ -17,7 +17,7 @@ export class PaginationDto {
   limit?: number;
 }
 
-export class GetPostsQueryDto extends PaginationDto {
+export class QueryCommunityDto extends PaginationDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -25,12 +25,13 @@ export class GetPostsQueryDto extends PaginationDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @Transform(({ value }) => (value ? value : undefined))
+  @Transform(({ value }) => (value ? value?.toUpperCase() : undefined))
   @IsEnum(PostStatus)
   status?: PostStatus;
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
-  role?: string;
+  @Transform(({ value }) => (value ? value?.toUpperCase() : undefined))
+  @IsEnum(['ADMIN', 'STUDENT'])
+  role?: 'ADMIN' | 'STUDENT';
 }

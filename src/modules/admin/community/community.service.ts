@@ -1,134 +1,124 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PostStatus, Prisma } from '@prisma/client';
-import { CreateCommunityManagementDto } from './dto/create-community-management.dto';
-import { UpdateCommunityManagementDto } from './dto/update-community-management.dto';
+import { CreateCommunityDto } from './dto/create-community.dto';
+import { UpdateCommunityDto } from './dto/update-community.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { GetPostsQueryDto } from './dto/query-community-management.dto';
+import { QueryCommunityDto } from './dto/query-community.dto';
 import { SazedStorage } from 'src/common/lib/Disk/SazedStorage';
 import appConfig from 'src/config/app.config';
 
 @Injectable()
-export class CommunityManagementService {
-  constructor(private prisma: PrismaService) {}
+export class CommunityService {
+  constructor(private prisma: PrismaService) { }
 
-  async create(createCommunityManagementDto: CreateCommunityManagementDto) {
+  async create(createCommunityDto: CreateCommunityDto) {
     // return this.prisma.communityPost.create({
-    //   data: createCommunityManagementDto,
+    //   data: createCommunityDto,
     // });
   }
 
-  async getAllPosts(userId: string, query: GetPostsQueryDto) {
-    try {
-      if (!userId) {
-        return {
-          success: false,
-          message: 'User ID is required',
-        };
-      }
-      const { page, limit, search, status, role } = query;
-      const skip = (page - 1) * limit;
+  async getAllPosts(user_id: string, query: QueryCommunityDto) {
+    if (!user_id) {
+      throw new UnauthorizedException('You are not authorized to access this feature');
+    }
+    const { page, limit, search, status, role } = query;
+    const skip = (page - 1) * limit;
 
-      const where: Prisma.CommunityPostWhereInput = {};
+    const where: Prisma.CommunityPostWhereInput = {};
 
-      if (search) {
-        where.OR = [
-          { content: { contains: query.search, mode: 'insensitive' } },
-          {
-            author: {
-              name: { contains: query.search, mode: 'insensitive' },
-            },
+    if (search) {
+      where.OR = [
+        { content: { contains: query.search, mode: 'insensitive' } },
+        {
+          author: {
+            name: { contains: query.search, mode: 'insensitive' },
           },
-        ];
-      }
+        },
+      ];
+    }
 
-      if (status) {
-        where.status = status;
-      }
-      if (role) {
-        where.author = {
-          role_users: {
-            some: {
-              role: {
-                name: {
-                  contains: role,
-                  mode: 'insensitive',
-                },
+    if (status) {
+      where.status = status;
+    }
+    if (role) {
+      where.author = {
+        role_users: {
+          some: {
+            role: {
+              name: {
+                contains: role,
+                mode: 'insensitive',
               },
             },
           },
-        };
-      }
-
-      const posts = await this.prisma.communityPost.findMany({
-        where,
-        orderBy: { created_at: 'desc' },
-        select: {
-          id: true,
-          content: true,
-          status: true,
-          created_at: true,
-          updated_at: true,
-          author: {
-            select: {
-              id: true,
-              name: true,
-              role_users: { select: { role: true } },
-              avatar: true,
-            },
-          },
-          _count: {
-            select: {
-              comments: true,
-              likes: true,
-            },
-          },
         },
-        skip,
-        take: limit,
-      });
-
-      const total = await this.prisma.communityPost.count({ where });
-
-      return {
-        success: true,
-        message: 'Posts fetched successfully',
-        data: posts.map((post) => {
-          const updatePost = {
-            ...post,
-            author: {
-              ...post.author,
-              avatar: post.author.avatar
-                ? post.author.avatar.startsWith('http')
-                  ? post.author.avatar
-                  : SazedStorage.url(
-                      `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
-                    )
-                : null,
-            },
-            comments: post._count.comments,
-            likes: post._count.likes,
-          };
-          delete updatePost._count;
-          return updatePost;
-        }),
-        meta_data: {
-          page,
-          limit,
-          total,
-          search,
-          status,
-          role,
-        },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: 'Error fetching posts',
       };
     }
+
+    const posts = await this.prisma.communityPost.findMany({
+      where,
+      orderBy: { created_at: 'desc' },
+      select: {
+        id: true,
+        content: true,
+        status: true,
+        created_at: true,
+        updated_at: true,
+        author: {
+          select: {
+            id: true,
+            name: true,
+            role_users: { select: { role: true } },
+            avatar: true,
+          },
+        },
+        _count: {
+          select: {
+            comments: true,
+            likes: true,
+          },
+        },
+      },
+      skip,
+      take: limit,
+    });
+
+    const total = await this.prisma.communityPost.count({ where });
+
+    return {
+      success: true,
+      message: 'Posts fetched successfully',
+      data: posts.map((post) => {
+        const updatePost = {
+          ...post,
+          author: {
+            ...post.author,
+            avatar: post.author.avatar
+              ? post.author.avatar.startsWith('http')
+                ? post.author.avatar
+                : SazedStorage.url(
+                  `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
+                )
+              : null,
+          },
+          comments: post._count.comments,
+          likes: post._count.likes,
+        };
+        delete updatePost._count;
+        return updatePost;
+      }),
+      meta_data: {
+        page,
+        limit,
+        total,
+        search,
+        status,
+        role,
+      },
+    };
   }
 
-  async getAllRequestedPost(userId: string, query: GetPostsQueryDto) {
+  async getAllRequestedPost(userId: string, query: QueryCommunityDto) {
     try {
       if (!userId) {
         return {
@@ -189,8 +179,8 @@ export class CommunityManagementService {
               ? post.author.avatar.startsWith('http')
                 ? post.author.avatar
                 : SazedStorage.url(
-                    `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
-                  )
+                  `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
+                )
               : null,
           },
         })),
@@ -208,84 +198,6 @@ export class CommunityManagementService {
       };
     }
   }
-
-  // async getAllPostsByStatus(userId: string, status: PostStatus) {
-  //   try {
-  //     if (!userId) {
-  //       return {
-  //         success: false,
-  //         message: 'User ID is required',
-  //       };
-  //     }
-
-  //     const posts = await this.prisma.communityPost.findMany({
-  //       where: { status: status },
-  //       orderBy: { createdAt: 'desc' },
-  //       include: {
-  //         author: {
-  //           select: {
-  //             id: true,
-  //             name: true,
-  //             role_users: { select: { role: true } },
-  //             avatar: true,
-  //           },
-  //         },
-  //         comments: { select: { id: true } },
-  //         likes: { select: { id: true } },
-  //       },
-  //     });
-  //     return { success: true, data: posts };
-  //   } catch (error) {
-  //     return {
-  //       success: false,
-  //       message: 'Error fetching posts',
-  //     };
-  //   }
-  // }
-
-  // async getAllPostsByRole(userId: string, role: string) {
-  //   try {
-  //     if (!userId) {
-  //       return {
-  //         success: false,
-  //         message: 'User ID is required',
-  //       };
-  //     }
-
-  //     const posts = await this.prisma.communityPost.findMany({
-  //       where: {
-  //         author: {
-  //           role_users: {
-  //             some: {
-  //               role: {
-  //                 name: role,
-  //               },
-  //             },
-  //           },
-  //         },
-  //       },
-  //       orderBy: { createdAt: 'desc' },
-  //       include: {
-  //         author: {
-  //           select: {
-  //             id: true,
-  //             name: true,
-  //             role_users: { select: { role: true } },
-  //             avatar: true,
-  //           },
-  //         },
-  //         comments: { select: { id: true } },
-  //         likes: { select: { id: true } },
-  //       },
-  //     });
-  //     return { success: true, data: posts };
-  //   } catch (error) {
-  //     return {
-  //       success: false,
-  //       message: 'Error fetching posts',
-  //     };
-  //   }
-  // }
 
   async getPostById(userId: string, postId: string) {
     try {
@@ -337,8 +249,8 @@ export class CommunityManagementService {
             ? post.author.avatar.startsWith('http')
               ? post.author.avatar
               : SazedStorage.url(
-                  `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
-                )
+                `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(post.author.avatar).replace(/^\/+/, '')}`,
+              )
             : null,
         },
         comments: post._count.comments,

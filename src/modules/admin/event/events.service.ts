@@ -134,7 +134,7 @@ export class EventsService {
     if (!user_id) throw new UnauthorizedException('User not found');
     if (!event_id) throw new BadRequestException('Invalid Event Id');
 
-    const { search, page, limit, startDate, endDate } = query;
+    const { search, page, limit, start_date, end_date } = query;
     let where: Prisma.EventRegistrationWhereInput = {
       event_id: event_id
     };
@@ -149,12 +149,12 @@ export class EventsService {
       ];
     }
 
-    if (startDate) {
-      where.created_at = { gte: startDate };
+    if (start_date) {
+      where.created_at = { gte: start_date };
     }
 
-    if (endDate) {
-      where.created_at = { lte: endDate };
+    if (end_date) {
+      where.created_at = { lte: end_date };
     }
 
     const [members, total] = await Promise.all([
@@ -213,8 +213,8 @@ export class EventsService {
         limit,
         total,
         search,
-        startDate,
-        endDate,
+        start_date,
+        end_date
       },
     };
 

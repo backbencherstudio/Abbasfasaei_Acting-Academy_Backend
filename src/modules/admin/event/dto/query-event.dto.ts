@@ -59,7 +59,7 @@ export class QueryEventMembersDto extends OmitType(QueryEventDto, ["status"]) {
     @IsOptional()
     @Type(() => Date)
     @IsDate()
-    startDate: Date;
+    start_date: Date;
 
     @ApiProperty({
         description: 'End date',
@@ -69,6 +69,6 @@ export class QueryEventMembersDto extends OmitType(QueryEventDto, ["status"]) {
     @IsOptional()
     @Type(() => Date)
     @IsDate()
-    endDate: Date;
+    end_date: Date;
 
 }
