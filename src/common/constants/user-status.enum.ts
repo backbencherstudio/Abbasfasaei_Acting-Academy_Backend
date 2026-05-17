@@ -3,4 +3,5 @@ export enum UserStatus {
   ACTIVE = 1,
   BLOCKED = 2,
   DEACTIVATED = 3,
+  REJECTED = 4,
 }

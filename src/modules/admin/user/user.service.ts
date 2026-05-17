@@ -1,434 +1,246 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UserRepository } from '../../../common/repository/user/user.repository';
-import appConfig from '../../../config/app.config';
 import { NajimStorage } from '../../../common/lib/Disk/NajimStorage';
-import { DateHelper } from '../../../common/helper/date.helper';
-import { InstructorsService } from './instructors.helper';
-import { StudentManagementService } from './student-management.helper';
+import { QueryUserDto } from './dto/query-user.dto';
+import { Prisma } from '@prisma/client';
+import { Role } from 'src/common/guard/role/role.enum';
+import { UserStatus } from 'src/common/constants/user-status.enum';
 
 @Injectable()
 export class UserService {
-  private readonly instructorsService: InstructorsService;
-  private readonly studentManagementService: StudentManagementService;
 
   constructor(private prisma: PrismaService) {
-    this.instructorsService = new InstructorsService(prisma);
-    this.studentManagementService = new StudentManagementService(prisma);
   }
 
-  async create(createUserDto: CreateUserDto) {
-    try {
-      const user = await UserRepository.createUser(createUserDto);
+  async create(createUserDto: CreateUserDto, admin_id: string) {
+    if (!admin_id) {
+      throw new UnauthorizedException('User not found')
+    }
 
-      if (user.success) {
-        return {
-          success: user.success,
-          message: user.message,
-        };
-      } else {
-        return {
-          success: user.success,
-          message: user.message,
-        };
-      }
-    } catch (error) {
+    const user = await UserRepository.createUser(createUserDto);
+
+    if (user.success) {
       return {
-        success: false,
-        message: error.message,
+        success: user.success,
+        message: user.message,
       };
+    } else {
+      throw new UnprocessableEntityException(user.message || "Error creating user")
     }
   }
 
-  async findAll({
-    q,
-    type,
-    approved,
-  }: {
-    q?: string;
-    type?: string;
-    approved?: string;
-  }) {
-    try {
-      const where_condition = {};
-      if (q) {
-        where_condition['OR'] = [
-          { name: { contains: q, mode: 'insensitive' } },
-          { email: { contains: q, mode: 'insensitive' } },
-        ];
-      }
-
-      if (type) {
-        where_condition['type'] = type;
-      }
-
-      if (approved) {
-        where_condition['approved_at'] =
-          approved == 'approved' ? { not: null } : { equals: null };
-      }
-
-      const users = await this.prisma.user.findMany({
-        where: {
-          ...where_condition,
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone_number: true,
-          address: true,
-          type: true,
-          role_users: { select: { role: { select: { name: true } } } },
-          approved_at: true,
-          created_at: true,
-          updated_at: true,
-        },
-      });
-
-      return {
-        success: true,
-        data: users,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+  async findAll(
+    query: QueryUserDto,
+    user_id: string
+  ) {
+    if (!user_id) {
+      throw new UnauthorizedException('User not found')
     }
-  }
 
-  async findOne(id: string) {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: {
-          id: id,
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          type: true,
-          role_users: { select: { role: { select: { name: true } } } },
-          phone_number: true,
-          approved_at: true,
-          created_at: true,
-          updated_at: true,
-          avatar: true,
-          customer_id: true,
-        },
-      });
+    const where: Prisma.UserWhereInput = {};
+    const { page, limit, status, type, search } = query;
+    if (search) {
+      where['OR'] = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { experience: { contains: search, mode: 'insensitive' } },
+        { phone_number: { contains: search, mode: 'insensitive' } },
+        { address: { contains: search, mode: 'insensitive' } },
+      ];
+    }
 
-      // add avatar url to user
-      if (user.avatar) {
-        if (/^https?:\/\//i.test(user.avatar)) {
-          user['avatar_url'] = user.avatar;
-        } else {
-          const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
-          user['avatar_url'] = NajimStorage.url(`${base}/${String(user.avatar).replace(/^\/+/, '')}`);
+    if (type) {
+      where['type'] = type;
+    }
+
+    const users = await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        status: true,
+        phone_number: true,
+        type: true,
+        approved_at: true,
+        created_at: true,
+        joined_at: true,
+        _count: {
+          select: {
+            enrollments: true,
+            assigned_courses: true,
+          }
         }
-      }
+      },
+      orderBy: {
+        created_at: 'desc'
+      },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
 
-      if (!user) {
+    const total = await this.prisma.user.count({
+      where,
+    });
+
+    return {
+      success: true,
+      message: 'Users fetched successfully',
+      data: users.map((user) => {
+        const count = user._count;
+        const type = user.type;
+        delete user._count;
         return {
-          success: false,
-          message: 'User not found',
+          ...user,
+          status: user.status ? UserStatus[user.status] : null,
+          total_enrolled: type === Role.STUDENT ? count.enrollments : 0,
+          total_assigned: type === Role.TEACHER ? count.assigned_courses : 0,
+          avatar_url: user.avatar ? NajimStorage.url(user.avatar) : null,
         };
+      }),
+      meta_data: {
+        page,
+        limit,
+        total,
+        search,
+        type,
+        status
       }
+    };
+  }
 
+  async findOne(user_id: string, admin_id: string) {
+    if (!admin_id) throw new UnauthorizedException("Please login first!");
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: user_id,
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        phone_number: true,
+        experience: true,
+        type: true,
+        status: true,
+        approved_at: true,
+        joined_at: true,
+        created_at: true,
+        avatar: true,
+        customer_id: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return {
+      success: true,
+      data: {
+        ...user,
+        status: user.status ? UserStatus[user.status] : null,
+        avatar_url: user.avatar ? NajimStorage.url(user.avatar) : null,
+      },
+    };
+
+  }
+
+  async approve(user_id: string, admin_id: string) {
+    if (!admin_id) throw new UnauthorizedException("Please login first!");
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+    if (!user) {
+      throw new UnprocessableEntityException('User not found');
+    }
+    await this.prisma.user.update({
+      where: { id: user_id },
+      data: { approved_at: new Date() },
+    });
+    return {
+      success: true,
+      message: 'User approved successfully',
+    };
+
+  }
+
+  async reject(user_id: string, admin_id: string) {
+    if (!admin_id) throw new UnauthorizedException("Please login first!");
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+    if (!user) {
+      throw new UnprocessableEntityException('User not found');
+    }
+    await this.prisma.user.update({
+      where: { id: user_id },
+      data: { approved_at: null, status: UserStatus.REJECTED },
+    });
+    return {
+      success: true,
+      message: 'User rejected successfully',
+    };
+  }
+
+  async update(user_id: string, updateUserDto: UpdateUserDto, admin_id: string) {
+    if (!admin_id) throw new UnauthorizedException("Please login first!");
+
+    const user = await UserRepository.updateUser(user_id, updateUserDto);
+
+    if (user.success) {
       return {
-        success: true,
-        data: user,
+        success: user.success,
+        message: user.message,
       };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+    }
+    else {
+      throw new UnprocessableEntityException(user.message || "Error updating user");
     }
   }
 
-  async approve(id: string) {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: id },
-      });
-      if (!user) {
-        return {
-          success: false,
-          message: 'User not found',
-        };
-      }
-      await this.prisma.user.update({
-        where: { id: id },
-        data: { approved_at: DateHelper.now() },
-      });
-      return {
-        success: true,
-        message: 'User approved successfully',
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+  async remove(user_id: string, admin_id: string) {
+    if (!admin_id) throw new UnauthorizedException("Please login first!");
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
+    await this.prisma.user.update({
+      where: { id: user_id },
+      data: { deleted_at: new Date() },
+    });
+    return {
+      success: true,
+      message: 'User deleted successfully',
+    };
+
   }
 
-  async reject(id: string) {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: id },
-      });
-      if (!user) {
-        return {
-          success: false,
-          message: 'User not found',
-        };
-      }
-      await this.prisma.user.update({
-        where: { id: id },
-        data: { approved_at: null },
-      });
-      return {
-        success: true,
-        message: 'User rejected successfully',
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+  async updateStatus(user_id: string, status: UserStatus, admin_id: string) {
+    if (!admin_id) throw new UnauthorizedException("Please login first!");
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
-  }
-
-  async update(id: string, updateUserDto: UpdateUserDto) {
-    try {
-      const user = await UserRepository.updateUser(id, updateUserDto);
-
-      if (user.success) {
-        return {
-          success: user.success,
-          message: user.message,
-        };
-      } else {
-        return {
-          success: user.success,
-          message: user.message,
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
-  }
-
-  async remove(id: string) {
-    try {
-      const user = await UserRepository.deleteUser(id);
-      return user;
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
-  }
-
-  async assignRole(id: string, body: any) {
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: id },
-      });
-      if (!user) {
-        return {
-          success: false,
-          message: 'User not found',
-        };
-      }
-
-      // Validate requested role from body
-      const requested = String(body?.role || '').toUpperCase();
-      const allowed = ['ADMIN', 'TEACHER', 'STUDENT'];
-      if (!allowed.includes(requested)) {
-        return {
-          success: false,
-          message: `Invalid role. Allowed roles: ${allowed.join(', ')}`,
-        };
-      }
-
-      // Find (or create) the requested role (case-insensitive)
-      let targetRole = await this.prisma.role.findFirst({
-        where: { name: { equals: requested, mode: 'insensitive' } },
-        select: { id: true, name: true },
-      });
-      if (!targetRole) {
-        targetRole = await this.prisma.role.create({
-          data: {
-            name: requested,
-            title: requested.charAt(0) + requested.slice(1).toLowerCase(),
-          },
-          select: { id: true, name: true },
-        });
-      }
-
-      // Enforce a single role per user: remove previous roles, then attach the chosen one
-      await this.prisma.$transaction([
-        this.prisma.roleUser.deleteMany({ where: { user_id: id } }),
-        this.prisma.roleUser.create({
-          data: { user_id: id, role_id: targetRole.id },
-        }),
-      ]);
-      return {
-        success: true,
-        message: `User role set to ${requested} successfully`,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
-  }
-
-  //-------------------- get all instructors --------------------//
-  async getAllInstructors() {
-    try {
-      const instructors = await this.prisma.user.findMany({
-        where: {
-          role_users: {
-            some: {
-              role: { name: { equals: 'TEACHER', mode: 'insensitive' } },
-            },
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          about: true,
-          phone_number: true,
-          address: true,
-          avatar: true,
-          role_users: { select: { role: { select: { name: true } } } },
-        },
-      });
-      return {
-        success: true,
-        data: instructors,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
-  }
-
-  //-------------------- get all students --------------------//
-  async getAllStudents() {
-    try {
-      const students = await this.prisma.user.findMany({
-        where: {
-          role_users: {
-            some: {
-              role: { name: { equals: 'STUDENT', mode: 'insensitive' } },
-            },
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role_users: { select: { role: { select: { name: true } } } },
-          phone_number: true,
-          address: true,
-          avatar: true,
-          about: true,
-        },
-      });
-      return {
-        success: true,
-        data: students,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
-  }
-
-  //-------------------- get all admins --------------------//
-  async getAllAdmins() {
-    try {
-      const admins = await this.prisma.user.findMany({
-        where: {
-          role_users: {
-            some: { role: { name: { equals: 'ADMIN', mode: 'insensitive' } } },
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role_users: { select: { role: { select: { name: true } } } },
-        },
-      });
-      return {
-        success: true,
-        data: admins,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
-  }
-
-  getAllTeachers(query?: any) {
-    return this.instructorsService.getAllTeachers(query);
-  }
-
-  addTeacher(dto: any) {
-    return this.instructorsService.addTeacher(dto);
-  }
-
-  getTeacherDetails(teacherId: string) {
-    return this.instructorsService.getTeacherDetails(teacherId);
-  }
-
-  updateTeacher(teacherId: string, dto: any) {
-    return this.instructorsService.updateTeacher(teacherId, dto);
-  }
-
-  combinedEnrollment(userId: string, dto: any, files: any) {
-    return this.studentManagementService.combinedEnrollment(userId, dto, files);
-  }
-
-  getStudentById(studentId: string) {
-    return this.studentManagementService.getStudentById(studentId);
-  }
-
-  getManagedStudents(userId: string, query: any) {
-    return this.studentManagementService.getAllStudents(userId, query);
-  }
-
-  updateEnrollmentInfo(enrollmentId: string, updateData: any) {
-    return this.studentManagementService.updateEnrollmentInfo(
-      enrollmentId,
-      updateData,
-    );
-  }
-
-  restrictStudentAccess(enrollmentId: string, updateData: any) {
-    return this.studentManagementService.restrictStudentAccess(
-      enrollmentId,
-      updateData,
-    );
+    await this.prisma.user.update({
+      where: { id: user_id },
+      data: { status },
+    });
+    return {
+      success: true,
+      message: 'User status updated successfully',
+    };
   }
 }

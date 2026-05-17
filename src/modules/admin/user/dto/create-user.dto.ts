@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsDate, IsEnum, IsNotEmpty, IsOptional } from 'class-validator';
+import { Role } from 'src/common/guard/role/role.enum';
 
 export class CreateUserDto {
   @IsNotEmpty()
@@ -16,6 +18,14 @@ export class CreateUserDto {
   })
   email: string;
 
+
+  @IsOptional()
+  @ApiProperty({
+    description: 'The phone of the user',
+    example: '1234567890',
+  })
+  phone?: string;
+
   @IsNotEmpty()
   @ApiProperty({
     description: 'The password of the user',
@@ -26,36 +36,27 @@ export class CreateUserDto {
   @IsOptional()
   @ApiProperty({
     description: 'The type of the user',
-    example: 'user',
+    enum: Role,
+    example: Role.USER,
   })
-  type?: string;
-
-  @IsOptional()
-  @ApiProperty({
-    description: 'The avatar of the user',
-    example: 'avatar.png',
-  })
-  avatar?: string;
-
-  @IsOptional()
-  @ApiProperty({
-    description: 'The date of birth of the user',
-    example: '1990-01-01',
-  })
-  date_of_birth?: string;
-
-  @IsOptional()
-  @ApiProperty({
-    description: 'The gender of the user',
-    example: 'male',
-  })
-  gender?: string;
+  @Transform(({ value }) => value?.trim()?.toLowerCase())
+  @IsEnum(Role)
+  type?: Role;
 
 
   @IsOptional()
   @ApiProperty({
-    description: 'The location of the user',
-    example: 'New York, USA',
+    description: 'The join date of the user',
+    example: '2022-01-01',
   })
-  address?: string;
+  @Type(() => Date)
+  @IsDate()
+  join_date?: Date;
+
+  @IsOptional()
+  @ApiProperty({
+    description: 'The experience of the user',
+    example: '5 years',
+  })
+  experience?: string;
 }

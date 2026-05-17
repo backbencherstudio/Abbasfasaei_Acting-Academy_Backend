@@ -191,20 +191,20 @@ export class UserRepository {
    */
   static async createUser({
     name,
-    first_name,
-    last_name,
     email,
     password,
     phone_number,
+    experience,
+    join_date,
     role_id = null,
     type = 'user',
   }: {
     name?: string;
-    first_name?: string;
-    last_name?: string;
     email: string;
     password: string;
     phone_number?: string;
+    experience?: string;
+    join_date?: Date;
     role_id?: string;
     type?: string;
   }) {
@@ -213,14 +213,14 @@ export class UserRepository {
       if (name) {
         data['name'] = name;
       }
-      if (first_name) {
-        data['first_name'] = first_name;
-      }
-      if (last_name) {
-        data['last_name'] = last_name;
-      }
       if (phone_number) {
         data['phone_number'] = phone_number;
+      }
+      if (experience) {
+        data['experience'] = experience;
+      }
+      if (join_date) {
+        data['join_date'] = join_date;
       }
       if (email) {
         // Check if email already exist
@@ -298,12 +298,18 @@ export class UserRepository {
       name,
       email,
       password,
+      phone_number,
+      experience,
+      join_date,
       role_id = null,
       type = 'user',
     }: {
       name?: string;
       email?: string;
       password?: string;
+      phone_number?: string;
+      experience?: string;
+      join_date?: Date;
       role_id?: string;
       type?: string;
     },
@@ -335,6 +341,16 @@ export class UserRepository {
         );
       }
 
+      if (phone_number) {
+        data['phone_number'] = phone_number;
+      }
+      if (experience) {
+        data['experience'] = experience;
+      }
+      if (join_date) {
+        data['join_date'] = join_date;
+      }
+
       if (ArrayHelper.inArray(type, Object.values(Role))) {
         data['type'] = type;
       } else {
@@ -356,6 +372,7 @@ export class UserRepository {
           message: 'User not found',
         };
       }
+
 
       const user = await prisma.user.update({
         where: {

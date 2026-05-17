@@ -206,7 +206,6 @@ export class CommunityService {
 
   }
 
-
   async deletePost(post_id: string, user_id: string) {
     if (!user_id) throw new UnauthorizedException("user not found")
     if (!post_id) throw new BadRequestException("Invalid post id")
