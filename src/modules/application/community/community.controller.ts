@@ -119,8 +119,11 @@ export class CommunityController {
 
   // updated
   @Get('post/:post_id/comments')
-  getComments(@Param('post_id') post_id: string) {
-    return this.service.getComments(post_id);
+  getComments(
+    @Param('post_id') post_id: string,
+    @GetUser('userId') user_id: string,
+  ) {
+    return this.service.getComments(post_id, user_id);
   }
 
   // updated

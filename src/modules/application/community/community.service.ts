@@ -23,6 +23,32 @@ import {
 export class CommunityService {
   constructor(private prisma: PrismaService) {}
 
+  private async ensurePostAccess(post_id: string, user_id: string) {
+    const post = await this.prisma.communityPost.findFirst({
+      where: {
+        id: post_id,
+        author: { status: UserStatus.ACTIVE },
+        OR: [
+          { author_id: user_id },
+          {
+            status: { in: [PostStatus.APPROVED, PostStatus.ANNOUNCEMENT] },
+            OR: [
+              { visibility: PostVisibility.PUBLIC },
+              { allowed_friends: { some: { id: user_id } } },
+            ],
+          },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (!post) {
+      throw new NotFoundException('post not found or inaccessible');
+    }
+
+    return post;
+  }
+
   async createPost(
     user_id: string,
     createPostDto: CreatePostDto,
@@ -534,13 +560,21 @@ export class CommunityService {
     if (!post_id) throw new BadRequestException('invalid post id');
     if (!content) throw new BadRequestException('invalid content');
 
+    await this.ensurePostAccess(post_id, user_id);
+
     if (parent_id) {
       const parentComment = await this.prisma.communityComment.findUnique({
         where: { id: parent_id },
-        select: { id: true },
+        select: { id: true, post_id: true, deleted_at: true },
       });
       if (!parentComment) {
         throw new BadRequestException('parent comment not found');
+      }
+      if (parentComment.post_id !== post_id) {
+        throw new BadRequestException('parent comment does not belong to this post');
+      }
+      if (parentComment.deleted_at) {
+        throw new BadRequestException('cannot reply to a deleted comment');
       }
     }
 
@@ -558,6 +592,17 @@ export class CommunityService {
     if (!user_id) throw new UnauthorizedException('user not found');
     if (!comment_id) throw new BadRequestException('invalid comment id');
 
+    const comment = await this.prisma.communityComment.findFirst({
+      where: { id: comment_id },
+      select: { id: true, post_id: true, deleted_at: true },
+    });
+
+    if (!comment || comment.deleted_at) {
+      throw new BadRequestException('comment or reply not found');
+    }
+
+    await this.ensurePostAccess(comment.post_id, user_id);
+
     const existingLike = await this.prisma.communityLike.findFirst({
       where: { comment_id: comment_id, user_id: user_id },
     });
@@ -571,15 +616,6 @@ export class CommunityService {
         message: 'Like removed successfully',
       };
     } else {
-      const comment = await this.prisma.communityComment.findFirst({
-        where: { id: comment_id },
-        select: { id: true },
-      });
-
-      if (!comment) {
-        throw new BadRequestException('comment or reply not found');
-      }
-
       await this.prisma.communityLike.create({
         data: {
           comment_id: comment_id,
@@ -633,7 +669,12 @@ export class CommunityService {
     };
   }
 
-  async getComments(postId: string) {
+  async getComments(postId: string, user_id: string) {
+    if (!user_id) throw new UnauthorizedException('user not found');
+    if (!postId) throw new BadRequestException('invalid post id');
+
+    await this.ensurePostAccess(postId, user_id);
+
     const comments = await this.prisma.communityComment.findMany({
       where: {
         post_id: postId,
@@ -660,13 +701,30 @@ export class CommunityService {
       orderBy: { created_at: 'desc' },
     });
 
-    // Return formatted data with like counts
     return comments.map((comment) => ({
       ...comment,
-      likeCount: comment.likes.length, // Count likes for the comment
+      content: comment.deleted_at
+        ? 'This comment has been deleted.'
+        : comment.content,
+      user: {
+        ...comment.user,
+        avatar: comment.user.avatar
+          ? NajimStorage.url(comment.user.avatar)
+          : null,
+      },
+      likeCount: comment.likes.length,
       replies: comment.replies.map((reply) => ({
         ...reply,
-        likeCount: reply.likes.length, // Count likes for the reply
+        content: reply.deleted_at
+          ? 'This comment has been deleted.'
+          : reply.content,
+        user: {
+          ...reply.user,
+          avatar: reply.user.avatar
+            ? NajimStorage.url(reply.user.avatar)
+            : null,
+        },
+        likeCount: reply.likes.length,
       })),
     }));
   }
