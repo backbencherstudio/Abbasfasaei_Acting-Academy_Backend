@@ -1,738 +1,1174 @@
-# API Curl Commands List (Ultimate)
+# API Curl List
 
-This file contains **every single endpoint** for the **Auth**, **Course**, and **Event** modules (including both Admin and Application APIs).
-
-**Base URL:** `http://localhost:3000`
+- Base URL: `http://localhost:7777`
+- Skipped modules: `payment`, `chat`, `notification`
+- Note: `transaction` module include kora hoyeche, karon eta alada module
 
 ---
 
-## 1. Auth Module (`/auth`)
+## Auth Module
 
-### Get Current User Details
-
+### Get Current User
 ```bash
-curl -X GET "http://localhost:3000/auth/me"
+curl -X GET "http://localhost:7777/auth/me"
 ```
 
-### Register User
-
+### Register
 ```bash
-curl -X POST "http://localhost:3000/auth/register" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "email": "user@example.com",
-           "password": "password123",
-           "type": "user"
-         }'
+curl -X POST "http://localhost:7777/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123",
+    "type": "user"
+  }'
 ```
 
-### Login User
-
+### Login
 ```bash
-curl -X POST "http://localhost:3000/auth/login" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "email": "user@example.com",
-           "password": "password123"
-         }'
+curl -X POST "http://localhost:7777/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "password123"
+  }'
 ```
 
 ### Refresh Token
-
 ```bash
-curl -X POST "http://localhost:3000/auth/refresh-token" \
-     -H "Content-Type: application/json" \
-     -d '{ "refresh_token": "YOUR_REFRESH_TOKEN" }'
+curl -X POST "http://localhost:7777/auth/refresh-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refresh_token": "YOUR_REFRESH_TOKEN"
+  }'
 ```
 
 ### Logout
-
 ```bash
-curl -X POST "http://localhost:3000/auth/logout"
+curl -X POST "http://localhost:7777/auth/logout"
 ```
 
 ### Google Login
-
 ```bash
-curl -X GET "http://localhost:3000/auth/google"
+curl -X GET "http://localhost:7777/auth/google"
 ```
 
-### Google Login Redirect
-
+### Google Redirect
 ```bash
-curl -X GET "http://localhost:3000/auth/google/redirect"
+curl -X GET "http://localhost:7777/auth/google/redirect"
 ```
 
 ### Facebook Login
-
 ```bash
-curl -X GET "http://localhost:3000/auth/facebook"
+curl -X GET "http://localhost:7777/auth/facebook"
 ```
 
-### Facebook Login Redirect
-
+### Facebook Redirect
 ```bash
-curl -X GET "http://localhost:3000/auth/facebook/redirect"
+curl -X GET "http://localhost:7777/auth/facebook/redirect"
 ```
 
-### Update User Profile (Multipart)
-
+### Update User
 ```bash
-curl -X PATCH "http://localhost:3000/auth/update" \
-     -F "name=John Doe" \
-     -F "username=johndoe" \
-     -F "phone_number=+1234567890" \
-     -F "date_of_birth=2001-11-14" \
-     -F "experience=Intermediate" \
-     -F "about=I am an actor" \
-     -F "avatar=@/path/to/avatar.jpg" \
-     -F "cover_image=@/path/to/cover.jpg"
+curl -X PATCH "http://localhost:7777/auth/update" \
+  -F "name=John Doe" \
+  -F "username=johndoe" \
+  -F "phone_number=+8801712345678" \
+  -F "date_of_birth=2001-11-14" \
+  -F "experience=Intermediate" \
+  -F "about=I am an actor" \
+  -F "avatar=@/path/to/avatar.jpg" \
+  -F "cover_image=@/path/to/cover.jpg"
 ```
 
 ### Forgot Password
-
 ```bash
-curl -X POST "http://localhost:3000/auth/forgot-password" \
-     -H "Content-Type: application/json" \
-     -d '{ "email": "user@example.com" }'
+curl -X POST "http://localhost:7777/auth/forgot-password" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
 ```
 
-### Verify Email (OTP)
-
+### Verify Email
 ```bash
-curl -X POST "http://localhost:3000/auth/verify-email" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "email": "user@example.com",
-           "otp": "123456"
-         }'
+curl -X POST "http://localhost:7777/auth/verify-email" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "otp": "123456"
+  }'
 ```
 
 ### Resend Verification Email
-
 ```bash
-curl -X POST "http://localhost:3000/auth/resend-verification-email" \
-     -H "Content-Type: application/json" \
-     -d '{ "email": "user@example.com" }'
+curl -X POST "http://localhost:7777/auth/resend-verification-email" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com"
+  }'
 ```
 
 ### Reset Password
-
 ```bash
-curl -X POST "http://localhost:3000/auth/reset-password" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "email": "user@example.com",
-           "otp": "123456",
-           "new_password": "newpassword123"
-         }'
+curl -X POST "http://localhost:7777/auth/reset-password" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "otp": "123456",
+    "new_password": "newpassword123"
+  }'
 ```
 
 ### Change Password
-
 ```bash
-curl -X POST "http://localhost:3000/auth/change-password" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "old_password": "oldpassword123",
-           "new_password": "newpassword123"
-         }'
+curl -X POST "http://localhost:7777/auth/change-password" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "old_password": "oldpassword123",
+    "new_password": "newpassword123"
+  }'
 ```
 
 ### Request Email Change
-
 ```bash
-curl -X POST "http://localhost:3000/auth/request-email-change" \
-     -H "Content-Type: application/json" \
-     -d '{ "email": "newemail@example.com" }'
+curl -X POST "http://localhost:7777/auth/request-email-change" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "newemail@example.com"
+  }'
 ```
 
-### Change Email (Confirm with Token)
-
+### Change Email
 ```bash
-curl -X POST "http://localhost:3000/auth/change-email" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "email": "newemail@example.com",
-           "token": "verification_token"
-         }'
+curl -X POST "http://localhost:7777/auth/change-email" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "newemail@example.com",
+    "token": "verification_token"
+  }'
 ```
 
-### 2FA - Generate Secret
-
+### Generate 2FA Secret
 ```bash
-curl -X POST "http://localhost:3000/auth/generate-2fa-secret"
+curl -X POST "http://localhost:7777/auth/generate-2fa-secret"
 ```
 
-### 2FA - Verify
-
+### Verify 2FA
 ```bash
-curl -X POST "http://localhost:3000/auth/verify-2fa" \
-     -H "Content-Type: application/json" \
-     -d '{ "token": "123456" }'
+curl -X POST "http://localhost:7777/auth/verify-2fa" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "123456"
+  }'
 ```
 
-### 2FA - Enable
-
+### Enable 2FA
 ```bash
-curl -X POST "http://localhost:3000/auth/enable-2fa"
+curl -X POST "http://localhost:7777/auth/enable-2fa"
 ```
 
-### 2FA - Disable
-
+### Disable 2FA
 ```bash
-curl -X POST "http://localhost:3000/auth/disable-2fa"
-```
-
----
-
-## 2. Course Module
-
-### A. Application side (`/courses`)
-
-#### Get All Courses
-
-_Query: `my_courses` (boolean)_
-
-```bash
-curl -X GET "http://localhost:3000/courses?my_courses=false"
-```
-
-#### Get Course Details
-
-```bash
-curl -X GET "http://localhost:3000/courses/:course_id"
-```
-
-#### Get My Assignments for Course
-
-```bash
-curl -X GET "http://localhost:3000/courses/:course_id/assignments"
-```
-
-#### Get Course Assets
-
-_Query: `type` (VIDEO | FILE)_
-
-```bash
-curl -X GET "http://localhost:3000/courses/:course_id/assets?type=VIDEO"
-```
-
-#### Get Module Details
-
-```bash
-curl -X GET "http://localhost:3000/courses/modules/:module_id"
-```
-
-#### Get Class Details
-
-```bash
-curl -X GET "http://localhost:3000/courses/modules/classes/:class_id"
-```
-
-#### Get Assignment Details
-
-```bash
-curl -X GET "http://localhost:3000/courses/modules/classes/assignments/:assignment_id"
-```
-
-#### Get All Assignments for a Class
-
-```bash
-curl -X GET "http://localhost:3000/courses/modules/classes/:class_id/assignments"
-```
-
-#### Submit Assignment (Multipart)
-
-```bash
-curl -X POST "http://localhost:3000/courses/modules/classes/assignments/:assignment_id" \
-     -F "title=Submission Title" \
-     -F "description=Submission Description" \
-     -F "attachments=@/path/to/file.zip"
-```
-
-#### Get All Assets for a Class
-
-```bash
-curl -X GET "http://localhost:3000/courses/modules/classes/:class_id/assets"
-```
-
-#### Get Enrollment Current Step
-
-```bash
-curl -X GET "http://localhost:3000/courses/:course_id/enrollment/current_step"
-```
-
-#### Enroll in Course
-
-```bash
-curl -X POST "http://localhost:3000/courses/:course_id/enrollment" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "step": "FORM_FILLING",
-           "name": "John Doe",
-           "email": "john@example.com",
-           "phone": "+123456789",
-           "address": "NY",
-           "date_of_birth": "2000-01-01"
-         }'
-```
-
-#### Scan Attendance QR
-
-```bash
-curl -X POST "http://localhost:3000/courses/attendance/scan-qr" \
-     -H "Content-Type: application/json" \
-     -d '{ "token": "QR_TOKEN" }'
-```
-
-### B. Admin side (`/admin/courses`)
-
-#### Generate Attendance QR
-
-```bash
-curl -X POST "http://localhost:3000/admin/courses/attendance/generate-qr/:classId"
-```
-
-#### Get All Attendance (Admin)
-
-_Query: `status`, `date`, `classId`, `courseId`, `search`, `page`, `limit`_
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses/attendance?status=PRESENT"
-```
-
-#### Mark Manual Attendance
-
-```bash
-curl -X POST "http://localhost:3000/admin/courses/attendance/manual" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "classId": "class_id_here",
-           "studentId": "student_id_here",
-           "status": "PRESENT"
-         }'
-```
-
-#### Create Course
-
-```bash
-curl -X POST "http://localhost:3000/admin/courses" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "title": "Acting Mastery",
-           "course_overview": "Comprehensive Acting Course",
-           "duration": 120,
-           "start_date": "2027-01-01",
-           "class_time": "18:00",
-           "fee_pence": 20000,
-           "installment_process": "3 months",
-           "seat_capacity": 25,
-           "contract": "Terms text",
-           "rules_regulations": "Rules text"
-         }'
-```
-
-#### Get All Courses (Admin)
-
-_Query: `search`, `page`, `limit`, `status`_
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses?status=ACTIVE"
-```
-
-#### Get Course by ID (Admin)
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses/:course_id"
-```
-
-#### Update Course (Admin)
-
-```bash
-curl -X PATCH "http://localhost:3000/admin/courses/:course_id" \
-     -H "Content-Type: application/json" \
-     -d '{ "title": "Updated Course Title" }'
-```
-
-#### Delete Course (Admin)
-
-```bash
-curl -X DELETE "http://localhost:3000/admin/courses/:course_id"
-```
-
-#### Add Module to Course
-
-```bash
-curl -X POST "http://localhost:3000/admin/courses/:course_id/modules" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "module_name": "Module 1",
-           "module_title": "Voice Acting",
-           "module_overview": "Voice modulation"
-         }'
-```
-
-#### Get All Modules for Course (Admin)
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses/:course_id/modules"
-```
-
-#### Get Module by ID (Admin)
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses/modules/:module_id"
-```
-
-#### Update Module (Admin)
-
-```bash
-curl -X PATCH "http://localhost:3000/admin/courses/modules/:module_id" \
-     -H "Content-Type: application/json" \
-     -d '{ "module_name": "New Module Name" }'
-```
-
-#### Delete Module (Admin)
-
-```bash
-curl -X DELETE "http://localhost:3000/admin/courses/modules/:module_id"
-```
-
-#### Add Class to Module
-
-```bash
-curl -X POST "http://localhost:3000/admin/courses/modules/:module_id/classes" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "class_title": "Class 1",
-           "class_name": "Breathing",
-           "duration": 60,
-           "class_date": "2027-01-15",
-           "class_time": "10:00"
-         }'
-```
-
-#### Get All Classes for Module (Admin)
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses/modules/:module_id/classes"
-```
-
-#### Get Class by ID (Admin)
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses/modules/classes/:class_id"
-```
-
-#### Update Class (Admin)
-
-```bash
-curl -X PATCH "http://localhost:3000/admin/courses/modules/classes/:class_id" \
-     -H "Content-Type: application/json" \
-     -d '{ "class_title": "New Class Title" }'
-```
-
-#### Delete Class (Admin)
-
-```bash
-curl -X DELETE "http://localhost:3000/admin/courses/modules/classes/:class_id"
-```
-
-#### Create Assignment (Admin - Multipart)
-
-```bash
-curl -X POST "http://localhost:3000/admin/courses/modules/classes/:class_id/assignments" \
-     -F "title=Homework 1" \
-     -F "description=Practice voice" \
-     -F "submission_date=2027-02-01" \
-     -F "total_marks=100" \
-     -F "attachments=@/path/to/file.pdf"
-```
-
-#### Get All Assignments for Class (Admin)
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses/modules/classes/:class_id/assignments"
-```
-
-#### Get Assignment by ID (Admin)
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses/modules/classes/assignments/:assignment_id"
-```
-
-#### Update Assignment (Admin - Multipart)
-
-```bash
-curl -X PATCH "http://localhost:3000/admin/courses/modules/classes/assignments/:assignment_id" \
-     -F "title=Updated Assignment Title"
-```
-
-#### Delete Assignment (Admin)
-
-```bash
-curl -X DELETE "http://localhost:3000/admin/courses/modules/classes/assignments/:assignment_id"
-```
-
-#### Get All Submissions for Assignment (Admin)
-
-_Query: `search`, `page`, `limit`, `status`_
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses/modules/classes/assignments/:assignment_id/submissions"
-```
-
-#### Grade Submission (Admin)
-
-```bash
-curl -X POST "http://localhost:3000/admin/courses/modules/classes/assignments/submissions/:submission_id/grade" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "grade": "A+",
-           "feedback": "Perfect!",
-           "grade_number": 100
-         }'
-```
-
-#### Upload Class Assets (Admin - Multipart)
-
-```bash
-curl -X POST "http://localhost:3000/admin/courses/modules/classes/:class_id/assets" \
-     -F "attachments=@/path/to/file.mp4"
-```
-
-#### Get All Assets for a Class (Admin)
-
-```bash
-curl -X GET "http://localhost:3000/admin/courses/modules/classes/:class_id/assets"
-```
-
-#### Delete Class Asset (Admin)
-
-```bash
-curl -X DELETE "http://localhost:3000/admin/courses/modules/classes/assets/:asset_id"
+curl -X POST "http://localhost:7777/auth/disable-2fa"
 ```
 
 ---
 
-## 3. Event Module
+## Application Profile Module
 
-### A. Application side (`/events`)
-
-#### Get All Events
-
+### Get Profile
 ```bash
-curl -X GET "http://localhost:3000/events"
+curl -X GET "http://localhost:7777/profile"
 ```
 
-#### Get Event Details
-
+### Get Personal Info
 ```bash
-curl -X GET "http://localhost:3000/events/:event_id"
+curl -X GET "http://localhost:7777/profile/personal-info"
 ```
 
-### B. Admin side (`/admin/events`)
-
-#### Get All Events (Admin)
-
-_Query: `search`, `page`, `limit`, `status`_
-
+### Update Personal Info
 ```bash
-curl -X GET "http://localhost:3000/admin/events?status=UPCOMING"
+curl -X PUT "http://localhost:7777/profile/personal-info" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fullName": "John Doe",
+    "phone": "+8801712345678",
+    "dateOfBirth": "2000-01-01T00:00:00.000Z",
+    "experienceLevel": "BEGINNER",
+    "about": "About me",
+    "address": {
+      "country": "Bangladesh",
+      "city": "Dhaka",
+      "address": "House 10, Road 2"
+    }
+  }'
 ```
 
-#### Get Event by ID (Admin)
-
+### Disable Account
 ```bash
-curl -X GET "http://localhost:3000/admin/events/:event_id"
+curl -X PUT "http://localhost:7777/profile/disable-account"
 ```
 
-#### Create Event (Admin)
-
+### Delete Account
 ```bash
-curl -X POST "http://localhost:3000/admin/events" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "name": "Drama Workshop",
-           "start_at": "2026-10-01",
-           "time": "15:00",
-           "location": "Theater Hall",
-           "amount": 50.0,
-           "description": "Workshop details",
-           "overview": "Overview text"
-         }'
+curl -X DELETE "http://localhost:7777/profile/delete-account"
 ```
 
-#### Update Event (Admin)
-
+### Activate Account
 ```bash
-curl -X PATCH "http://localhost:3000/admin/events/:event_id" \
-     -H "Content-Type: application/json" \
-     -d '{ "name": "Updated Workshop Name" }'
+curl -X PUT "http://localhost:7777/profile/activate-account"
+```
+
+### Profile Logout
+```bash
+curl -X POST "http://localhost:7777/profile/logout"
 ```
 
 ---
 
-## 4. User Management (Admin)
+## Application Overview Module
 
-### Create User (Admin)
-
+### Get Student Overview
 ```bash
-curl -X POST "http://localhost:3000/" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "name": "New User",
-           "email": "user@example.com",
-           "password": "password123",
-           "type": "student"
-         }'
+curl -X GET "http://localhost:7777/overview"
 ```
 
-### Get All Users (Admin)
+---
 
-_Query: `q` (search), `type` (role), `approved` (true/false)_
+## Application Contact Module
 
+### Create Contact
 ```bash
-curl -X GET "http://localhost:3000/?type=student&approved=true"
+curl -X POST "http://localhost:7777/contact" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "phone_number": "+1234567890",
+    "message": "Hello, I have a question."
+  }'
 ```
 
-#### Get User by ID (Admin)
+---
 
+## Application FAQ Module
+
+### Get All FAQ
 ```bash
-curl -X GET "http://localhost:3000/:id"
+curl -X GET "http://localhost:7777/faq"
 ```
 
-#### Update User (Admin)
-
+### Get FAQ By ID
 ```bash
-curl -X PATCH "http://localhost:3000/:id" \
-     -H "Content-Type: application/json" \
-     -d '{ "name": "Updated Name" }'
+curl -X GET "http://localhost:7777/faq/:id"
 ```
 
-#### Delete User (Admin)
+---
 
+## Application Event Module
+
+### Get All Events
 ```bash
-curl -X DELETE "http://localhost:3000/:id"
+curl -X GET "http://localhost:7777/events"
 ```
 
-### Approve User (Admin)
-
+### Get Event By ID
 ```bash
-curl -X POST "http://localhost:3000/:id/approve"
+curl -X GET "http://localhost:7777/events/:event_id"
 ```
 
-### Reject User (Admin)
+---
 
+## Application Course Module
+
+### Get All Courses
 ```bash
-curl -X POST "http://localhost:3000/:id/reject"
+curl -X GET "http://localhost:7777/courses?my_courses=false"
 ```
 
-### Assign Role to User (Admin)
-
+### Get Course Details
 ```bash
-curl -X POST "http://localhost:3000/:id/assign-role" \
-     -H "Content-Type: application/json" \
-     -d '{ "role": "TEACHER" }'
+curl -X GET "http://localhost:7777/courses/:course_id"
 ```
 
-### Get All Instructors (Short List)
-
+### Get Course Assignments
 ```bash
-curl -X GET "http://localhost:3000/instructors/all"
+curl -X GET "http://localhost:7777/courses/:course_id/assignments"
 ```
 
-### Get All Students (Short List)
-
+### Get Course Assets
 ```bash
-curl -X GET "http://localhost:3000/students/all"
+curl -X GET "http://localhost:7777/courses/:course_id/assets?type=VIDEO"
 ```
 
-### Get All Admins (Short List)
-
+### Get Module Details
 ```bash
-curl -X GET "http://localhost:3000/admins/all"
+curl -X GET "http://localhost:7777/courses/modules/:module_id"
 ```
 
-### Manage Instructors (Admin Detailed)
-
-_Query: `search`, `status`, `page`, `limit`, `teacherId`, `includeClasses`_
-
+### Get Class Details
 ```bash
-curl -X GET "http://localhost:3000/admin/instructors?status=ACTIVE"
+curl -X GET "http://localhost:7777/courses/modules/classes/:class_id"
 ```
 
-### Add Instructor (Admin Detailed)
-
+### Get Assignment Details
 ```bash
-curl -X POST "http://localhost:3000/admin/instructors" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "name": "Professor X",
-           "email": "profx@example.com",
-           "phone_number": "555-0199",
-           "experienceLevel": "ADVANCED"
-         }'
+curl -X GET "http://localhost:7777/courses/modules/classes/assignments/:assignment_id"
 ```
 
-### Instructor Details (Admin Detailed)
-
+### Get Class Assignments
 ```bash
-curl -X GET "http://localhost:3000/admin/instructors/details/:id"
+curl -X GET "http://localhost:7777/courses/modules/classes/:class_id/assignments"
 ```
 
-### Update Instructor (Admin Detailed)
-
+### Submit Assignment
 ```bash
-curl -X PATCH "http://localhost:3000/admin/instructors/update/:id" \
-     -H "Content-Type: application/json" \
-     -d '{ "name": "Professor Charles Xavier" }'
+curl -X POST "http://localhost:7777/courses/modules/classes/assignments/:assignment_id" \
+  -F "title=Submission Title" \
+  -F "description=Submission Description" \
+  -F "fileUrl=https://example.com/submission.pdf" \
+  -F "attachments=@/path/to/file.pdf"
 ```
 
-### Manual Student Enrollment (Admin - Multipart)
-
+### Get Class Assets
 ```bash
-curl -X POST "http://localhost:3000/admin/student-management/manual-enrollment" \
-     -F "courseId=course_id_here" \
-     -F "full_name=Student Name" \
-     -F "email=student@example.com" \
-     -F "phone=123456789" \
-     -F "address=NY" \
-     -F "experience_level=BEGINNER" \
-     -F "acting_goals=Goals" \
-     -F "transaction_id=TXN_001" \
-     -F "amount=150" \
-     -F "rules_signing=@/path/to/rules.pdf" \
-     -F "contract_signing=@/path/to/contract.pdf"
+curl -X GET "http://localhost:7777/courses/modules/classes/:class_id/assets"
 ```
 
-### Get Student Profile (Admin Detailed)
-
+### Get Enrollment Current Step
 ```bash
-curl -X GET "http://localhost:3000/admin/student-management/student/:studentId"
+curl -X GET "http://localhost:7777/courses/:course_id/enrollment/current_step"
 ```
 
-### Managed Students List (Admin Detailed)
-
-_Query: `page`, `limit`, `search`, `status`, `experienceLevel`, `paymentStatus`, `courseId`_
-
+### Enroll User - Form Filling
 ```bash
-curl -X GET "http://localhost:3000/admin/student-management?courseId=id_here"
+curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "step": "FORM_FILLING",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "+8801712345678",
+    "address": "Dhaka",
+    "date_of_birth": "2000-01-01",
+    "experience": "BEGINNER",
+    "acting_goals": "Improve acting"
+  }'
 ```
 
-### Update Enrollment Info (Admin Detailed)
-
+### Enroll User - Rules Signing
 ```bash
-curl -X PATCH "http://localhost:3000/admin/student-management/enrollment/:enrollmentId" \
-     -H "Content-Type: application/json" \
-     -d '{ "status": "ACTIVE" }'
+curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "step": "RULES_SIGNING",
+    "rules_accepted": true,
+    "signature_full_name": "John Doe",
+    "signature": "John Doe",
+    "signature_date": "2026-05-17"
+  }'
 ```
 
-### Restrict Student Access (Admin Detailed)
-
+### Enroll User - Contract Signing
 ```bash
-curl -X PATCH "http://localhost:3000/admin/student-management/enrollment/:enrollmentId/restrict" \
-     -H "Content-Type: application/json" \
-     -d '{ "restricted": true }'
+curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "step": "CONTRACT_SIGNING",
+    "terms_accepted": true,
+    "signature_full_name": "John Doe",
+    "signature": "John Doe",
+    "signature_date": "2026-05-17"
+  }'
+```
+
+### Scan Attendance QR
+```bash
+curl -X POST "http://localhost:7777/courses/attendance/scan-qr" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "QR_TOKEN"
+  }'
+```
+
+---
+
+## Application Community Module
+
+### Create Post
+```bash
+curl -X POST "http://localhost:7777/community/post" \
+  -F "post_type=POST" \
+  -F "content=This is my first post" \
+  -F "visibility=PUBLIC" \
+  -F "attachments=@/path/to/file.jpg"
+```
+
+### Create Poll Post
+```bash
+curl -X POST "http://localhost:7777/community/post" \
+  -F "post_type=POLL" \
+  -F "content=Which class do you like?" \
+  -F "poll_options=Option 1" \
+  -F "poll_options=Option 2" \
+  -F "visibility=PUBLIC"
+```
+
+### Update Post
+```bash
+curl -X PATCH "http://localhost:7777/community/post/:post_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Updated post content",
+    "visibility": "PUBLIC"
+  }'
+```
+
+### Get Community Feed
+```bash
+curl -X GET "http://localhost:7777/community/feed?search=hello&cursor=CURSOR_VALUE&limit=10"
+```
+
+### Delete Post
+```bash
+curl -X DELETE "http://localhost:7777/community/post/:post_id"
+```
+
+### Get Post Likes
+```bash
+curl -X GET "http://localhost:7777/community/posts/:post_id/likes?cursor=CURSOR_VALUE&limit=10"
+```
+
+### Like Post
+```bash
+curl -X POST "http://localhost:7777/community/posts/:post_id/like"
+```
+
+### Vote On Poll
+```bash
+curl -X PATCH "http://localhost:7777/community/post/:post_id/vote/:option_id"
+```
+
+### Comment On Post
+```bash
+curl -X POST "http://localhost:7777/community/post/:post_id/comment" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Nice post",
+    "comment_id": "OPTIONAL_PARENT_COMMENT_ID"
+  }'
+```
+
+### Get Post Comments
+```bash
+curl -X GET "http://localhost:7777/community/post/:post_id/comments"
+```
+
+### Like Comment
+```bash
+curl -X POST "http://localhost:7777/community/posts/comments/:comment_id/like"
+```
+
+### Delete Comment
+```bash
+curl -X PATCH "http://localhost:7777/community/posts/comments/:comment_id/delete"
+```
+
+### Share Post
+```bash
+curl -X POST "http://localhost:7777/community/posts/:post_id/share" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "medium": "facebook"
+  }'
+```
+
+### Get User Profile
+```bash
+curl -X GET "http://localhost:7777/community/profile/:user_id"
+```
+
+### Report User
+```bash
+curl -X POST "http://localhost:7777/community/report/:reported_user_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "spam",
+    "description": "Detailed reason"
+  }'
+```
+
+---
+
+## Admin Overview Module
+
+### Get Admin Overview
+```bash
+curl -X GET "http://localhost:7777/admin/overview"
+```
+
+---
+
+## Admin User Module
+
+### Create User
+```bash
+curl -X POST "http://localhost:7777/admin/user" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "John Doe",
+    "email": "john@example.com",
+    "phone": "1234567890",
+    "password": "password123",
+    "type": "student",
+    "join_date": "2026-01-01",
+    "experience": "2 years"
+  }'
+```
+
+### Get All Users
+```bash
+curl -X GET "http://localhost:7777/admin/user?search=john&type=STUDENT&page=1&limit=10&status=ACTIVE"
+```
+
+### Approve User
+```bash
+curl -X POST "http://localhost:7777/admin/user/:user_id/approve"
+```
+
+### Reject User
+```bash
+curl -X POST "http://localhost:7777/admin/user/:user_id/reject"
+```
+
+### Get User By ID
+```bash
+curl -X GET "http://localhost:7777/admin/user/:user_id"
+```
+
+### Update User
+```bash
+curl -X PATCH "http://localhost:7777/admin/user/:user_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Updated Name",
+    "phone": "01999999999"
+  }'
+```
+
+### Update User Status
+```bash
+curl -X PATCH "http://localhost:7777/admin/user/:user_id/status" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "BLOCKED"
+  }'
+```
+
+### Delete User
+```bash
+curl -X DELETE "http://localhost:7777/admin/user/:user_id"
+```
+
+---
+
+## Admin Settings Module
+
+### Get General Settings
+```bash
+curl -X GET "http://localhost:7777/admin/settings/general-settings"
+```
+
+### Update General Settings
+```bash
+curl -X POST "http://localhost:7777/admin/settings/general-settings" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Website Name",
+    "phone_number": "+8801712345678",
+    "email": "info@example.com",
+    "address": "Dhaka"
+  }'
+```
+
+### Get Profile Settings
+```bash
+curl -X GET "http://localhost:7777/admin/settings/profile-settings"
+```
+
+### Update Profile Settings
+```bash
+curl -X POST "http://localhost:7777/admin/settings/update-profile" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john@example.com",
+    "currentPassword": "oldpass",
+    "newPassword": "newpass123",
+    "confirmNewPassword": "newpass123"
+  }'
+```
+
+---
+
+## Admin Website Info Module
+
+### Update Website Info
+```bash
+curl -X POST "http://localhost:7777/admin/website-info" \
+  -F "name=My Website" \
+  -F "phone_number=081234567890" \
+  -F "email=mywebsite@gmail.com" \
+  -F "address=Dhaka" \
+  -F "copyright=© 2025 My Website" \
+  -F "cancellation_policy=No refund after enrollment" \
+  -F "logo=@/path/to/logo.png" \
+  -F "favicon=@/path/to/favicon.ico"
+```
+
+### Get Website Info
+```bash
+curl -X GET "http://localhost:7777/admin/website-info"
+```
+
+---
+
+## Admin Contact Module
+
+### Create Contact
+```bash
+curl -X POST "http://localhost:7777/admin/contact" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john@example.com",
+    "phone_number": "+1234567890",
+    "message": "Hello"
+  }'
+```
+
+### Get All Contacts
+```bash
+curl -X GET "http://localhost:7777/admin/contact?q=john&status=1"
+```
+
+### Get Contact By ID
+```bash
+curl -X GET "http://localhost:7777/admin/contact/:id"
+```
+
+### Update Contact
+```bash
+curl -X PATCH "http://localhost:7777/admin/contact/:id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Updated message"
+  }'
+```
+
+### Delete Contact
+```bash
+curl -X DELETE "http://localhost:7777/admin/contact/:id"
+```
+
+---
+
+## Admin FAQ Module
+
+### Create FAQ
+```bash
+curl -X POST "http://localhost:7777/admin/faq" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is the fee?",
+    "answer": "1000 BDT",
+    "sort_order": 1
+  }'
+```
+
+### Batch Create FAQ
+```bash
+curl -X POST "http://localhost:7777/admin/faq/batch-create" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "faqs": [
+      {
+        "question": "What is the fee?",
+        "answer": "1000 BDT",
+        "sort_order": 1
+      }
+    ]
+  }'
+```
+
+### Get All FAQ
+```bash
+curl -X GET "http://localhost:7777/admin/faq"
+```
+
+### Get FAQ By ID
+```bash
+curl -X GET "http://localhost:7777/admin/faq/:id"
+```
+
+### Update FAQ
+```bash
+curl -X PATCH "http://localhost:7777/admin/faq/:id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Updated question",
+    "answer": "Updated answer"
+  }'
+```
+
+### Delete FAQ
+```bash
+curl -X DELETE "http://localhost:7777/admin/faq/:id"
+```
+
+---
+
+## Admin Event Module
+
+### Get All Events
+```bash
+curl -X GET "http://localhost:7777/admin/events?search=hiphop&page=1&limit=10&status=UPCOMING"
+```
+
+### Get Event By ID
+```bash
+curl -X GET "http://localhost:7777/admin/events/:event_id"
+```
+
+### Get Event Members
+```bash
+curl -X GET "http://localhost:7777/admin/events/:event_id/members?search=john&page=1&limit=10&start_date=2026-01-01&end_date=2026-12-31"
+```
+
+### Create Event
+```bash
+curl -X POST "http://localhost:7777/admin/events" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Hip Hop Fest",
+    "start_at": "2026-06-01",
+    "time": "09:00",
+    "location": "Auditorium",
+    "amount": 25,
+    "description": "Event description",
+    "overview": "Long overview"
+  }'
+```
+
+### Update Event
+```bash
+curl -X PATCH "http://localhost:7777/admin/events/:event_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Updated Event Name",
+    "location": "Updated Location"
+  }'
+```
+
+---
+
+## Admin Course Module
+
+Controller source: `src/modules/admin/course/courses.controller.ts`
+
+### Generate Attendance QR
+```bash
+curl -X POST "http://localhost:7777/admin/courses/attendance/generate-qr/:classId"
+```
+
+### Get All Attendance
+```bash
+curl -X GET "http://localhost:7777/admin/courses/attendance?status=PRESENT&date=2026-05-17&classId=CLASS_ID&courseId=COURSE_ID&search=john&page=1&limit=10"
+```
+
+### Mark Manual Attendance
+```bash
+curl -X POST "http://localhost:7777/admin/courses/attendance/manual" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "classId": "CLASS_ID",
+    "studentId": "STUDENT_ID",
+    "status": "PRESENT",
+    "attendedAt": "2026-05-17T10:00:00.000Z"
+  }'
+```
+
+### Create Course
+```bash
+curl -X POST "http://localhost:7777/admin/courses" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Introduction to Acting",
+    "course_overview": "Course Overview",
+    "status": "ACTIVE",
+    "duration": 100,
+    "start_date": "2027-01-01",
+    "class_time": "17:00",
+    "instructor_id": "OPTIONAL_USER_ID",
+    "fee_pence": 100,
+    "installment_process": "3 installments",
+    "seat_capacity": 30,
+    "contract": "Terms text",
+    "rules_regulations": "Rules text"
+  }'
+```
+
+### Get All Courses
+```bash
+curl -X GET "http://localhost:7777/admin/courses?search=acting&page=1&limit=10&status=ACTIVE"
+```
+
+### Get All Courses - Teacher/Admin Basic
+```bash
+curl -X GET "http://localhost:7777/admin/courses"
+```
+
+### Get Courses By User ID
+```bash
+curl -X GET "http://localhost:7777/admin/courses/courses/users/:user_id"
+```
+
+### Get Course By ID
+```bash
+curl -X GET "http://localhost:7777/admin/courses/:course_id"
+```
+
+### Update Course
+```bash
+curl -X PATCH "http://localhost:7777/admin/courses/:course_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Updated Course Title"
+  }'
+```
+
+### Update Course - Full Example
+```bash
+curl -X PATCH "http://localhost:7777/admin/courses/:course_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Advanced Acting",
+    "course_overview": "Updated course overview",
+    "status": "ACTIVE",
+    "duration": 120,
+    "start_date": "2027-02-01",
+    "class_time": "18:30",
+    "instructor_id": "USER_ID",
+    "fee_pence": 150,
+    "installment_process": "2 installments",
+    "seat_capacity": 35,
+    "contract": "Updated terms",
+    "rules_regulations": "Updated rules"
+  }'
+```
+
+### Delete Course
+```bash
+curl -X DELETE "http://localhost:7777/admin/courses/:course_id"
+```
+
+### Add Module
+```bash
+curl -X POST "http://localhost:7777/admin/courses/:course_id/modules" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "module_name": "Module 1",
+    "module_title": "Introduction",
+    "module_overview": "Overview"
+  }'
+```
+
+### Get All Modules
+```bash
+curl -X GET "http://localhost:7777/admin/courses/:course_id/modules"
+```
+
+### Get Module By ID
+```bash
+curl -X GET "http://localhost:7777/admin/courses/modules/:module_id"
+```
+
+### Update Module
+```bash
+curl -X PATCH "http://localhost:7777/admin/courses/modules/:module_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "module_title": "Updated Module Title"
+  }'
+```
+
+### Update Module - Full Example
+```bash
+curl -X PATCH "http://localhost:7777/admin/courses/modules/:module_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "module_name": "Updated Module Name",
+    "module_title": "Updated Module Title",
+    "module_overview": "Updated module overview"
+  }'
+```
+
+### Delete Module
+```bash
+curl -X DELETE "http://localhost:7777/admin/courses/modules/:module_id"
+```
+
+### Add Class
+```bash
+curl -X POST "http://localhost:7777/admin/courses/modules/:module_id/classes" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "class_title": "Class 1",
+    "class_name": "Voice Training",
+    "class_overview": "Overview",
+    "duration": 60,
+    "class_date": "2027-01-15",
+    "class_time": "10:00"
+  }'
+```
+
+### Get All Classes
+```bash
+curl -X GET "http://localhost:7777/admin/courses/modules/:module_id/classes"
+```
+
+### Get Class By ID
+```bash
+curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id"
+```
+
+### Update Class
+```bash
+curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "class_title": "Updated Class Title"
+  }'
+```
+
+### Update Class - Full Example
+```bash
+curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "class_title": "Updated Class Title",
+    "class_name": "Updated Class Name",
+    "class_overview": "Updated class overview",
+    "duration": 90,
+    "class_date": "2027-01-20",
+    "class_time": "11:00"
+  }'
+```
+
+### Delete Class
+```bash
+curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/:class_id"
+```
+
+### Start Class
+```bash
+curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id/start"
+```
+
+### End Class
+```bash
+curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id/end"
+```
+
+### Create Assignment
+```bash
+curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assignments" \
+  -F "title=Homework 1" \
+  -F "description=Practice scene" \
+  -F "submission_date=2027-02-01" \
+  -F "total_marks=100" \
+  -F "attachments=@/path/to/file.pdf"
+```
+
+### Get All Assignments
+```bash
+curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id/assignments"
+```
+
+### Get Assignment By ID
+```bash
+curl -X GET "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id"
+```
+
+### Update Assignment
+```bash
+curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id" \
+  -F "title=Updated Assignment Title" \
+  -F "description=Updated description" \
+  -F "total_marks=80"
+```
+
+### Update Assignment - Full Example
+```bash
+curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id" \
+  -F "title=Updated Assignment Title" \
+  -F "description=Updated assignment description" \
+  -F "submission_date=2027-02-05" \
+  -F "total_marks=80" \
+  -F "attachments=@/path/to/updated-file.pdf"
+```
+
+### Delete Assignment
+```bash
+curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id"
+```
+
+### Get Assignment Submissions
+```bash
+curl -X GET "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id/submissions?search=john&page=1&limit=10&status=SUBMITTED"
+```
+
+### Grade Submission
+```bash
+curl -X POST "http://localhost:7777/admin/courses/modules/classes/assignments/submissions/:submission_id/grade" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "grade": "A+",
+    "feedback": "Excellent work",
+    "grade_number": 95
+  }'
+```
+
+### Upload Class Assets
+```bash
+curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assets" \
+  -F "attachments=@/path/to/file1.pdf" \
+  -F "attachments=@/path/to/file2.mp4"
+```
+
+### Upload Class Assets - Single File
+```bash
+curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assets" \
+  -F "attachments=@/path/to/file.pdf"
+```
+
+### Get Class Assets
+```bash
+curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id/assets"
+```
+
+### Delete Class Asset
+```bash
+curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/assets/:asset_id"
+```
+
+---
+
+## Admin Community Module
+
+### Create Admin Post
+```bash
+curl -X POST "http://localhost:7777/admin/community" \
+  -F "post_type=POST" \
+  -F "content=Official admin announcement" \
+  -F "attachments=@/path/to/file.jpg"
+```
+
+### Create Admin Poll Post
+```bash
+curl -X POST "http://localhost:7777/admin/community" \
+  -F "post_type=POLL" \
+  -F "content=Which batch suits you?" \
+  -F "poll_options=Morning" \
+  -F "poll_options=Evening"
+```
+
+### Get All Community Posts
+```bash
+curl -X GET "http://localhost:7777/admin/community/posts?search=hello&status=ACTIVE&role=STUDENT&page=1&limit=10"
+```
+
+### Get Community Post By ID
+```bash
+curl -X GET "http://localhost:7777/admin/community/posts/:post_id"
+```
+
+### Update Post Status
+```bash
+curl -X PATCH "http://localhost:7777/admin/community/post/:post_id/status" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "ACTIVE"
+  }'
+```
+
+### Delete Community Post
+```bash
+curl -X DELETE "http://localhost:7777/admin/community/post/:post_id"
+```
+
+---
+
+## Admin Transaction Module
+
+### Register Finance User
+```bash
+curl -X POST "http://localhost:7777/admin/transactions/register" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Finance User",
+    "email": "finance@example.com",
+    "phone": "0123456789",
+    "experienceLevel": "ADVANCED",
+    "joined_at": "2026-02-28T12:45:05+06:00",
+    "password": "password123"
+  }'
+```
+
+### Update Finance User
+```bash
+curl -X POST "http://localhost:7777/admin/transactions/update" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Updated Finance User"
+  }'
+```
+
+### Get Revenue Stats
+```bash
+curl -X GET "http://localhost:7777/admin/transactions/revenue/stats"
+```
+
+### Get All Transactions
+```bash
+curl -X GET "http://localhost:7777/admin/transactions/transactions?search=john&page=1&limit=10&payment_type=ONE_TIME&date=2026-05-17"
+```
+
+### Add Manual Payment
+```bash
+curl -X POST "http://localhost:7777/admin/transactions/payments/manual" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "studentId": "student_user_id",
+    "amount": 2500,
+    "currency": "USD",
+    "paymentMethod": "stripe",
+    "transactionRef": "TXN-2026-001",
+    "paymentType": "ONE_TIME",
+    "paymentStatus": "PAID",
+    "transactionStatus": "SUCCESS",
+    "itemType": "COURSE_ENROLLMENT",
+    "courseId": "course_id",
+    "paymentDate": "2026-04-11T12:00:00.000Z",
+    "notes": "Manual entry by finance team"
+  }'
+```
+
+### Get Finance And Payments Dashboard
+```bash
+curl -X GET "http://localhost:7777/finance-and-payments"
 ```
