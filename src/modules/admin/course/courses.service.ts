@@ -180,6 +180,91 @@ export class CoursesService {
     };
   }
 
+  async getCoursesByUserId(user_id: string, admin_id: string) {
+    if (!admin_id) throw new UnauthorizedException('Please login first!!');
+
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: user_id,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const where: Prisma.CourseWhereInput = {}
+
+    if (user.type == Role.STUDENT) {
+      where.enrollments = { some: { user_id: user_id, status: 'ACTIVE', step: 'COMPLETED' } }
+    }
+    if (user.type == Role.TEACHER) {
+      where.instructor_id = user_id;
+    }
+
+    const courses = await this.prisma.course.findMany({
+      where: {
+        instructor_id: user_id,
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        seat_capacity: true,
+        fee_pence: true,
+        duration: true,
+        start_date: true,
+        instructor: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        _count: {
+          select: {
+            enrollments: {
+              where: {
+                status: 'ACTIVE',
+                step: 'COMPLETED',
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+
+    return {
+      message: 'Courses fetched successfully',
+      success: true,
+      data: courses.map((course) => {
+        const total_enrollments = course._count.enrollments;
+        const course_progress = Math.max(
+          0,
+          Math.min(
+            100,
+            course?.duration
+              ? ((Date.now() - new Date(course.start_date).getTime()) /
+                (Number(course.duration) * 86400000)) *
+              100
+              : 0,
+          ),
+        );
+
+        delete course._count;
+        return {
+          ...course,
+          fee: course.fee_pence > 0 ? course.fee_pence / 100 : 0,
+          total_enrollments,
+          course_progress
+        };
+      }),
+    };
+  }
+
   async getCourseById(userId: string, id: string) {
     if (!userId) {
       throw new UnauthorizedException('Unauthorized');
@@ -236,8 +321,8 @@ export class CoursesService {
         100,
         course?.duration
           ? ((Date.now() - new Date(course.start_date).getTime()) /
-              (Number(course.duration) * 86400000)) *
-              100
+            (Number(course.duration) * 86400000)) *
+          100
           : 0,
       ),
     );
@@ -625,6 +710,7 @@ export class CoursesService {
         id: true,
         class_title: true,
         class_name: true,
+        class_at: true,
         start_at: true,
         end_at: true,
         module_id: true,
@@ -638,10 +724,10 @@ export class CoursesService {
     const now = new Date();
 
     const nextClass = classes
-      .filter((c) => new Date(c.start_at) > now)
+      .filter((c) => new Date(c.class_at) > now)
       .sort(
         (a, b) =>
-          new Date(a.start_at).getTime() - new Date(b.start_at).getTime(),
+          new Date(a.class_at).getTime() - new Date(b.class_at).getTime(),
       )[0];
 
     return {
@@ -650,8 +736,9 @@ export class CoursesService {
       data: classes.map((classItem) => {
         let status = 'PENDING';
         const startTime = new Date(classItem.start_at);
+        const endTime = new Date(classItem.end_at);
 
-        if (startTime < now) {
+        if (startTime < now && endTime < now) {
           status = 'COMPLETED';
         } else if (nextClass && classItem.id === nextClass.id) {
           status = 'NEXT';
@@ -717,19 +804,19 @@ export class CoursesService {
     // Fetch other classes in the same module to determine if this is the 'NEXT' class
     const classesInModule = await this.prisma.moduleClass.findMany({
       where: { module_id: classData.module_id },
-      select: { id: true, start_at: true },
+      select: { id: true, class_at: true },
     });
 
     const now = new Date();
     const nextClass = classesInModule
-      .filter((c) => c.start_at && new Date(c.start_at) > now)
+      .filter((c) => c.class_at && new Date(c.class_at) > now)
       .sort(
         (a, b) =>
-          new Date(a.start_at).getTime() - new Date(b.start_at).getTime(),
+          new Date(a.class_at).getTime() - new Date(b.class_at).getTime(),
       )[0];
 
     let status = 'PENDING';
-    if (classData.start_at && new Date(classData.start_at) < now) {
+    if (classData.start_at && new Date(classData.start_at) < now && classData.end_at && new Date(classData.end_at) < now) {
       status = 'COMPLETED';
     } else if (nextClass && classData.id === nextClass.id) {
       status = 'NEXT';
@@ -831,6 +918,49 @@ export class CoursesService {
       message: 'Class updated successfully',
       success: true,
       data: updatedClass,
+    };
+  }
+
+  async startOrEndClass(user_id: string, class_id: string, status: 'START' | 'END') {
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+
+    const existingClass = await this.prisma.moduleClass.findUnique({
+      where: { id: class_id },
+    });
+
+    if (!existingClass) {
+      throw new NotFoundException('Class not found');
+    }
+
+
+    if (status === 'START') {
+      if (existingClass.start_at) {
+        throw new InternalServerErrorException('Class already started');
+      }
+      const updatedClass = await this.prisma.moduleClass.update({
+        where: { id: class_id },
+        data: {
+          start_at: new Date(),
+        },
+      });
+
+    } else if (status === 'END') {
+      if (!existingClass.start_at) {
+        throw new InternalServerErrorException('Class not started');
+      }
+      const updatedClass = await this.prisma.moduleClass.update({
+        where: { id: class_id },
+        data: {
+          end_at: new Date(),
+        },
+      });
+    } else {
+      throw new InternalServerErrorException('Failed to update class');
+    }
+
+    return {
+      message: `Class ${status.toLowerCase()}ed successfully`,
+      success: true,
     };
   }
 

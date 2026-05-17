@@ -49,7 +49,7 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('admin/courses')
 export class CoursesController {
-  constructor(private readonly coursesService: CoursesService) {}
+  constructor(private readonly coursesService: CoursesService) { }
 
   @Roles(Role.ADMIN, Role.TEACHER)
   @Post('attendance/generate-qr/:classId')
@@ -122,6 +122,11 @@ export class CoursesController {
   @Get()
   getAllCourses(@GetUser() user: any, @Query() query: GetAllCourseQueryDto) {
     return this.coursesService.getAllCourses(user.userId, query);
+  }
+
+  @Get("courses/users/:user_id")
+  async getCoursesByUserId(@Param("user_id") user_id: string, @GetUser("userId") admin_id: string) {
+    return this.coursesService.getCoursesByUserId(user_id, admin_id);
   }
 
   // updated
@@ -276,7 +281,25 @@ export class CoursesController {
     return this.coursesService.deleteClass(user_id, class_id);
   }
 
-  // TODO: start and ends class will be create in future
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @ApiOperation({ summary: 'Start or end a class by ID' })
+  @Patch('modules/classes/:class_id/start')
+  startClass(
+    @GetUser('userId') user_id: string,
+    @Param('class_id') class_id: string,
+  ) {
+    return this.coursesService.startOrEndClass(user_id, class_id, 'START');
+  }
+
+  @Roles(Role.TEACHER, Role.ADMIN)
+  @ApiOperation({ summary: 'Start or end a class by ID' })
+  @Patch('modules/classes/:class_id/end')
+  endClass(
+    @GetUser('userId') user_id: string,
+    @Param('class_id') class_id: string,
+  ) {
+    return this.coursesService.startOrEndClass(user_id, class_id, 'END');
+  }
 
   //---------------------------- assignments Management -------------------------------//
 
