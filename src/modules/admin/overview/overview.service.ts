@@ -1,23 +1,177 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { CourseStatus } from '@prisma/client';
+import { Role } from 'src/common/guard/role/role.enum';
+import { NajimStorage } from 'src/common/lib/Disk';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { DashboardService } from './dashboard.helper';
-import { HomeService } from './home.helper';
 
 @Injectable()
 export class OverviewService {
-  private readonly dashboardService: DashboardService;
-  private readonly homeService: HomeService;
 
-  constructor(private readonly prisma: PrismaService) {
-    this.dashboardService = new DashboardService(prisma);
-    this.homeService = new HomeService(prisma);
-  }
+  constructor(private readonly prisma: PrismaService) { }
 
-  getDashboardData(userId: string) {
-    return this.dashboardService.getDashboardData(userId);
-  }
+  async getOverview(user_id: string) {
+    if (!user_id) throw new UnauthorizedException("Please login first");
 
-  getHome(userId: string) {
-    return this.homeService.getHome(userId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+      select: { type: true }
+    });
+
+    if (!user) throw new UnauthorizedException("User not found");
+
+    const userType = user.type?.toLowerCase();
+
+    const isFinance = userType === Role.FINANCE;
+    const isTeacher = userType === Role.TEACHER;
+    const isAdmin = userType === Role.ADMIN || userType === Role.SU_ADMIN;
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    if (isTeacher && !isAdmin && !isFinance) {
+      // ----------------------------------------------------
+      // TEACHER OVERVIEW
+      // ----------------------------------------------------
+      const [myTotalStudents, myActiveCourses, totalAssignments, totalClasses, upComingClasses] = await Promise.all([
+        this.prisma.user.count({
+          where: { type: Role.STUDENT, enrollments: { some: { course: { instructor_id: user_id } } } }
+        }),
+        this.prisma.course.count({
+          where: { instructor_id: user_id, status: CourseStatus.ACTIVE }
+        }),
+        this.prisma.assignment.count({
+          where: { class: { module: { course: { instructor_id: user_id } } } }
+        }),
+        this.prisma.moduleClass.count({
+          where: { module: { course: { instructor_id: user_id } } }
+        }),
+        this.prisma.moduleClass.findMany({
+          where: { class_at: { gte: new Date() }, module: { course: { instructor_id: user_id } } },
+          take: 4,
+          orderBy: { class_at: 'asc' },
+          include: { module: { include: { course: { include: { instructor: { select: { id: true, name: true } } } } } } }
+        })
+      ]);
+
+      return {
+        success: true,
+        data: {
+          role: 'teacher',
+          my_total_students: myTotalStudents,
+          my_active_courses: myActiveCourses,
+          total_assignments: totalAssignments,
+          total_classes: totalClasses,
+          up_coming_classes: upComingClasses.map((cls) => ({
+            id: cls.id,
+            class_title: cls.class_title,
+            class_name: cls.class_name,
+            duration: cls.duration,
+            class_at: cls.class_at,
+            module_name: cls.module?.module_name,
+            module_title: cls.module?.module_title,
+            course_id: cls.module?.course?.id,
+            course_title: cls.module?.course?.title,
+            instructor_id: cls.module?.course?.instructor?.id,
+            instructor_name: cls.module?.course?.instructor?.name,
+          }))
+        }
+      };
+    } else {
+      // ----------------------------------------------------
+      // ADMIN & FINANCE OVERVIEW
+      // ----------------------------------------------------
+      const promises: Promise<any>[] = [
+        this.prisma.user.count({ where: { type: Role.STUDENT } }),
+        this.prisma.user.count({ where: { type: Role.TEACHER } }),
+        this.prisma.course.count({ where: { status: CourseStatus.ACTIVE } }),
+        this.prisma.paymentTransaction.aggregate({
+          _sum: { amount: true },
+          where: { status: 'SUCCESS', paid_at: { gte: startOfMonth, lte: endOfMonth } },
+        }),
+        this.prisma.enrollment.findMany({
+          select: {
+            id: true, status: true, created_at: true,
+            user: { select: { id: true, name: true, avatar: true } },
+            course: { select: { id: true, title: true } }
+          },
+          take: 4,
+          orderBy: { created_at: 'desc' }
+        })
+      ];
+
+      if (isFinance) {
+        promises.push(
+          this.prisma.paymentTransaction.findMany({
+            include: { user: { select: { id: true, name: true, avatar: true } } },
+            take: 4,
+            orderBy: { paid_at: 'desc' }
+          })
+        );
+      } else {
+        promises.push(
+          this.prisma.moduleClass.findMany({
+            where: { class_at: { gte: new Date() } },
+            take: 4,
+            orderBy: { class_at: 'asc' },
+            include: { module: { include: { course: { include: { instructor: { select: { id: true, name: true } } } } } } }
+          })
+        );
+      }
+
+      const results = await Promise.all(promises);
+
+      const monthlyRevenue = Number(results[3]._sum.amount) || 0;
+      const recentEnrollments = results[4];
+      const dynamicData = results[5];
+
+      return {
+        success: true,
+        data: {
+          role: isFinance ? 'finance' : 'admin',
+          total_students: results[0],
+          total_teachers: results[1],
+          ongoing_courses: results[2],
+          monthly_revenue: monthlyRevenue,
+          recent_enrollments: recentEnrollments.map((enrollment: any) => ({
+            id: enrollment.id,
+            status: enrollment.status,
+            user_id: enrollment.user?.id,
+            user_name: enrollment.user?.name,
+            user_avatar: enrollment.user?.avatar ? NajimStorage.url(enrollment.user.avatar) : null,
+            course_id: enrollment.course?.id,
+            course_title: enrollment.course?.title,
+            created_at: enrollment.created_at
+          })),
+          ...(isFinance
+            ? {
+              recent_transactions: dynamicData.map((trans: any) => ({
+                id: trans.id,
+                user_id: trans.user?.id,
+                user_name: trans.user?.name,
+                user_avatar: trans.user?.avatar ? NajimStorage.url(trans.user.avatar) : null,
+                amount: Number(trans.amount),
+                status: trans.status,
+                paid_at: trans.paid_at || trans.created_at
+              }))
+            }
+            : {
+              upcoming_classes: dynamicData.map((cls: any) => ({
+                id: cls.id,
+                class_title: cls.class_title,
+                class_name: cls.class_name,
+                duration: cls.duration,
+                class_at: cls.class_at,
+                module_name: cls.module?.module_name,
+                module_title: cls.module?.module_title,
+                course_id: cls.module?.course?.id,
+                course_title: cls.module?.course?.title,
+                instructor_id: cls.module?.course?.instructor?.id,
+                instructor_name: cls.module?.course?.instructor?.name,
+              }))
+            })
+        }
+      };
+    }
   }
 }
