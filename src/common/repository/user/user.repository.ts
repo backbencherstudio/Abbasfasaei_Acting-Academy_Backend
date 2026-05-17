@@ -373,7 +373,6 @@ export class UserRepository {
         };
       }
 
-
       const user = await prisma.user.update({
         where: {
           id: user_id,

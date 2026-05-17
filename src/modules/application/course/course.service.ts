@@ -6,13 +6,22 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AssignmentSubmissionStatus, AttachmentType, CourseStatus, EnrollmentStatus, EnrollmentStep, Prisma } from '@prisma/client';
+import {
+  AssignmentSubmissionStatus,
+  AttachmentType,
+  CourseStatus,
+  EnrollmentStatus,
+  EnrollmentStep,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { AttendanceService } from './attendance.helper';
-import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
-import { SubmitAssignmentDto } from './dto/submit-assignment.dto';
+import {
+  CreateEnrollmentDto,
+  SubmitAssignmentDto,
+} from './dto/create-course.dto';
 
 @Injectable()
 export class CourseService {
@@ -26,16 +35,15 @@ export class CourseService {
     if (!user_id) throw new UnauthorizedException('User not found');
     if (!course_id) throw new BadRequestException('Invalid Course Id');
 
-
     const course = await this.prisma.course.findUnique({
-      where: { id: course_id, },
+      where: { id: course_id },
       select: {
         status: true,
       },
     });
     if (!course) throw new NotFoundException('Course not found');
-    if (course.status !== CourseStatus.ACTIVE) throw new BadRequestException('Course is not active');
-
+    if (course.status !== CourseStatus.ACTIVE)
+      throw new BadRequestException('Course is not active');
 
     const enrollment = await this.prisma.enrollment.findFirst({
       where: { user_id, course_id },
@@ -77,24 +85,43 @@ export class CourseService {
     };
   }
 
-  async enrollUser(user_id: string, course_id: string, createEnrollmentDto: CreateEnrollmentDto) {
+  async enrollUser(
+    user_id: string,
+    course_id: string,
+    createEnrollmentDto: CreateEnrollmentDto,
+  ) {
     if (!user_id) throw new UnauthorizedException('User not found');
     if (!course_id) throw new BadRequestException('Invalid Course Id');
 
-    const { step, rules_accepted, terms_accepted, signature_full_name, signature, signature_date, acting_goals, ...pinfo } = createEnrollmentDto;
-
-
+    const {
+      step,
+      rules_accepted,
+      terms_accepted,
+      signature_full_name,
+      signature,
+      signature_date,
+      acting_goals,
+      ...pinfo
+    } = createEnrollmentDto;
 
     const existingEnrollment = await this.prisma.enrollment.findFirst({
       where: { user_id, course_id },
-    })
+    });
 
-    if (existingEnrollment && existingEnrollment.step === EnrollmentStep.COMPLETED) {
+    if (
+      existingEnrollment &&
+      existingEnrollment.step === EnrollmentStep.COMPLETED
+    ) {
       throw new BadRequestException('User is already enrolled in the course');
     }
 
-    if (existingEnrollment && existingEnrollment.step === EnrollmentStep.PAYMENT) {
-      throw new BadRequestException('Enrollment exist , just make payment to complete enrollment');
+    if (
+      existingEnrollment &&
+      existingEnrollment.step === EnrollmentStep.PAYMENT
+    ) {
+      throw new BadRequestException(
+        'Enrollment exist , just make payment to complete enrollment',
+      );
     }
 
     if (step === EnrollmentStep.FORM_FILLING && !existingEnrollment) {
@@ -106,7 +133,8 @@ export class CourseService {
           ...pinfo,
         },
       });
-      if (!enrollment) throw new InternalServerErrorException('Failed to create enrollment');
+      if (!enrollment)
+        throw new InternalServerErrorException('Failed to create enrollment');
       if (acting_goals) {
         await this.prisma.user.update({
           where: { id: user_id },
@@ -116,9 +144,11 @@ export class CourseService {
         });
       }
     } else if (step === EnrollmentStep.RULES_SIGNING && existingEnrollment) {
-      if (existingEnrollment?.step !== EnrollmentStep.RULES_SIGNING) throw new BadRequestException('Invalid step');
+      if (existingEnrollment?.step !== EnrollmentStep.RULES_SIGNING)
+        throw new BadRequestException('Invalid step');
       if (!rules_accepted) throw new BadRequestException('Rules not accepted');
-      if (!signature_date || !signature || !signature_full_name) throw new BadRequestException('Invalid signature');
+      if (!signature_date || !signature || !signature_full_name)
+        throw new BadRequestException('Invalid signature');
 
       const updated = await this.prisma.enrollment.update({
         where: { id: existingEnrollment.id },
@@ -130,16 +160,18 @@ export class CourseService {
               full_name: signature_full_name,
               signature: signature,
               signed_at: new Date(signature_date),
-            }
-          }
+            },
+          },
         },
       });
-      if (!updated) throw new InternalServerErrorException('Failed to update enrollment');
-    }
-    else if (step === EnrollmentStep.CONTRACT_SIGNING && existingEnrollment) {
-      if (existingEnrollment?.step !== EnrollmentStep.CONTRACT_SIGNING) throw new BadRequestException('Invalid step');
+      if (!updated)
+        throw new InternalServerErrorException('Failed to update enrollment');
+    } else if (step === EnrollmentStep.CONTRACT_SIGNING && existingEnrollment) {
+      if (existingEnrollment?.step !== EnrollmentStep.CONTRACT_SIGNING)
+        throw new BadRequestException('Invalid step');
       if (!terms_accepted) throw new BadRequestException('Terms not accepted');
-      if (!signature_date || !signature || !signature_full_name) throw new BadRequestException('Invalid signature');
+      if (!signature_date || !signature || !signature_full_name)
+        throw new BadRequestException('Invalid signature');
 
       const updated = await this.prisma.enrollment.update({
         where: { id: existingEnrollment.id },
@@ -151,11 +183,12 @@ export class CourseService {
               full_name: signature_full_name,
               signature: signature,
               signed_at: new Date(signature_date),
-            }
-          }
+            },
+          },
         },
       });
-      if (!updated) throw new InternalServerErrorException('Failed to update enrollment');
+      if (!updated)
+        throw new InternalServerErrorException('Failed to update enrollment');
     } else {
       throw new BadRequestException('Invalid step');
     }
@@ -163,7 +196,7 @@ export class CourseService {
     return {
       success: true,
       message: 'Submitted successfully',
-    }
+    };
   }
 
   scanQr(token: string, userId: string) {
@@ -175,19 +208,17 @@ export class CourseService {
   async getAllCourses(user_id: string, my_courses?: string) {
     if (!user_id) throw new UnauthorizedException('User not found');
 
-    const where: Prisma.CourseWhereInput = {
-    }
+    const where: Prisma.CourseWhereInput = {};
 
     if (my_courses === 'true') {
       where.enrollments = {
         some: {
           user_id: user_id,
-          status: EnrollmentStatus.ACTIVE
-        }
-      }
-    }
-    else {
-      where.status = CourseStatus.ACTIVE
+          status: EnrollmentStatus.ACTIVE,
+        },
+      };
+    } else {
+      where.status = CourseStatus.ACTIVE;
     }
 
     const courses = await this.prisma.course.findMany({
@@ -200,8 +231,9 @@ export class CourseService {
         start_date: true,
         enrollments: {
           where: {
-            user_id: user_id, status: EnrollmentStatus.ACTIVE,
-          }
+            user_id: user_id,
+            status: EnrollmentStatus.ACTIVE,
+          },
         },
         _count: {
           select: {
@@ -215,18 +247,28 @@ export class CourseService {
       success: true,
       message: 'Courses fetched successfully',
       data: courses.map((course) => {
-        const modules = course?._count?.modules || 0
+        const modules = course?._count?.modules || 0;
         delete course._count;
-        const enrollment = course?.enrollments?.[0]
+        const enrollment = course?.enrollments?.[0];
         delete course.enrollments;
-        const course_progress = Math.max(0, Math.min(100, course?.duration ? ((Date.now() - new Date(course.start_date).getTime()) / (Number(course.duration) * 86400000)) * 100 : 0));
+        const course_progress = Math.max(
+          0,
+          Math.min(
+            100,
+            course?.duration
+              ? ((Date.now() - new Date(course.start_date).getTime()) /
+                  (Number(course.duration) * 86400000)) *
+                  100
+              : 0,
+          ),
+        );
         return {
           ...course,
           module_count: modules,
           is_enrolled: !!enrollment?.status,
-          ...(my_courses && { course_progress })
+          ...(my_courses && { course_progress }),
         };
-      })
+      }),
     };
   }
 
@@ -235,7 +277,7 @@ export class CourseService {
     if (!course_id) throw new BadRequestException('Invalid Course Id');
 
     const course = await this.prisma.course.findUnique({
-      where: { id: course_id, },
+      where: { id: course_id },
       select: {
         id: true,
         title: true,
@@ -254,7 +296,7 @@ export class CourseService {
             id: true,
             name: true,
             avatar: true,
-            experience: true
+            experience: true,
           },
         },
         modules: {
@@ -268,18 +310,22 @@ export class CourseService {
         enrollments: {
           where: {
             user_id: user_id,
-            status: EnrollmentStatus.ACTIVE
+            status: EnrollmentStatus.ACTIVE,
           },
           take: 1,
           select: {
             status: true,
-          }
-        }
+          },
+        },
       },
     });
 
     if (!course) throw new NotFoundException('Course not found');
-    if (!course?.enrollments?.[0]?.status && course.status !== CourseStatus.ACTIVE) throw new BadRequestException('Course is not active');
+    if (
+      !course?.enrollments?.[0]?.status &&
+      course.status !== CourseStatus.ACTIVE
+    )
+      throw new BadRequestException('Course is not active');
 
     let nextClass = null;
     if (course?.enrollments?.[0]?.status) {
@@ -301,17 +347,17 @@ export class CourseService {
             select: {
               module_title: true,
               module_name: true,
-            }
-          }
+            },
+          },
         },
       });
       delete course.enrollments;
-      delete course?.contract
-      delete course?.rules_regulations
-      delete course?.installment_process
-      delete course?.seat_capacity
-      delete course?.duration
-      delete course?.class_time
+      delete course?.contract;
+      delete course?.rules_regulations;
+      delete course?.installment_process;
+      delete course?.seat_capacity;
+      delete course?.duration;
+      delete course?.class_time;
     }
 
     delete course.status;
@@ -324,9 +370,11 @@ export class CourseService {
         fee: course.fee_pence > 0 ? course.fee_pence / 100 : 0,
         instructor: {
           ...course.instructor,
-          avatar: course.instructor?.avatar ? NajimStorage.url(course.instructor.avatar) : null,
+          avatar: course.instructor?.avatar
+            ? NajimStorage.url(course.instructor.avatar)
+            : null,
         },
-        ...(nextClass && { next_class: nextClass })
+        ...(nextClass && { next_class: nextClass }),
       },
     };
   }
@@ -387,14 +435,27 @@ export class CourseService {
       data: {
         ...moduleItem,
         classes: moduleItem.classes.map((c) => {
-          const startTime = c.start_at ? new Date(c.start_at) : c.class_at ? new Date(c.class_at) : null;
-          const endTime = c.end_at ? new Date(c.end_at) : startTime && c.duration ? new Date(startTime.getTime() + c.duration * 60000) : startTime;
+          const startTime = c.start_at
+            ? new Date(c.start_at)
+            : c.class_at
+              ? new Date(c.class_at)
+              : null;
+          const endTime = c.end_at
+            ? new Date(c.end_at)
+            : startTime && c.duration
+              ? new Date(startTime.getTime() + c.duration * 60000)
+              : startTime;
 
           let status = 'UPCOMING';
 
           if (endTime && now > endTime) {
             status = 'COMPLETED';
-          } else if (startTime && now >= startTime && endTime && now <= endTime) {
+          } else if (
+            startTime &&
+            now >= startTime &&
+            endTime &&
+            now <= endTime
+          ) {
             status = 'ONGOING';
           } else if (startTime && startTime > now && !nextClassFound) {
             status = 'NEXT';
@@ -411,7 +472,6 @@ export class CourseService {
   }
 
   async getClassDetails(class_id: string, user_id: string) {
-
     if (!user_id) throw new UnauthorizedException('User not found');
     if (!class_id) throw new BadRequestException('Invalid Class Id');
 
@@ -458,7 +518,6 @@ export class CourseService {
   }
 
   async getAssignmentsForCourse(course_id: string, user_id: string) {
-
     if (!user_id) throw new UnauthorizedException('User not found');
     if (!course_id) throw new BadRequestException('Invalid Course Id');
 
@@ -516,7 +575,6 @@ export class CourseService {
       message: 'Assignments fetched successfully',
       data: modules
         .map((moduleItem) => {
-
           return {
             ...moduleItem,
             classes: moduleItem.classes.map((classItem) => {
@@ -524,14 +582,20 @@ export class CourseService {
                 ...classItem,
                 assignments: classItem.assignments.map((assignment) => {
                   const submission = assignment.submissions?.[0];
-                  const submissionDate = new Date(assignment.submission_date).getTime();
+                  const submissionDate = new Date(
+                    assignment.submission_date,
+                  ).getTime();
                   const diffInTime = submissionDate - now;
-                  const due_days = Math.ceil(diffInTime / (1000 * 60 * 60 * 24));
+                  const due_days = Math.ceil(
+                    diffInTime / (1000 * 60 * 60 * 24),
+                  );
                   delete assignment.submissions;
                   return {
                     ...assignment,
-                    submission_date: assignment.submission_date.toISOString().split('T')[0],
-                    status: submission.status ?? "PENDING",
+                    submission_date: assignment.submission_date
+                      .toISOString()
+                      .split('T')[0],
+                    status: submission.status ?? 'PENDING',
                     grade_number: submission.grades?.[0].grade_number,
                     grade: submission.grades?.[0],
                     due_days: due_days > 0 ? due_days : null,
@@ -539,9 +603,11 @@ export class CourseService {
                 }),
               };
             }),
-          }
+          };
         })
-        .filter((moduleItem) => moduleItem.classes.some(cls => cls.assignments.length > 0)),
+        .filter((moduleItem) =>
+          moduleItem.classes.some((cls) => cls.assignments.length > 0),
+        ),
     };
   }
 
@@ -570,8 +636,8 @@ export class CourseService {
         },
       },
       select: {
-        id: true
-      }
+        id: true,
+      },
     });
 
     if (!enrollment) throw new NotFoundException('Enrollment not found');
@@ -659,27 +725,31 @@ export class CourseService {
         attachments: assignment.attachments.map((attachment) => {
           return {
             file_name: attachment.file_name,
-            file_path: attachment.file_path ? NajimStorage.url(attachment.file_path) : null,
+            file_path: attachment.file_path
+              ? NajimStorage.url(attachment.file_path)
+              : null,
             mime_type: attachment.mime_type,
-          }
+          };
         }),
         class: assignment.class,
         module: classModule,
-        status: submission?.status ?? "PENDING",
+        status: submission?.status ?? 'PENDING',
         due_days: due_days > 0 ? due_days : null,
         submitted_at: submission?.submitted_at,
         submission: submission
           ? {
-            ...submission,
-            attachments: submission.attachments.map((attachment) => {
-              return {
-                file_name: attachment.file_name,
-                file_path: attachment.file_path ? NajimStorage.url(attachment.file_path) : null,
-                mime_type: attachment.mime_type,
-              }
-            }),
-            grade,
-          }
+              ...submission,
+              attachments: submission.attachments.map((attachment) => {
+                return {
+                  file_name: attachment.file_name,
+                  file_path: attachment.file_path
+                    ? NajimStorage.url(attachment.file_path)
+                    : null,
+                  mime_type: attachment.mime_type,
+                };
+              }),
+              grade,
+            }
           : null,
       },
     };
@@ -691,10 +761,8 @@ export class CourseService {
     submitAssignmentDto: SubmitAssignmentDto,
     files: Express.Multer.File[],
   ) {
-
     if (!user_id) throw new UnauthorizedException('User not found');
     if (!assignment_id) throw new BadRequestException('Invalid Assignment Id');
-
 
     const assignment = await this.prisma.assignment.findUnique({
       where: { id: assignment_id },
@@ -723,21 +791,23 @@ export class CourseService {
         course_id: assignment.class.module.course_id,
       },
       select: {
-        id: true
-      }
+        id: true,
+      },
     });
 
     if (!enrollment) throw new NotFoundException('Enrollment not found');
 
-    const existingSubmission = await this.prisma.assignmentSubmission.findFirst({
-      where: {
-        assignment_id: assignment_id,
-        student_id: user_id,
+    const existingSubmission = await this.prisma.assignmentSubmission.findFirst(
+      {
+        where: {
+          assignment_id: assignment_id,
+          student_id: user_id,
+        },
+        select: {
+          id: true,
+        },
       },
-      select: {
-        id: true,
-      },
-    });
+    );
 
     if (existingSubmission) {
       throw new ConflictException('Assignment already submitted');
@@ -746,17 +816,16 @@ export class CourseService {
     const attachments: Prisma.AttachmentCreateInput[] = [];
 
     for (const file of files) {
-      const filename = NajimStorage.generateFileName(file.originalname)
-      const objectKey = appConfig().storageUrl.assignment + '/' + filename
-      await NajimStorage.put(objectKey, file)
+      const filename = NajimStorage.generateFileName(file.originalname);
+      const objectKey = appConfig().storageUrl.assignment + '/' + filename;
+      await NajimStorage.put(objectKey, file);
       attachments.push({
         file_name: filename,
         file_path: objectKey,
         mime_type: file.mimetype,
-        type: AttachmentType.FILE
-      })
+        type: AttachmentType.FILE,
+      });
     }
-
 
     const submission = await this.prisma.assignmentSubmission.create({
       data: {
@@ -770,13 +839,14 @@ export class CourseService {
         status: AssignmentSubmissionStatus.SUBMITTED,
         attachments: attachments.length
           ? {
-            create: attachments,
-          }
+              create: attachments,
+            }
           : undefined,
-      }
+      },
     });
 
-    if (!submission) throw new InternalServerErrorException('Failed to submit assignment');
+    if (!submission)
+      throw new InternalServerErrorException('Failed to submit assignment');
 
     return {
       success: true,
@@ -785,7 +855,6 @@ export class CourseService {
   }
 
   async getAssignmentsForClass(user_id: string, class_id: string) {
-
     if (!user_id) throw new UnauthorizedException('User not found');
     if (!class_id) throw new BadRequestException('Invalid Class Id');
 
@@ -818,7 +887,6 @@ export class CourseService {
     });
 
     if (!enrollment) throw new NotFoundException('Enrollment not found');
-
 
     const assignments = await this.prisma.assignment.findMany({
       where: { class_id: class_id },
@@ -866,35 +934,43 @@ export class CourseService {
         delete assignment.submissions;
         return {
           ...assignment,
-          submission_date: assignment.submission_date.toISOString().split('T')[0],
-          status: submission.status ?? "PENDING",
+          submission_date: assignment.submission_date
+            .toISOString()
+            .split('T')[0],
+          status: submission.status ?? 'PENDING',
           grade_number: submission.grades?.[0].grade_number,
           grade: submission.grades?.[0],
           due_days: due_days > 0 ? due_days : null,
         };
-
       }),
     };
   }
 
-  async getAllAssetsFromCourse(course_id: string, user_id: string, type?: "VIDEO" | 'FILE') {
-    if (!user_id) throw new BadRequestException('You must be logged in to access this feature');
+  async getAllAssetsFromCourse(
+    course_id: string,
+    user_id: string,
+    type?: 'VIDEO' | 'FILE',
+  ) {
+    if (!user_id)
+      throw new BadRequestException(
+        'You must be logged in to access this feature',
+      );
     if (!course_id) throw new BadRequestException('Invalid Course Id');
 
     const where: Prisma.CourseModuleWhereInput = {
       course_id: course_id,
-    }
+    };
 
     if (type !== 'VIDEO') {
       where.classes = {
         some: {
           class_assets: {
             none: {
-              type: AttachmentType.VIDEO
-            }
-          }
-        }
-      }
+              type: AttachmentType.VIDEO,
+            },
+          },
+        },
+      };
     }
 
     const modules = await this.prisma.courseModule.findMany({
@@ -927,24 +1003,27 @@ export class CourseService {
     return {
       success: true,
       message: 'Course assets fetched successfully',
-      data:
-        modules.map((moduleItem) => ({
-          ...moduleItem,
-          classes: moduleItem.classes.map((classItem) => ({
-            ...classItem,
-            class_assets: classItem?.class_assets?.map((asset) => ({
+      data: modules.map((moduleItem) => ({
+        ...moduleItem,
+        classes: moduleItem.classes.map((classItem) => ({
+          ...classItem,
+          class_assets:
+            classItem?.class_assets?.map((asset) => ({
               ...asset,
-              file_path: asset.file_path ? NajimStorage.url(asset.file_path) : null
+              file_path: asset.file_path
+                ? NajimStorage.url(asset.file_path)
+                : null,
             })) ?? [],
-          })),
         })),
+      })),
     };
   }
 
-
   async getAllAssets(class_id: string, user_id: string) {
-
-    if (!user_id) throw new BadRequestException('You must be logged in to access this feature');
+    if (!user_id)
+      throw new BadRequestException(
+        'You must be logged in to access this feature',
+      );
     if (!class_id) throw new BadRequestException('Invalid Course Id');
 
     const moduleClass = await this.prisma.moduleClass.findUnique({
@@ -977,23 +1056,29 @@ export class CourseService {
       success: true,
       message: 'Class assets fetched successfully',
       data: {
-        videos: assets?.flatMap((asset) => {
-          if (asset.type === AttachmentType.VIDEO) {
-            return {
-              ...asset,
-              file_path: asset.file_path ? NajimStorage.url(asset.file_path) : null
+        videos:
+          assets?.flatMap((asset) => {
+            if (asset.type === AttachmentType.VIDEO) {
+              return {
+                ...asset,
+                file_path: asset.file_path
+                  ? NajimStorage.url(asset.file_path)
+                  : null,
+              };
             }
-          }
-        }) ?? [],
-        files: assets?.flatMap((asset) => {
-          if (asset.type !== AttachmentType.VIDEO) {
-            return {
-              ...asset,
-              file_path: asset.file_path ? NajimStorage.url(asset.file_path) : null
+          }) ?? [],
+        files:
+          assets?.flatMap((asset) => {
+            if (asset.type !== AttachmentType.VIDEO) {
+              return {
+                ...asset,
+                file_path: asset.file_path
+                  ? NajimStorage.url(asset.file_path)
+                  : null,
+              };
             }
-          }
-        }) ?? [],
-      }
+          }) ?? [],
+      },
     };
   }
 

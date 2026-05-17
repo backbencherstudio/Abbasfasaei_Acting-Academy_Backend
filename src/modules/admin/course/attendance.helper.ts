@@ -11,7 +11,7 @@ import { AttendanceStatus } from '@prisma/client';
 
 @Injectable()
 export class AttendanceService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async getAllAttendance(query?: {
     status?: string;
@@ -113,45 +113,45 @@ export class AttendanceService {
 
     const studentsScope = isOverall
       ? await this.prisma.user.findMany({
-        where: {
-          deleted_at: null,
-          role_users: {
-            some: {
-              role: {
-                name: {
-                  equals: 'STUDENT',
-                  mode: 'insensitive',
+          where: {
+            deleted_at: null,
+            role_users: {
+              some: {
+                role: {
+                  name: {
+                    equals: 'STUDENT',
+                    mode: 'insensitive',
+                  },
                 },
               },
             },
           },
-        },
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          email: true,
-          avatar: true,
-        },
-      })
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            email: true,
+            avatar: true,
+          },
+        })
       : await this.prisma.enrollment.findMany({
-        where: {
-          course_id: scopedCourseId,
-        },
-        select: {
-          user_id: true,
-          name: true,
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              email: true,
-              avatar: true,
+          where: {
+            course_id: scopedCourseId,
+          },
+          select: {
+            user_id: true,
+            name: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+                email: true,
+                avatar: true,
+              },
             },
           },
-        },
-      });
+        });
 
     const uniqueStudents = new Map<
       string,
@@ -183,37 +183,39 @@ export class AttendanceService {
     const scopedStudentIds = Array.from(uniqueStudents.keys());
 
     const attendanceWhere: any = {
-      ...(scopedStudentIds.length ? { student_id: { in: scopedStudentIds } } : {}),
+      ...(scopedStudentIds.length
+        ? { student_id: { in: scopedStudentIds } }
+        : {}),
       ...(scopedClassIds.length ? { class_id: { in: scopedClassIds } } : {}),
       ...(dateRange ? { attended_at: dateRange } : {}),
     };
 
     const attendanceRows = scopedStudentIds.length
       ? await this.prisma.attendance.findMany({
-        where: attendanceWhere,
-        include: {
-          class: {
-            select: {
-              id: true,
-              class_title: true,
-              class_at: true,
-              module: {
-                select: {
-                  id: true,
-                  module_title: true,
-                  course: {
-                    select: {
-                      id: true,
-                      title: true,
+          where: attendanceWhere,
+          include: {
+            class: {
+              select: {
+                id: true,
+                class_title: true,
+                class_at: true,
+                module: {
+                  select: {
+                    id: true,
+                    module_title: true,
+                    course: {
+                      select: {
+                        id: true,
+                        title: true,
+                      },
                     },
                   },
                 },
               },
             },
           },
-        },
-        orderBy: [{ attended_at: 'desc' }, { created_at: 'desc' }],
-      })
+          orderBy: [{ attended_at: 'desc' }, { created_at: 'desc' }],
+        })
       : [];
 
     const attendanceByStudent = new Map<string, any[]>();
@@ -249,7 +251,9 @@ export class AttendanceService {
         classTitle: latest?.class?.class_title || null,
         classTime: latest?.class?.class_time || null,
         courseId:
-          latest?.class?.module?.course?.id || scopedCourseId || query?.courseId,
+          latest?.class?.module?.course?.id ||
+          scopedCourseId ||
+          query?.courseId,
         courseTitle: latest?.class?.module?.course?.title || null,
         presentClasses,
         missedClasses,
@@ -269,7 +273,9 @@ export class AttendanceService {
     );
     const attendanceRate =
       studentStatusRows.length > 0
-        ? Number(((presentStudents / studentStatusRows.length) * 100).toFixed(2))
+        ? Number(
+            ((presentStudents / studentStatusRows.length) * 100).toFixed(2),
+          )
         : 0;
 
     let finalList = studentStatusRows;
@@ -443,7 +449,9 @@ export class AttendanceService {
     });
 
     if (!enrollment) {
-      throw new ForbiddenException('Student is not enrolled in this class course');
+      throw new ForbiddenException(
+        'Student is not enrolled in this class course',
+      );
     }
 
     const normalizedStatus = (body?.status || 'PRESENT').toUpperCase();

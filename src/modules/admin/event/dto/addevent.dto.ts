@@ -44,6 +44,9 @@ export class addEventDto {
 
   @IsNotEmpty()
   @IsString()
-  @ApiProperty({ example: 'Hip hop is a culture and art movement that originated in the Bronx, New York City, during the 1970s. It is characterized by four key elements: MCing (rapping), DJing (turntablism), graffiti art, and breakdancing. Hip hop has evolved into a global phenomenon, influencing music, fashion, language, and popular culture worldwide.' })
+  @ApiProperty({
+    example:
+      'Hip hop is a culture and art movement that originated in the Bronx, New York City, during the 1970s. It is characterized by four key elements: MCing (rapping), DJing (turntablism), graffiti art, and breakdancing. Hip hop has evolved into a global phenomenon, influencing music, fashion, language, and popular culture worldwide.',
+  })
   overview: string;
 }

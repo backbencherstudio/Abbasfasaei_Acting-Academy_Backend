@@ -11,8 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
-import { CreateDmDto } from './dto/create-dm.dto';
-import { CreateGroupDto } from './dto/create-group.dto';
+import { CreateDmDto, CreateGroupDto } from './dto/create-conversation.dto';
 import { id } from 'date-fns/locale';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';

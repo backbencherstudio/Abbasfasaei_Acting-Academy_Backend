@@ -158,7 +158,6 @@ export class RtcService {
     return { ok: true };
   }
 
-
   async endCall(conversationId: string, userId: string) {
     await this.convs.ensureMember(conversationId, userId);
     const session = await this.prisma.callSession.findFirst({

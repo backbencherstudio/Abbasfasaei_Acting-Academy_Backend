@@ -5,10 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateFinanceDto } from './dto/create-finance.dto';
-import { CreateManualPaymentDto } from './dto/create-manual-payment.dto';
-import { UpdateFinanceDto } from './dto/update-finance.dto';
-import { PaymentType, TransactionsQueryDto } from './dto/query-finance.dto';
+import {
+  CreateFinanceDto,
+  CreateManualPaymentDto,
+} from './dto/create-transaction.dto';
+import { UpdateFinanceDto } from './dto/update-transaction.dto';
+import { PaymentType, TransactionsQueryDto } from './dto/query-transaction.dto';
 import {
   ItemType,
   OrderStatus,
@@ -663,10 +665,11 @@ export class FinanceService {
     }
 
     if (body.transactionRef) {
-      const existingTransaction = await this.prisma.paymentTransaction.findUnique({
-        where: { transaction_ref: body.transactionRef },
-        select: { id: true },
-      });
+      const existingTransaction =
+        await this.prisma.paymentTransaction.findUnique({
+          where: { transaction_ref: body.transactionRef },
+          select: { id: true },
+        });
 
       if (existingTransaction) {
         throw new BadRequestException('Transaction reference already exists');
@@ -712,9 +715,7 @@ export class FinanceService {
           status: transactionStatus,
           gateway: PaymentGateway.MANUAL,
           payment_method: paymentMethod,
-          paid_at: body.paymentDate
-            ? new Date(body.paymentDate)
-            : new Date(),
+          paid_at: body.paymentDate ? new Date(body.paymentDate) : new Date(),
           metadata: {
             manual: true,
             createdBy: 'finance',

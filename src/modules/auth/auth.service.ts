@@ -1,5 +1,11 @@
 // external imports
-import { Injectable, UnauthorizedException, ConflictException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
@@ -20,7 +26,7 @@ export class AuthService {
     private prisma: PrismaService,
     private mailService: MailService,
     @InjectRedis() private readonly redis: Redis,
-  ) { }
+  ) {}
 
   async me(userId: string) {
     const user = await this.prisma.user.findFirst({
@@ -41,7 +47,7 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new NotFoundException("User not found");
+      throw new NotFoundException('User not found');
     }
 
     if (user.avatar) {
@@ -64,7 +70,7 @@ export class AuthService {
     const user = await UserRepository.getUserDetails(user_id);
 
     if (!user) {
-      throw new NotFoundException("User not found");
+      throw new NotFoundException('User not found');
     }
 
     if (updateUserDto.name) {
@@ -92,7 +98,10 @@ export class AuthService {
     }
 
     if (avatar) {
-      const fileName = appConfig().storageUrl.avatar + '/' + NajimStorage.generateFileName(avatar.originalname);
+      const fileName =
+        appConfig().storageUrl.avatar +
+        '/' +
+        NajimStorage.generateFileName(avatar.originalname);
       try {
         // Attempt upload first to avoid deleting old before success
         await NajimStorage.put(fileName, avatar.buffer, {
@@ -115,14 +124,16 @@ export class AuthService {
         }
 
         data.avatar = fileName;
-
       } catch (e) {
         console.warn('Avatar upload failed:', e?.message || e);
       }
     }
 
     if (cover_image) {
-      const fileName = appConfig().storageUrl.cover_image + '/' + NajimStorage.generateFileName(cover_image.originalname);
+      const fileName =
+        appConfig().storageUrl.cover_image +
+        '/' +
+        NajimStorage.generateFileName(cover_image.originalname);
       try {
         // Attempt upload first to avoid deleting old before success
         await NajimStorage.put(fileName, cover_image.buffer, {
@@ -145,7 +156,6 @@ export class AuthService {
         }
 
         data.cover_image = fileName;
-
       } catch (e) {
         console.warn('Cover image upload failed:', e?.message || e);
       }
@@ -154,7 +164,7 @@ export class AuthService {
     if (user) {
       await this.prisma.user.update({
         where: { id: user_id },
-        data
+        data,
       });
 
       return {
@@ -162,9 +172,8 @@ export class AuthService {
         message: 'User updated successfully',
       };
     } else {
-      throw new NotFoundException("User not found");
+      throw new NotFoundException('User not found');
     }
-
   }
 
   async validateUser(
@@ -222,7 +231,6 @@ export class AuthService {
   }
 
   async login({ email, userId }) {
-
     const payload = { email: email, sub: userId };
 
     const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
@@ -249,7 +257,6 @@ export class AuthService {
       type: user.type,
       user_id: user.id,
     };
-
   }
 
   async refreshToken(user_id: string, refreshToken: string) {
@@ -329,8 +336,6 @@ export class AuthService {
     password: string;
     type?: string;
   }) {
-
-
     const userEmailExist = await UserRepository.exist({
       field: 'email',
       value: String(email),
@@ -412,11 +417,9 @@ export class AuthService {
       success: true,
       message: 'You have successfully registered',
     };
-
   }
 
   async forgotPassword(email: string) {
-
     const user = await UserRepository.exist({
       field: 'email',
       value: email,
@@ -441,7 +444,6 @@ export class AuthService {
     } else {
       throw new NotFoundException('Email not found');
     }
-
   }
 
   // // verify otp

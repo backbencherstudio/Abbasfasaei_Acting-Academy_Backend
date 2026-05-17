@@ -6,18 +6,17 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class OverviewService {
-
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async getOverview(user_id: string) {
-    if (!user_id) throw new UnauthorizedException("Please login first");
+    if (!user_id) throw new UnauthorizedException('Please login first');
 
     const user = await this.prisma.user.findUnique({
       where: { id: user_id },
-      select: { type: true }
+      select: { type: true },
     });
 
-    if (!user) throw new UnauthorizedException("User not found");
+    if (!user) throw new UnauthorizedException('User not found');
 
     const userType = user.type?.toLowerCase();
 
@@ -27,31 +26,59 @@ export class OverviewService {
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
 
     if (isTeacher && !isAdmin && !isFinance) {
       // ----------------------------------------------------
       // TEACHER OVERVIEW
       // ----------------------------------------------------
-      const [myTotalStudents, myActiveCourses, totalAssignments, totalClasses, upComingClasses] = await Promise.all([
+      const [
+        myTotalStudents,
+        myActiveCourses,
+        totalAssignments,
+        totalClasses,
+        upComingClasses,
+      ] = await Promise.all([
         this.prisma.user.count({
-          where: { type: Role.STUDENT, enrollments: { some: { course: { instructor_id: user_id } } } }
+          where: {
+            type: Role.STUDENT,
+            enrollments: { some: { course: { instructor_id: user_id } } },
+          },
         }),
         this.prisma.course.count({
-          where: { instructor_id: user_id, status: CourseStatus.ACTIVE }
+          where: { instructor_id: user_id, status: CourseStatus.ACTIVE },
         }),
         this.prisma.assignment.count({
-          where: { class: { module: { course: { instructor_id: user_id } } } }
+          where: { class: { module: { course: { instructor_id: user_id } } } },
         }),
         this.prisma.moduleClass.count({
-          where: { module: { course: { instructor_id: user_id } } }
+          where: { module: { course: { instructor_id: user_id } } },
         }),
         this.prisma.moduleClass.findMany({
-          where: { class_at: { gte: new Date() }, module: { course: { instructor_id: user_id } } },
+          where: {
+            class_at: { gte: new Date() },
+            module: { course: { instructor_id: user_id } },
+          },
           take: 4,
           orderBy: { class_at: 'asc' },
-          include: { module: { include: { course: { include: { instructor: { select: { id: true, name: true } } } } } } }
-        })
+          include: {
+            module: {
+              include: {
+                course: {
+                  include: { instructor: { select: { id: true, name: true } } },
+                },
+              },
+            },
+          },
+        }),
       ]);
 
       return {
@@ -74,8 +101,8 @@ export class OverviewService {
             course_title: cls.module?.course?.title,
             instructor_id: cls.module?.course?.instructor?.id,
             instructor_name: cls.module?.course?.instructor?.name,
-          }))
-        }
+          })),
+        },
       };
     } else {
       // ----------------------------------------------------
@@ -87,26 +114,33 @@ export class OverviewService {
         this.prisma.course.count({ where: { status: CourseStatus.ACTIVE } }),
         this.prisma.paymentTransaction.aggregate({
           _sum: { amount: true },
-          where: { status: 'SUCCESS', paid_at: { gte: startOfMonth, lte: endOfMonth } },
+          where: {
+            status: 'SUCCESS',
+            paid_at: { gte: startOfMonth, lte: endOfMonth },
+          },
         }),
         this.prisma.enrollment.findMany({
           select: {
-            id: true, status: true, created_at: true,
+            id: true,
+            status: true,
+            created_at: true,
             user: { select: { id: true, name: true, avatar: true } },
-            course: { select: { id: true, title: true } }
+            course: { select: { id: true, title: true } },
           },
           take: 4,
-          orderBy: { created_at: 'desc' }
-        })
+          orderBy: { created_at: 'desc' },
+        }),
       ];
 
       if (isFinance) {
         promises.push(
           this.prisma.paymentTransaction.findMany({
-            include: { user: { select: { id: true, name: true, avatar: true } } },
+            include: {
+              user: { select: { id: true, name: true, avatar: true } },
+            },
             take: 4,
-            orderBy: { paid_at: 'desc' }
-          })
+            orderBy: { paid_at: 'desc' },
+          }),
         );
       } else {
         promises.push(
@@ -114,8 +148,18 @@ export class OverviewService {
             where: { class_at: { gte: new Date() } },
             take: 4,
             orderBy: { class_at: 'asc' },
-            include: { module: { include: { course: { include: { instructor: { select: { id: true, name: true } } } } } } }
-          })
+            include: {
+              module: {
+                include: {
+                  course: {
+                    include: {
+                      instructor: { select: { id: true, name: true } },
+                    },
+                  },
+                },
+              },
+            },
+          }),
         );
       }
 
@@ -138,39 +182,43 @@ export class OverviewService {
             status: enrollment.status,
             user_id: enrollment.user?.id,
             user_name: enrollment.user?.name,
-            user_avatar: enrollment.user?.avatar ? NajimStorage.url(enrollment.user.avatar) : null,
+            user_avatar: enrollment.user?.avatar
+              ? NajimStorage.url(enrollment.user.avatar)
+              : null,
             course_id: enrollment.course?.id,
             course_title: enrollment.course?.title,
-            created_at: enrollment.created_at
+            created_at: enrollment.created_at,
           })),
           ...(isFinance
             ? {
-              recent_transactions: dynamicData.map((trans: any) => ({
-                id: trans.id,
-                user_id: trans.user?.id,
-                user_name: trans.user?.name,
-                user_avatar: trans.user?.avatar ? NajimStorage.url(trans.user.avatar) : null,
-                amount: Number(trans.amount),
-                status: trans.status,
-                paid_at: trans.paid_at || trans.created_at
-              }))
-            }
+                recent_transactions: dynamicData.map((trans: any) => ({
+                  id: trans.id,
+                  user_id: trans.user?.id,
+                  user_name: trans.user?.name,
+                  user_avatar: trans.user?.avatar
+                    ? NajimStorage.url(trans.user.avatar)
+                    : null,
+                  amount: Number(trans.amount),
+                  status: trans.status,
+                  paid_at: trans.paid_at || trans.created_at,
+                })),
+              }
             : {
-              upcoming_classes: dynamicData.map((cls: any) => ({
-                id: cls.id,
-                class_title: cls.class_title,
-                class_name: cls.class_name,
-                duration: cls.duration,
-                class_at: cls.class_at,
-                module_name: cls.module?.module_name,
-                module_title: cls.module?.module_title,
-                course_id: cls.module?.course?.id,
-                course_title: cls.module?.course?.title,
-                instructor_id: cls.module?.course?.instructor?.id,
-                instructor_name: cls.module?.course?.instructor?.name,
-              }))
-            })
-        }
+                upcoming_classes: dynamicData.map((cls: any) => ({
+                  id: cls.id,
+                  class_title: cls.class_title,
+                  class_name: cls.class_name,
+                  duration: cls.duration,
+                  class_at: cls.class_at,
+                  module_name: cls.module?.module_name,
+                  module_title: cls.module?.module_title,
+                  course_id: cls.module?.course?.id,
+                  course_title: cls.module?.course?.title,
+                  instructor_id: cls.module?.course?.instructor?.id,
+                  instructor_name: cls.module?.course?.instructor?.name,
+                })),
+              }),
+        },
       };
     }
   }

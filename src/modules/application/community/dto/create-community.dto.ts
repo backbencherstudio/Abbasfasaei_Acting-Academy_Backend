@@ -1,3 +1,5 @@
+import { ApiProperty } from '@nestjs/swagger';
+import { PostType, PostVisibility } from '@prisma/client';
 import {
   IsArray,
   IsEnum,
@@ -6,8 +8,6 @@ import {
   IsString,
   ValidateIf,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
-import { PostType, PostVisibility } from '@prisma/client';
 
 export class CreatePostDto {
   @IsOptional()
@@ -35,4 +35,18 @@ export class CreatePostDto {
   @IsArray()
   @IsString({ each: true })
   friends_ids?: string[];
+}
+
+export class CommentPostDto {
+  content: string;
+}
+
+export class LikePostDto {
+  postId: string;
+  userId: string;
+}
+
+export class SharePostDto {
+  postId: string;
+  userId: string;
 }

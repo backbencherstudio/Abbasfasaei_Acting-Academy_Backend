@@ -24,28 +24,39 @@ import { Role } from 'src/common/guard/role/role.enum';
 @Roles(Role.ADMIN)
 @Controller('admin/events')
 export class EventsController {
-  constructor(private readonly eventsService: EventsService) { }
+  constructor(private readonly eventsService: EventsService) {}
 
   @Get()
-  async getAllEvents(@Query() query: QueryEventDto, @GetUser('userId') user_id: string) {
+  async getAllEvents(
+    @Query() query: QueryEventDto,
+    @GetUser('userId') user_id: string,
+  ) {
     return this.eventsService.getAllEvents(user_id, query);
   }
   @Get(':event_id')
-  async getEventById(@Param('event_id') event_id: string, @GetUser('userId') user_id: string) {
+  async getEventById(
+    @Param('event_id') event_id: string,
+    @GetUser('userId') user_id: string,
+  ) {
     return this.eventsService.getEventById(user_id, event_id);
   }
 
-
   @Get(':event_id/members')
-  async getEventMembers(@Param('event_id') event_id: string, @GetUser('userId') user_id: string, @Query() query: QueryEventMembersDto) {
+  async getEventMembers(
+    @Param('event_id') event_id: string,
+    @GetUser('userId') user_id: string,
+    @Query() query: QueryEventMembersDto,
+  ) {
     return this.eventsService.getEventMembers(event_id, user_id, query);
   }
 
   @Post()
-  async addEvent(@GetUser('userId') user_id: string, @Body() addEventDto: addEventDto) {
+  async addEvent(
+    @GetUser('userId') user_id: string,
+    @Body() addEventDto: addEventDto,
+  ) {
     return this.eventsService.addEvent(addEventDto, user_id);
   }
-
 
   @Patch(':event_id')
   async editEvent(

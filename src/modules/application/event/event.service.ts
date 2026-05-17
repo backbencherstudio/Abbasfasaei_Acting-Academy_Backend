@@ -1,10 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { EventRegistrationStatus, OrderStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class EventService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async getAllEvents(user_id: string) {
     if (!user_id) throw new UnauthorizedException('User not found');
@@ -47,7 +52,7 @@ export class EventService {
 
     return {
       success: true,
-      message: "Events fetched successfully",
+      message: 'Events fetched successfully',
       data: events.map((event, index) => {
         const registration = event.registrations[0];
 
@@ -104,7 +109,6 @@ export class EventService {
 
     if (!event) throw new NotFoundException('Event not found');
 
-
     const nextEvent = await this.prisma.event.findFirst({
       where: {
         start_at: { gte: now },
@@ -126,14 +130,13 @@ export class EventService {
 
     return {
       success: true,
-      message: "Event fetched successfully",
+      message: 'Event fetched successfully',
       data: {
         ...eventData,
         fee: event.amount_pence > 0 ? event.amount_pence / 100 : 0,
         is_registered: !!registrations?.[0],
-        status: status
+        status: status,
       },
     };
   }
-
 }

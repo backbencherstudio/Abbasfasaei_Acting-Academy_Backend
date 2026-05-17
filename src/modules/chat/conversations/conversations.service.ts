@@ -370,7 +370,8 @@ export class ConversationsService {
   ) {
     await this.requireAdmin(conversationId, currentUserId);
 
-    const { validIds, invalidIds } = await this.validateExistingUsers(memberIds);
+    const { validIds, invalidIds } =
+      await this.validateExistingUsers(memberIds);
 
     if (invalidIds.length > 0) {
       throw new BadRequestException(

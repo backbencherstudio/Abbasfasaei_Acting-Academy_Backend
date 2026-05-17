@@ -2,7 +2,6 @@
 // import { PresenceService } from './presence.service';
 // import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 
-
 // @UseGuards(JwtAuthGuard)
 // @Controller('presence')
 // export class PresenceController {

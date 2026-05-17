@@ -26,10 +26,9 @@ export class UsersController {
     @Query('take') take = '10',
   ) {
     const takeNumber = Number(take) || 10;
-   
+
     return this.users.suggestUsers(me.userId, q, takeNumber);
   }
-
 
   @Post(':id/block')
   block(@GetUser() me: any, @Param('id') id: string) {

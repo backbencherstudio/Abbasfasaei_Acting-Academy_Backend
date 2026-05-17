@@ -28,7 +28,10 @@ export class RealtimeGateway
   @WebSocketServer() io: Server;
 
   // In-memory caches / limits (sufficient for single-instance deployment)
-  private usernameCache = new Map<string, { name: string | null; ts: number }>();
+  private usernameCache = new Map<
+    string,
+    { name: string | null; ts: number }
+  >();
   private messageTimestamps = new Map<string, number[]>(); // userId -> send times (ms)
   private typingLastEmit = new Map<string, number>(); // key: userId:conversationId -> last emit ms
 
@@ -94,7 +97,7 @@ export class RealtimeGateway
 
       socket.data.userId = payload.sub;
       socket.join(`user:${payload.sub}`);
-  this.dbg('connection', { sid: socket.id, userId: payload.sub });
+      this.dbg('connection', { sid: socket.id, userId: payload.sub });
       // Ensure user still exists (token may reference deleted user in dev environments)
       const userExists = await this.prisma.user.findUnique({
         where: { id: payload.sub },
@@ -117,9 +120,11 @@ export class RealtimeGateway
 
       socket.emit('connection:ok', { userId: payload.sub });
       this.io.emit('presence:update', { userId: payload.sub, online: true });
-      
     } catch (err) {
-      socket.emit('connection:error', { code: 'UNAUTHORIZED', message: 'Unauthorized' });
+      socket.emit('connection:error', {
+        code: 'UNAUTHORIZED',
+        message: 'Unauthorized',
+      });
       socket.disconnect(true);
     }
   }
@@ -149,19 +154,33 @@ export class RealtimeGateway
     const userId = socket.data.userId as string;
     if (!userId) return;
     if (!body?.conversationId) {
-      socket.emit('error:conversation', { code: 'BAD_REQUEST', message: 'conversationId required' });
+      socket.emit('error:conversation', {
+        code: 'BAD_REQUEST',
+        message: 'conversationId required',
+      });
       return;
     }
     try {
       this.dbg('onJoin:incoming', { userId, body });
       await this.conversationsService.ensureMember(body.conversationId, userId);
       socket.join(`conv:${body.conversationId}`);
-      socket.emit('conversation:joined', { conversationId: body.conversationId });
-      socket.to(`conv:${body.conversationId}`).emit('presence:update', { userId, online: true });
-      this.dbg('onJoin:success', { userId, conversationId: body.conversationId, rooms: Array.from(socket.rooms) });
+      socket.emit('conversation:joined', {
+        conversationId: body.conversationId,
+      });
+      socket
+        .to(`conv:${body.conversationId}`)
+        .emit('presence:update', { userId, online: true });
+      this.dbg('onJoin:success', {
+        userId,
+        conversationId: body.conversationId,
+        rooms: Array.from(socket.rooms),
+      });
     } catch (err) {
       this.dbg('onJoin:failed', { userId, body, err: (err as any)?.message });
-      socket.emit('error:conversation', { code: 'JOIN_FAILED', message: 'Not a member of conversation' });
+      socket.emit('error:conversation', {
+        code: 'JOIN_FAILED',
+        message: 'Not a member of conversation',
+      });
     }
   }
 
@@ -191,7 +210,11 @@ export class RealtimeGateway
     });
     const parseResult = schema.safeParse(body);
     if (!parseResult.success) {
-      socket.emit('error:message', { code: 'BAD_MESSAGE', message: 'Invalid payload', issues: parseResult.error.issues });
+      socket.emit('error:message', {
+        code: 'BAD_MESSAGE',
+        message: 'Invalid payload',
+        issues: parseResult.error.issues,
+      });
       return;
     }
 
@@ -201,7 +224,10 @@ export class RealtimeGateway
     const stamps = this.messageTimestamps.get(userId) || [];
     const recent = stamps.filter((t) => t > windowStart);
     if (recent.length >= this.MESSAGE_RATE_LIMIT) {
-      socket.emit('error:message', { code: 'RATE_LIMIT', message: 'Too many messages, slow down.' });
+      socket.emit('error:message', {
+        code: 'RATE_LIMIT',
+        message: 'Too many messages, slow down.',
+      });
       return;
     }
     recent.push(now);
@@ -220,10 +246,21 @@ export class RealtimeGateway
       // Echo back for unified stream UX
       socket.emit('message:new', msg);
       socket.emit('message:ack', { messageId: msg.id });
-      this.dbg('onSend:delivered', { messageId: msg.id, conversationId, userId });
+      this.dbg('onSend:delivered', {
+        messageId: msg.id,
+        conversationId,
+        userId,
+      });
     } catch (e) {
-      this.dbg('onSend:failed', { userId, conversationId, err: (e as any)?.message });
-      socket.emit('error:message', { code: 'SEND_FAILED', message: 'Failed to send message' });
+      this.dbg('onSend:failed', {
+        userId,
+        conversationId,
+        err: (e as any)?.message,
+      });
+      socket.emit('error:message', {
+        code: 'SEND_FAILED',
+        message: 'Failed to send message',
+      });
     }
   }
 
@@ -253,7 +290,9 @@ export class RealtimeGateway
         this.usernameCache.set(userId, { name: user?.name ?? null, ts: now });
       }
       const name = this.usernameCache.get(userId)?.name;
-      socket.to(`conv:${body.conversationId}`).emit('typing', { userId, userName: name, on: body.on });
+      socket
+        .to(`conv:${body.conversationId}`)
+        .emit('typing', { userId, userName: name, on: body.on });
     } catch (_) {
       // swallow silently; typing is best-effort
     }

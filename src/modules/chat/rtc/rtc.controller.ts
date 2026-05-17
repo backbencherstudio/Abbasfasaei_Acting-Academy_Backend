@@ -30,7 +30,8 @@ export class RtcController {
       kind,
     );
 
-    const memberIds = await this.rtcService.getConversationMemberIds(conversationId);
+    const memberIds =
+      await this.rtcService.getConversationMemberIds(conversationId);
     const recipients = memberIds.filter((id) => id !== user.userId);
     this.realtimeGateway.emitCallIncoming(
       conversationId,
@@ -58,14 +59,14 @@ export class RtcController {
     return resp;
   }
 
-
   // End call (any member for now)
   @Post('conversations/:id/end')
   @UseGuards(JwtAuthGuard)
   async endCall(@GetUser() user: any, @Param('id') conversationId: string) {
     const resp = await this.rtcService.endCall(conversationId, user.userId);
 
-    const memberIds = await this.rtcService.getConversationMemberIds(conversationId);
+    const memberIds =
+      await this.rtcService.getConversationMemberIds(conversationId);
     const recipients = memberIds.filter((id) => id !== user.userId);
     this.realtimeGateway.emitCallEnded(conversationId, user.userId, recipients);
 

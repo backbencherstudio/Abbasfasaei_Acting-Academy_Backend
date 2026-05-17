@@ -5,6 +5,7 @@ import {
   PaymentType,
   TransactionStatus,
 } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
@@ -14,7 +15,37 @@ import {
   IsString,
   ValidateIf,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+
+export class CreateFinanceDto {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  email: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  phone: string;
+
+  @ApiProperty({ example: 'BEGINNER | INTERMEDIATE | ADVANCED' })
+  @IsOptional()
+  @IsString()
+  experienceLevel: string;
+
+  @IsOptional()
+  @IsString()
+  @ApiProperty({ example: '2026-02-28T12:45:05+06:00', required: false })
+  joined_at?: string;
+
+  @IsNotEmpty()
+  @IsString()
+  password: string;
+}
 
 export class CreateManualPaymentDto {
   @ApiProperty({ example: 'student_user_id' })
@@ -52,7 +83,10 @@ export class CreateManualPaymentDto {
   @IsEnum(OrderStatus)
   paymentStatus?: OrderStatus;
 
-  @ApiPropertyOptional({ enum: TransactionStatus, example: TransactionStatus.SUCCESS })
+  @ApiPropertyOptional({
+    enum: TransactionStatus,
+    example: TransactionStatus.SUCCESS,
+  })
   @IsOptional()
   @IsEnum(TransactionStatus)
   transactionStatus?: TransactionStatus;
@@ -63,7 +97,9 @@ export class CreateManualPaymentDto {
   itemType?: ItemType;
 
   @ApiPropertyOptional({ example: 'course_id' })
-  @ValidateIf((dto) => dto.itemType === ItemType.COURSE_ENROLLMENT || !dto.itemType)
+  @ValidateIf(
+    (dto) => dto.itemType === ItemType.COURSE_ENROLLMENT || !dto.itemType,
+  )
   @IsNotEmpty()
   @IsString()
   courseId?: string;

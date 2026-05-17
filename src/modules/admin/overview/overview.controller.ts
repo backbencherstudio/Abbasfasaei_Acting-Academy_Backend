@@ -6,7 +6,7 @@ import { OverviewService } from './overview.service';
 
 @Controller('admin/overview')
 export class OverviewController {
-  constructor(private readonly overviewService: OverviewService) { }
+  constructor(private readonly overviewService: OverviewService) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()

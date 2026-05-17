@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, UnauthorizedException, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PostStatus, PostType, PostVisibility, Prisma } from '@prisma/client';
 import { CreateCommunityDto } from './dto/create-community.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -8,25 +13,25 @@ import appConfig from 'src/config/app.config';
 
 @Injectable()
 export class CommunityService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async create(
     user_id: string,
     dto: CreateCommunityDto,
     attachments?: Express.Multer.File[],
   ) {
-    if (!user_id) throw new UnauthorizedException("user not found")
+    if (!user_id) throw new UnauthorizedException('user not found');
 
     const { post_type, poll_options, ...postData } = dto;
 
-    const attachmentsData: Prisma.AttachmentCreateInput[] = []
+    const attachmentsData: Prisma.AttachmentCreateInput[] = [];
 
-    for (const attachment of (attachments ?? [])) {
+    for (const attachment of attachments ?? []) {
       try {
-        const filename = NajimStorage.generateFileName(attachment.originalname)
-        const objectKey = `${appConfig().storageUrl.community}/${filename}`
+        const filename = NajimStorage.generateFileName(attachment.originalname);
+        const objectKey = `${appConfig().storageUrl.community}/${filename}`;
 
-        await NajimStorage.put(objectKey, attachment.buffer)
+        await NajimStorage.put(objectKey, attachment.buffer);
 
         attachmentsData.push({
           file_name: attachment.originalname,
@@ -34,8 +39,7 @@ export class CommunityService {
           type: attachment.mimetype.startsWith('video/') ? 'VIDEO' : 'IMAGE',
           mime_type: attachment.mimetype,
           size_bytes: attachment.size,
-        })
-
+        });
       } catch (error) {
         console.error(error);
       }
@@ -43,10 +47,10 @@ export class CommunityService {
 
     const pollOptions = poll_options?.map((option) => ({
       title: option,
-    }))
+    }));
 
     if (post_type === PostType.POLL && (pollOptions?.length ?? 0) < 2) {
-      throw new BadRequestException("poll options are required")
+      throw new BadRequestException('poll options are required');
     }
 
     const post = await this.prisma.communityPost.create({
@@ -56,14 +60,16 @@ export class CommunityService {
         post_type,
         status: PostStatus.ANNOUNCEMENT,
         visibility: PostVisibility.PUBLIC,
-        ...(post_type === PostType.POLL && { poll_options: { create: pollOptions } }),
+        ...(post_type === PostType.POLL && {
+          poll_options: { create: pollOptions },
+        }),
         attachments: {
-          create: attachmentsData
+          create: attachmentsData,
         },
       },
     });
 
-    if (!post) throw new InternalServerErrorException('error in create post')
+    if (!post) throw new InternalServerErrorException('error in create post');
 
     return {
       success: true,
@@ -73,7 +79,9 @@ export class CommunityService {
 
   async getAllPosts(user_id: string, query: QueryCommunityDto) {
     if (!user_id) {
-      throw new UnauthorizedException('You are not authorized to access this feature');
+      throw new UnauthorizedException(
+        'You are not authorized to access this feature',
+      );
     }
     const { page, limit, search, status, role } = query;
     const skip = (page - 1) * limit;
@@ -95,12 +103,17 @@ export class CommunityService {
       where.status = status;
     }
     if (role) {
-      where.author = role === 'ADMIN' ? {
-        OR: [
-          { type: { equals: 'admin' } },
-          { type: { equals: 'su_admin' } },
-        ]
-      } : role === 'STUDENT' ? { type: { equals: 'student' } } : { type: { equals: 'user' } }
+      where.author =
+        role === 'ADMIN'
+          ? {
+              OR: [
+                { type: { equals: 'admin' } },
+                { type: { equals: 'su_admin' } },
+              ],
+            }
+          : role === 'STUDENT'
+            ? { type: { equals: 'student' } }
+            : { type: { equals: 'user' } };
     }
 
     const posts = await this.prisma.communityPost.findMany({
@@ -163,8 +176,7 @@ export class CommunityService {
   }
 
   async getPostById(user_id: string, post_id: string) {
-
-    if (!user_id) throw new UnauthorizedException("Unauthorized")
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
 
     const post = await this.prisma.communityPost.findUnique({
       where: { id: post_id },
@@ -192,14 +204,15 @@ export class CommunityService {
       },
     });
 
-    if (!post) throw new BadRequestException("Post not found")
+    if (!post) throw new BadRequestException('Post not found');
 
     const formatPost = {
       ...post,
       author: {
         ...post.author,
         avatar: post.author.avatar
-          ? NajimStorage.url(post.author.avatar) : null,
+          ? NajimStorage.url(post.author.avatar)
+          : null,
       },
       comments: post._count.comments,
       likes: post._count.likes,
@@ -208,38 +221,35 @@ export class CommunityService {
 
     return {
       success: true,
-      message: "Post fetched successfully",
+      message: 'Post fetched successfully',
       data: formatPost,
     };
-
   }
 
   async changePostStatus(user_id: string, post_id: string, status: PostStatus) {
-    if (!user_id) throw new UnauthorizedException("Unauthorized")
-    if (!post_id) throw new BadRequestException("Post not found")
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+    if (!post_id) throw new BadRequestException('Post not found');
 
     const post = await this.prisma.communityPost.update({
       where: { id: post_id },
       data: { status },
     });
 
-    if (!post) throw new BadRequestException("Post not found")
+    if (!post) throw new BadRequestException('Post not found');
 
-    return { success: true, message: "Post status changed successfully" };
+    return { success: true, message: 'Post status changed successfully' };
   }
 
   async deletePost(user_id: string, post_id: string) {
-
-    if (!user_id) throw new UnauthorizedException("Unauthorized")
-    if (!post_id) throw new BadRequestException("Post not found")
+    if (!user_id) throw new UnauthorizedException('Unauthorized');
+    if (!post_id) throw new BadRequestException('Post not found');
 
     const post = await this.prisma.communityPost.delete({
       where: { id: post_id },
     });
 
-    if (!post) throw new BadRequestException("Post not found")
+    if (!post) throw new BadRequestException('Post not found');
 
-    return { success: true, message: "Post deleted successfully" };
-
+    return { success: true, message: 'Post deleted successfully' };
   }
 }

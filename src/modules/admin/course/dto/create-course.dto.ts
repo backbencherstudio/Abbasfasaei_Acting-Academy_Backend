@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsDate,
   IsEnum,
+  Min,
 } from 'class-validator';
 
 export class CreateCourseDto {
@@ -20,7 +21,6 @@ export class CreateCourseDto {
   @IsString()
   @ApiProperty({ example: 'Course Overview' })
   course_overview: string;
-
 
   @IsOptional()
   @ApiProperty({ example: CourseStatus.DRAFT })
@@ -89,4 +89,125 @@ export class CreateCourseDto {
   @IsString()
   @ApiProperty({ example: 'write rules & regulations of the course' })
   rules_regulations: string;
+}
+
+export class CreateAssignmentDto {
+  @IsNotEmpty({ message: 'Assignment title is required' })
+  @IsString()
+  title: string;
+
+  @IsNotEmpty({ message: 'Assignment description is required' })
+  @IsString()
+  description: string;
+
+  @IsNotEmpty({ message: 'Submission date is required' })
+  @Type(() => Date)
+  @IsDate()
+  submission_date: Date;
+
+  @IsNotEmpty({ message: 'Total marks is required' })
+  @IsNumber()
+  @Min(0, { message: 'Total marks must be a non-negative number' })
+  @Type(() => Number)
+  total_marks: number;
+}
+
+export enum Grade {
+  A_PLUS = 'A+',
+  A = 'A',
+  B = 'B',
+  C = 'C',
+  D = 'D',
+  F = 'F',
+}
+
+export class GradeAssignmentDto {
+  @IsString()
+  @IsOptional()
+  @IsEnum(Grade)
+  grade?: Grade;
+
+  @IsString()
+  @IsOptional()
+  feedback?: string;
+
+  @IsNumber()
+  @IsOptional()
+  grade_number?: number;
+}
+
+export class CreateAttendenceDto {}
+
+export class CreateClassDto {
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  class_title: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @IsString()
+  class_name: string;
+
+  @ApiProperty()
+  @IsOptional()
+  @IsString()
+  class_overview?: string;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @Type(() => Number)
+  @IsNumber()
+  duration: number;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @Type(() => Date)
+  @IsDate()
+  class_date: Date;
+
+  @ApiProperty()
+  @IsNotEmpty()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const digits = value.replace(/\D/g, '');
+      if (digits.length === 4) {
+        const hours = parseInt(digits.substring(0, 2), 10);
+        const minutes = parseInt(digits.substring(2, 4), 10);
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        }
+      }
+      throw new Error('Invalid time format. Use HH:MM (e.g., "17:00").');
+    }
+    return value;
+  })
+  @IsString()
+  class_time: string;
+}
+
+export class CreateModuleDto {
+  @ApiProperty({
+    example: 'Module Name',
+    required: true,
+  })
+  @IsString()
+  @IsNotEmpty()
+  module_name: string;
+
+  @ApiProperty({
+    example: 'Module Title',
+    required: true,
+  })
+  @IsString()
+  @IsNotEmpty()
+  module_title: string;
+
+  @ApiProperty({
+    example: 'Module Overview',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  module_overview?: string;
 }

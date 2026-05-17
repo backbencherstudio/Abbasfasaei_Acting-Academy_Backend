@@ -5,10 +5,12 @@ import { Role } from 'src/common/guard/role/role.enum';
 import { Roles } from 'src/common/guard/role/roles.decorator';
 import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
-import { CreateFinanceDto } from './dto/create-finance.dto';
-import { CreateManualPaymentDto } from './dto/create-manual-payment.dto';
-import { TransactionsQueryDto } from './dto/query-finance.dto';
-import { UpdateFinanceDto } from './dto/update-finance.dto';
+import {
+  CreateFinanceDto,
+  CreateManualPaymentDto,
+} from './dto/create-transaction.dto';
+import { TransactionsQueryDto } from './dto/query-transaction.dto';
+import { UpdateFinanceDto } from './dto/update-transaction.dto';
 import { TransactionService } from './transaction.service';
 
 @Controller()

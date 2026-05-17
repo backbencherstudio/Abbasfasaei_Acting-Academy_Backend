@@ -3,7 +3,6 @@
 // import { PresenceController } from './presence.controller';
 // import { PrismaModule } from 'src/prisma/prisma.module';
 
-
 // @Module({
 //   imports: [PrismaModule],
 //   providers: [PresenceService],

@@ -14,7 +14,7 @@ import { UsersModule } from '../users/users.module';
     forwardRef(() => ConversationsModule),
   ],
   controllers: [MessagesController],
-  providers: [ MessagesService],
+  providers: [MessagesService],
   exports: [MessagesService],
 })
 export class MessagesModule {}

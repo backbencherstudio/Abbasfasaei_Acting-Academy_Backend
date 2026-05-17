@@ -13,7 +13,7 @@ import { Role } from 'src/common/guard/role/role.enum';
 @Controller('overview')
 @DisAllowDeactivated()
 export class OverviewController {
-  constructor(private readonly overviewService: OverviewService) { }
+  constructor(private readonly overviewService: OverviewService) {}
 
   @ApiBearerAuth()
   @Get()

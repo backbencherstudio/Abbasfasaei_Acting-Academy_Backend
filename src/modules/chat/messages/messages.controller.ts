@@ -19,10 +19,12 @@ import { diskStorage, memoryStorage } from 'multer';
 import { extname } from 'path';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
-import { SendMessageDto } from '../conversations/dto/send-message.dto';
-import { SearchMessagesDto } from './dto/search-messages.dto';
-import { ReportMessageDto } from './dto/report-message.dto';
-import { CursorPaginationDto } from './dto/pagination.dto';
+import { SendMessageDto } from '../conversations/dto/create-conversation.dto';
+import {
+  SearchMessagesDto,
+  CursorPaginationDto,
+} from './dto/query-message.dto';
+import { ReportMessageDto } from './dto/create-message.dto';
 import { text } from 'stream/consumers';
 
 const MAX_SIZE = 10 * 1024 * 1024;
@@ -71,10 +73,7 @@ export class MessagesController {
   // /messages/search?q=hello&conversationId=...&take=20&skip=0
   @Get('messages/search')
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-  search(
-    @GetUser() user: any,
-    @Query() dto: SearchMessagesDto,
-  ) {
+  search(@GetUser() user: any, @Query() dto: SearchMessagesDto) {
     return this.service.search(
       user.userId,
       dto.q,

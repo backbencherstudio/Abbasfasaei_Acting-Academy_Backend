@@ -17,8 +17,10 @@ import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { CourseService } from './course.service';
-import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
-import { SubmitAssignmentDto } from './dto/submit-assignment.dto';
+import {
+  CreateEnrollmentDto,
+  SubmitAssignmentDto,
+} from './dto/create-course.dto';
 import { RolesGuard } from 'src/common/guard/role/roles.guard';
 
 @ApiTags('Course')
@@ -26,14 +28,17 @@ import { RolesGuard } from 'src/common/guard/role/roles.guard';
 @DisAllowDeactivated()
 @Controller('courses')
 export class CourseController {
-  constructor(private readonly courseService: CourseService) { }
+  constructor(private readonly courseService: CourseService) {}
 
   // -------------------------------------------------
 
   //updated
   @ApiOperation({ summary: 'Get all available courses' })
   @Get()
-  getAllCourses(@GetUser('userId') user_id: string, @Query('my_courses') my_courses?: string) {
+  getAllCourses(
+    @GetUser('userId') user_id: string,
+    @Query('my_courses') my_courses?: string,
+  ) {
     return this.courseService.getAllCourses(user_id, my_courses);
   }
 
@@ -46,7 +51,6 @@ export class CourseController {
   ) {
     return this.courseService.getCourseDetails(course_id, user_id);
   }
-
 
   // updated
   @ApiOperation({ summary: 'Get my assignments for a course' })
@@ -64,11 +68,10 @@ export class CourseController {
   getAllAssetsFromCourse(
     @Param('course_id') course_id: string,
     @GetUser('userId') user_id: string,
-    @Query('type') type?: "VIDEO" | 'FILE',
+    @Query('type') type?: 'VIDEO' | 'FILE',
   ) {
     return this.courseService.getAllAssetsFromCourse(course_id, user_id, type);
   }
-
 
   // updated
   @ApiOperation({ summary: 'Get module details' })
@@ -79,7 +82,6 @@ export class CourseController {
   ) {
     return this.courseService.getModuleDetails(module_id, user_id);
   }
-
 
   // updated
 
@@ -133,7 +135,6 @@ export class CourseController {
     );
   }
 
-
   // updated
   @ApiOperation({ summary: 'Get all assets for a class' })
   @Get('modules/classes/:class_id/assets')
@@ -143,7 +144,6 @@ export class CourseController {
   ) {
     return this.courseService.getAllAssets(user_id, class_id);
   }
-
 
   // updated
   @Get(':course_id/enrollment/current_step')

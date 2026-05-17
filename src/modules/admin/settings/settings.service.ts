@@ -29,10 +29,10 @@ export class SettingsService {
             phone_number: true,
             email: true,
             password: true,
-          }
+          },
         });
 
-        return { teacherInfo}
+        return { teacherInfo };
       }
     }
     const settings = await this.prisma.websiteInfo.findMany({
@@ -82,7 +82,6 @@ export class SettingsService {
 
       const updateData: any = {};
       let userData: any = null; // Declare userData outside the block
-
 
       if (email) updateData.email = email;
 

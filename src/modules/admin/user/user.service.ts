@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -11,13 +16,11 @@ import { UserStatus } from 'src/common/constants/user-status.enum';
 
 @Injectable()
 export class UserService {
-
-  constructor(private prisma: PrismaService) {
-  }
+  constructor(private prisma: PrismaService) {}
 
   async create(createUserDto: CreateUserDto, admin_id: string) {
     if (!admin_id) {
-      throw new UnauthorizedException('User not found')
+      throw new UnauthorizedException('User not found');
     }
 
     const user = await UserRepository.createUser(createUserDto);
@@ -28,16 +31,15 @@ export class UserService {
         message: user.message,
       };
     } else {
-      throw new UnprocessableEntityException(user.message || "Error creating user")
+      throw new UnprocessableEntityException(
+        user.message || 'Error creating user',
+      );
     }
   }
 
-  async findAll(
-    query: QueryUserDto,
-    user_id: string
-  ) {
+  async findAll(query: QueryUserDto, user_id: string) {
     if (!user_id) {
-      throw new UnauthorizedException('User not found')
+      throw new UnauthorizedException('User not found');
     }
 
     const where: Prisma.UserWhereInput = {};
@@ -73,11 +75,11 @@ export class UserService {
           select: {
             enrollments: true,
             assigned_courses: true,
-          }
-        }
+          },
+        },
       },
       orderBy: {
-        created_at: 'desc'
+        created_at: 'desc',
       },
       skip: (page - 1) * limit,
       take: limit,
@@ -108,13 +110,13 @@ export class UserService {
         total,
         search,
         type,
-        status
-      }
+        status,
+      },
     };
   }
 
   async findOne(user_id: string, admin_id: string) {
-    if (!admin_id) throw new UnauthorizedException("Please login first!");
+    if (!admin_id) throw new UnauthorizedException('Please login first!');
     const user = await this.prisma.user.findUnique({
       where: {
         id: user_id,
@@ -148,11 +150,10 @@ export class UserService {
         avatar_url: user.avatar ? NajimStorage.url(user.avatar) : null,
       },
     };
-
   }
 
   async approve(user_id: string, admin_id: string) {
-    if (!admin_id) throw new UnauthorizedException("Please login first!");
+    if (!admin_id) throw new UnauthorizedException('Please login first!');
 
     const user = await this.prisma.user.findUnique({
       where: { id: user_id },
@@ -168,11 +169,10 @@ export class UserService {
       success: true,
       message: 'User approved successfully',
     };
-
   }
 
   async reject(user_id: string, admin_id: string) {
-    if (!admin_id) throw new UnauthorizedException("Please login first!");
+    if (!admin_id) throw new UnauthorizedException('Please login first!');
 
     const user = await this.prisma.user.findUnique({
       where: { id: user_id },
@@ -190,8 +190,12 @@ export class UserService {
     };
   }
 
-  async update(user_id: string, updateUserDto: UpdateUserDto, admin_id: string) {
-    if (!admin_id) throw new UnauthorizedException("Please login first!");
+  async update(
+    user_id: string,
+    updateUserDto: UpdateUserDto,
+    admin_id: string,
+  ) {
+    if (!admin_id) throw new UnauthorizedException('Please login first!');
 
     const user = await UserRepository.updateUser(user_id, updateUserDto);
 
@@ -200,14 +204,15 @@ export class UserService {
         success: user.success,
         message: user.message,
       };
-    }
-    else {
-      throw new UnprocessableEntityException(user.message || "Error updating user");
+    } else {
+      throw new UnprocessableEntityException(
+        user.message || 'Error updating user',
+      );
     }
   }
 
   async remove(user_id: string, admin_id: string) {
-    if (!admin_id) throw new UnauthorizedException("Please login first!");
+    if (!admin_id) throw new UnauthorizedException('Please login first!');
 
     const user = await this.prisma.user.findUnique({
       where: { id: user_id },
@@ -223,11 +228,10 @@ export class UserService {
       success: true,
       message: 'User deleted successfully',
     };
-
   }
 
   async updateStatus(user_id: string, status: UserStatus, admin_id: string) {
-    if (!admin_id) throw new UnauthorizedException("Please login first!");
+    if (!admin_id) throw new UnauthorizedException('Please login first!');
     const user = await this.prisma.user.findUnique({
       where: { id: user_id },
     });

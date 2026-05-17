@@ -4,16 +4,26 @@ import { Transform } from 'class-transformer';
 import { IsEnum, IsNotEmpty } from 'class-validator';
 import { UserStatus } from 'src/common/constants/user-status.enum';
 
-export class UpdateUserDto extends PartialType(CreateUserDto) { }
+export class UpdateUserDto extends PartialType(CreateUserDto) {}
 
 export class UpdateUserStatusDto {
-    @ApiProperty({
-        description: 'The status of the user',
-        enum: UserStatus,
-        example: 'BLOCKED',
-    })
-    @IsNotEmpty()
-    @Transform(({ value }) => UserStatus[value] ? UserStatus[value] : undefined)
-    @IsEnum(UserStatus)
-    status: UserStatus;
+  @ApiProperty({
+    description: 'The status of the user',
+    enum: UserStatus,
+    example: 'BLOCKED',
+  })
+  @IsNotEmpty()
+  @Transform(({ value }) => (UserStatus[value] ? UserStatus[value] : undefined))
+  @IsEnum(UserStatus)
+  status: UserStatus;
 }
+
+import {
+  CreateStudentManagementDto,
+  CreateTeacherDto,
+} from './create-user.dto';
+
+export class UpdateStudentManagementDto extends PartialType(
+  CreateStudentManagementDto,
+) {}
+export class UpdateTeacherDto extends PartialType(CreateTeacherDto) {}

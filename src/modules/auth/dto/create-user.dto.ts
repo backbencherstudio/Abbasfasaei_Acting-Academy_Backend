@@ -18,7 +18,6 @@ export class CreateUserDto {
   type?: string;
 }
 
-
 export class UserLoginDto {
   @IsNotEmpty()
   @ApiProperty()
@@ -28,7 +27,6 @@ export class UserLoginDto {
   @MinLength(8, { message: 'Password should be minimum 8' })
   @ApiProperty()
   password: string;
-
 }
 
 export class ForgotPasswordDto {

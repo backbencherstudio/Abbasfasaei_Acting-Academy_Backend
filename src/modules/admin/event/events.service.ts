@@ -1,13 +1,22 @@
-import { Injectable, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { addEventDto } from './dto/addevent.dto';
 import { updateEventDto } from './dto/updateEventDto';
-import { EventStatus, QueryEventDto, QueryEventMembersDto } from './dto/query-event.dto';
+import {
+  EventStatus,
+  QueryEventDto,
+  QueryEventMembersDto,
+} from './dto/query-event.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class EventsService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async getAllEvents(user_id: string, query: QueryEventDto) {
     if (!user_id) throw new UnauthorizedException('User not found');
@@ -20,7 +29,7 @@ export class EventsService {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } },
-        { overview: { contains: search, mode: 'insensitive' } }
+        { overview: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -52,35 +61,36 @@ export class EventsService {
       this.prisma.event.findFirst({
         where: { start_at: { gte: now } },
         orderBy: { start_at: 'asc' },
-        select: { id: true }
-      })
+        select: { id: true },
+      }),
     ]);
 
-    const formattedEvents = events.map(event => {
+    const formattedEvents = events.map((event) => {
       let eventStatus = 'completed';
 
       if (event.start_at >= now) {
-        eventStatus = (nextEvent && event.id === nextEvent.id) ? 'next' : 'upcoming';
+        eventStatus =
+          nextEvent && event.id === nextEvent.id ? 'next' : 'upcoming';
       }
 
       return {
         ...event,
         amount: event.amount_pence > 0 ? event.amount_pence / 100 : 0,
-        status: eventStatus
+        status: eventStatus,
       };
     });
 
     return {
       success: true,
-      message: "Events fetched successfully",
+      message: 'Events fetched successfully',
       data: formattedEvents,
       meta_data: {
         page,
         limit,
         total,
         search,
-        status
-      }
+        status,
+      },
     };
   }
 
@@ -102,7 +112,6 @@ export class EventsService {
           start_at: true,
           time: true,
           amount_pence: true,
-
         },
       }),
       this.prisma.event.findFirst({
@@ -116,12 +125,13 @@ export class EventsService {
 
     let eventStatus = 'completed';
     if (event.start_at >= now) {
-      eventStatus = (nextEvent && event.id === nextEvent.id) ? 'next' : 'upcoming';
+      eventStatus =
+        nextEvent && event.id === nextEvent.id ? 'next' : 'upcoming';
     }
 
     return {
       success: true,
-      message: "Event fetched successfully",
+      message: 'Event fetched successfully',
       data: {
         ...event,
         amount: event.amount_pence > 0 ? event.amount_pence / 100 : 0,
@@ -130,13 +140,17 @@ export class EventsService {
     };
   }
 
-  async getEventMembers(event_id: string, user_id: string, query: QueryEventMembersDto) {
+  async getEventMembers(
+    event_id: string,
+    user_id: string,
+    query: QueryEventMembersDto,
+  ) {
     if (!user_id) throw new UnauthorizedException('User not found');
     if (!event_id) throw new BadRequestException('Invalid Event Id');
 
     const { search, page, limit, start_date, end_date } = query;
     let where: Prisma.EventRegistrationWhereInput = {
-      event_id: event_id
+      event_id: event_id,
     };
 
     if (search) {
@@ -145,7 +159,7 @@ export class EventsService {
         { user: { email: { contains: search, mode: 'insensitive' } } },
         { user: { phone_number: { contains: search, mode: 'insensitive' } } },
         { user: { username: { contains: search, mode: 'insensitive' } } },
-        { ticket_number: { contains: search, mode: 'insensitive' } }
+        { ticket_number: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -165,8 +179,8 @@ export class EventsService {
             select: {
               id: true,
               name: true,
-              email: true
-            }
+              email: true,
+            },
           },
           created_at: true,
           order: {
@@ -178,9 +192,9 @@ export class EventsService {
                 },
                 take: 1,
                 orderBy: { created_at: 'desc' },
-              }
-            }
-          }
+              },
+            },
+          },
         },
         orderBy: { created_at: 'desc' },
         skip: (page - 1) * limit,
@@ -191,10 +205,11 @@ export class EventsService {
 
     return {
       success: true,
-      message: "Event members fetched successfully",
+      message: 'Event members fetched successfully',
       data: members.map((member) => {
         const paid_amount = member.order?.paid_amount;
-        const transaction_ref = member.order?.transactions?.[0].transaction_ref || null;
+        const transaction_ref =
+          member.order?.transactions?.[0].transaction_ref || null;
         const user = member.user;
         delete member.user;
         delete member.order.paid_amount;
@@ -205,7 +220,7 @@ export class EventsService {
           user_name: user.name,
           user_email: user.email,
           paid_amount,
-          transaction_ref
+          transaction_ref,
         };
       }),
       meta_data: {
@@ -214,14 +229,12 @@ export class EventsService {
         total,
         search,
         start_date,
-        end_date
+        end_date,
       },
     };
-
   }
 
   async addEvent(dto: addEventDto, user_id: string) {
-
     if (!user_id) throw new UnauthorizedException('User not found');
 
     const event = await this.prisma.event.create({
@@ -236,20 +249,17 @@ export class EventsService {
         created_by: user_id,
       },
     });
-    if (!event) throw new BadRequestException("Failed to create event")
+    if (!event) throw new BadRequestException('Failed to create event');
 
     return {
       success: true,
       message: 'Event created successfully',
     };
-
   }
 
   async editEvent(user_id: string, event_id: string, dto: updateEventDto) {
     if (!user_id) throw new UnauthorizedException('User not found');
     if (!event_id) throw new BadRequestException('Invalid Event Id');
-
-
 
     const creator = await this.prisma.user.findUnique({
       where: { id: user_id },
@@ -258,8 +268,8 @@ export class EventsService {
     if (!creator) throw new UnauthorizedException('User not found');
 
     const existingEvent = await this.prisma.event.findUnique({
-      where: { id: event_id }
-    })
+      where: { id: event_id },
+    });
     if (!existingEvent) throw new NotFoundException('Event not found');
 
     const event = await this.prisma.event.update({
@@ -269,18 +279,19 @@ export class EventsService {
         time: dto.time ?? existingEvent.time,
         location: dto.location ?? existingEvent.location,
         start_at: dto.start_at ?? existingEvent.start_at,
-        amount_pence: dto.amount ? dto.amount * 100 : existingEvent.amount_pence,
+        amount_pence: dto.amount
+          ? dto.amount * 100
+          : existingEvent.amount_pence,
         description: dto.description ?? existingEvent.description,
         overview: dto.overview ?? existingEvent.overview,
       },
     });
 
-    if (!event) throw new BadRequestException("Failed to update event")
+    if (!event) throw new BadRequestException('Failed to update event');
 
     return {
       success: true,
       message: 'Event updated successfully',
     };
-
   }
 }

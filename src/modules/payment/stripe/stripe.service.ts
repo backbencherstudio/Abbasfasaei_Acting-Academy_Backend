@@ -637,17 +637,17 @@ export class StripeService {
         });
       }
     } else if (subscriptionId) {
-       await this.prisma.installmentPlan.upsert({
-         where: { order_id: payment.id },
-         update: { stripe_subscription_id: subscriptionId },
-         create: {
-           order_id: payment.id,
-           stripe_subscription_id: subscriptionId,
-           total_amount: payment.total_amount,
-           installment_count: 1,
-           start_date: new Date(),
-         }
-       });
+      await this.prisma.installmentPlan.upsert({
+        where: { order_id: payment.id },
+        update: { stripe_subscription_id: subscriptionId },
+        create: {
+          order_id: payment.id,
+          stripe_subscription_id: subscriptionId,
+          total_amount: payment.total_amount,
+          installment_count: 1,
+          start_date: new Date(),
+        },
+      });
     }
 
     // Create a new Transaction for this specific invoice

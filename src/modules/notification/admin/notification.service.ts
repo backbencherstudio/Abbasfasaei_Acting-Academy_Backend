@@ -16,7 +16,8 @@ export class NotificationService {
       const attachedRoles = (userDetails?.role_users || []).map((r) =>
         String(r?.role?.name || '').toLowerCase(),
       );
-      const isAdmin = attachedRoles.includes('admin') || attachedRoles.includes('su_admin');
+      const isAdmin =
+        attachedRoles.includes('admin') || attachedRoles.includes('su_admin');
 
       if (isAdmin) {
         where_condition['OR'] = [
@@ -73,7 +74,9 @@ export class NotificationService {
               notification.sender['avatar_url'] = sAvatar;
             } else {
               const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
-              notification.sender['avatar_url'] = NajimStorage.url(`${base}/${sAvatar.replace(/^\/+/, '')}`);
+              notification.sender['avatar_url'] = NajimStorage.url(
+                `${base}/${sAvatar.replace(/^\/+/, '')}`,
+              );
             }
           }
 
@@ -83,7 +86,9 @@ export class NotificationService {
               notification.receiver['avatar_url'] = rAvatar;
             } else {
               const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
-              notification.receiver['avatar_url'] = NajimStorage.url(`${base}/${rAvatar.replace(/^\/+/, '')}`);
+              notification.receiver['avatar_url'] = NajimStorage.url(
+                `${base}/${rAvatar.replace(/^\/+/, '')}`,
+              );
             }
           }
         }

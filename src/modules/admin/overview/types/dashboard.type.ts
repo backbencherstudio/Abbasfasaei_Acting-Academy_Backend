@@ -1,4 +1,3 @@
-
 export interface MetricResult {
   current: number;
   previous: number;

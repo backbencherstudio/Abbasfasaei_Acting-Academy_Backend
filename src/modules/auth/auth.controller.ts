@@ -18,7 +18,11 @@ import { memoryStorage } from 'multer';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { CreateUserDto, ForgotPasswordDto, UserLoginDto } from './dto/create-user.dto';
+import {
+  CreateUserDto,
+  ForgotPasswordDto,
+  UserLoginDto,
+} from './dto/create-user.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -28,7 +32,7 @@ import { GetUser } from './decorators/get-user.decorator';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) { }
+  constructor(private authService: AuthService) {}
 
   @ApiOperation({ summary: 'Get user details' })
   @ApiBearerAuth()
@@ -54,7 +58,6 @@ export class AuthController {
       userId: user.id,
       email: user.email,
     });
-
   }
 
   @ApiOperation({ summary: 'Refresh token' })
@@ -171,7 +174,7 @@ export class AuthController {
       user.userId,
       data,
       avatarFile,
-      coverFile
+      coverFile,
     );
   }
 

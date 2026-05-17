@@ -4,10 +4,10 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class OverviewService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   async getOverview(userId: string) {
-    if (!userId) throw new UnauthorizedException("Please login first!!!")
+    if (!userId) throw new UnauthorizedException('Please login first!!!');
     const enrollment = await this.prisma.enrollment.findFirst({
       where: {
         user_id: userId,
@@ -103,50 +103,53 @@ export class OverviewService {
     const mapClass = (rawClass: any) =>
       rawClass
         ? {
-          id: rawClass.id,
-          class_title: rawClass.class_title,
-          class_name: rawClass.class_name,
-          start_at: rawClass.start_at,
-          end_at: rawClass.end_at,
-          module_name: rawClass.module?.module_name,
-          module_title: rawClass.module?.module_title,
-          course_title: rawClass.module?.course?.title,
-          instructor_name: rawClass.module?.course?.instructor?.name,
-        }
+            id: rawClass.id,
+            class_title: rawClass.class_title,
+            class_name: rawClass.class_name,
+            start_at: rawClass.start_at,
+            end_at: rawClass.end_at,
+            module_name: rawClass.module?.module_name,
+            module_title: rawClass.module?.module_title,
+            course_title: rawClass.module?.course?.title,
+            instructor_name: rawClass.module?.course?.instructor?.name,
+          }
         : null;
 
     const mapAssignment = (rawAssignment: any) =>
       rawAssignment
         ? {
-          id: rawAssignment.id,
-          title: rawAssignment.title,
-          due_date: rawAssignment.submission_date,
-          total_marks: rawAssignment.total_marks,
-          teacher_name: rawAssignment.creator?.name,
-          course_title: rawAssignment.class?.module?.course?.title,
-          due_days: Math.ceil(
-            (new Date(rawAssignment.submission_date).getTime() - Date.now()) /
-            (1000 * 60 * 60 * 24),
-          ) > 0
-            ? Math.ceil(
-              (new Date(rawAssignment.submission_date).getTime() - Date.now()) /
-              (1000 * 60 * 60 * 24),
-            )
-            : null,
-        }
+            id: rawAssignment.id,
+            title: rawAssignment.title,
+            due_date: rawAssignment.submission_date,
+            total_marks: rawAssignment.total_marks,
+            teacher_name: rawAssignment.creator?.name,
+            course_title: rawAssignment.class?.module?.course?.title,
+            due_days:
+              Math.ceil(
+                (new Date(rawAssignment.submission_date).getTime() -
+                  Date.now()) /
+                  (1000 * 60 * 60 * 24),
+              ) > 0
+                ? Math.ceil(
+                    (new Date(rawAssignment.submission_date).getTime() -
+                      Date.now()) /
+                      (1000 * 60 * 60 * 24),
+                  )
+                : null,
+          }
         : null;
 
     const mapEvent = (rawEvent: any) =>
       rawEvent
         ? {
-          id: rawEvent.id,
-          name: rawEvent.name,
-          description: rawEvent.description,
-          date: rawEvent.start_at,
-          time: rawEvent.time,
-          location: rawEvent.location,
-          is_member: rawEvent.registrations.length > 0,
-        }
+            id: rawEvent.id,
+            name: rawEvent.name,
+            description: rawEvent.description,
+            date: rawEvent.start_at,
+            time: rawEvent.time,
+            location: rawEvent.location,
+            is_member: rawEvent.registrations.length > 0,
+          }
         : null;
 
     const [
@@ -270,15 +273,15 @@ export class OverviewService {
     const mapEvent = (rawEvent: any) =>
       rawEvent
         ? {
-          id: rawEvent.id,
-          name: rawEvent.name,
-          description: rawEvent.description,
-          date: rawEvent.start_at,
-          time: rawEvent.time,
-          location: rawEvent.location,
-          creator_name: rawEvent.creator?.name,
-          is_member: rawEvent.registrations.length > 0,
-        }
+            id: rawEvent.id,
+            name: rawEvent.name,
+            description: rawEvent.description,
+            date: rawEvent.start_at,
+            time: rawEvent.time,
+            location: rawEvent.location,
+            creator_name: rawEvent.creator?.name,
+            is_member: rawEvent.registrations.length > 0,
+          }
         : null;
 
     const [rawCourse, rawEvent] = await Promise.all([
@@ -314,15 +317,15 @@ export class OverviewService {
 
     const upcomingCourse = rawCourse
       ? {
-        id: rawCourse.id,
-        title: rawCourse.title,
-        fee: rawCourse.fee_pence,
-        duration: rawCourse.duration,
-        start_date: rawCourse.start_date,
-        class_time: rawCourse.class_time,
-        seat_capacity: rawCourse.seat_capacity,
-        instructor_name: rawCourse.instructor?.name,
-      }
+          id: rawCourse.id,
+          title: rawCourse.title,
+          fee: rawCourse.fee_pence,
+          duration: rawCourse.duration,
+          start_date: rawCourse.start_date,
+          class_time: rawCourse.class_time,
+          seat_capacity: rawCourse.seat_capacity,
+          instructor_name: rawCourse.instructor?.name,
+        }
       : null;
 
     return {

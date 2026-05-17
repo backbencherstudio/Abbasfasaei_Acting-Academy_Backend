@@ -1,6 +1,20 @@
-import { Transform } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsEnum,
+  IsObject,
+  IsOptional,
+  IsString,
+} from 'class-validator';
+import { MessageKind } from '@prisma/client';
+
+export class CreateDmDto {
+  @IsString()
+  otherUserId: string;
+}
+
 export class CreateGroupDto {
   @ApiProperty({
     description: 'Group conversation title',
@@ -51,4 +65,30 @@ export class CreateGroupDto {
     format: 'binary',
   })
   avatar?: Express.Multer.File;
+}
+
+export class SendMessageDto {
+  @IsEnum(MessageKind)
+  @IsOptional()
+  kind?: MessageKind = MessageKind.TEXT;
+
+  @IsObject()
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    if (typeof value === 'object') return value;
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
+  content?: Record<string, any>;
+
+  @IsOptional()
+  @IsString()
+  media_Url?: string;
 }
