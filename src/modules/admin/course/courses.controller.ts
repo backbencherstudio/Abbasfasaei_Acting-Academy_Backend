@@ -10,7 +10,6 @@ import {
   UseInterceptors,
   UploadedFiles,
   Query,
-  BadRequestException,
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
@@ -120,10 +119,12 @@ export class CoursesController {
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all courses' })
   @Get()
-  getAllCourses(@GetUser() user: any, @Query() query: GetAllCourseQueryDto) {
-    return this.coursesService.getAllCourses(user.userId, query);
+  getAllCourses(@GetUser('userId') user_id: string, @Query() query: GetAllCourseQueryDto) {
+    return this.coursesService.getAllCourses(user_id, query);
   }
 
+  // updated
+  @Roles(Role.ADMIN)
   @Get("courses/users/:user_id")
   async getCoursesByUserId(@Param("user_id") user_id: string, @GetUser("userId") admin_id: string) {
     return this.coursesService.getCoursesByUserId(user_id, admin_id);
@@ -133,8 +134,8 @@ export class CoursesController {
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a course by ID' })
   @Get(':course_id')
-  getCourseById(@GetUser() user: any, @Param('course_id') course_id: string) {
-    return this.coursesService.getCourseById(user.userId, course_id);
+  getCourseById(@GetUser('userId') user_id: string, @Param('course_id') course_id: string) {
+    return this.coursesService.getCourseById(user_id, course_id);
   }
 
   // updated
@@ -142,12 +143,12 @@ export class CoursesController {
   @ApiOperation({ summary: 'Update a course by ID' })
   @Patch(':course_id')
   updateCourse(
-    @GetUser() user: any,
+    @GetUser('userId') user_id: string,
     @Param('course_id') course_id: string,
     @Body() updateCourseDto: UpdateCourseDto,
   ) {
     return this.coursesService.updateCourse(
-      user.userId,
+      user_id,
       course_id,
       updateCourseDto,
     );
@@ -157,8 +158,8 @@ export class CoursesController {
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Delete a course by ID' })
   @Delete(':course_id')
-  deleteCourse(@GetUser() user: any, @Param('course_id') course_id: string) {
-    return this.coursesService.deleteCourse(user.userId, course_id);
+  deleteCourse(@GetUser('userId') user_id: string, @Param('course_id') course_id: string) {
+    return this.coursesService.deleteCourse(user_id, course_id);
   }
 
   //---------------------module---------------------//
@@ -281,8 +282,9 @@ export class CoursesController {
     return this.coursesService.deleteClass(user_id, class_id);
   }
 
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
-  @ApiOperation({ summary: 'Start or end a class by ID' })
+  @ApiOperation({ summary: 'Start a class by ID' })
   @Patch('modules/classes/:class_id/start')
   startClass(
     @GetUser('userId') user_id: string,
@@ -291,8 +293,9 @@ export class CoursesController {
     return this.coursesService.startOrEndClass(user_id, class_id, 'START');
   }
 
+  // updated
   @Roles(Role.TEACHER, Role.ADMIN)
-  @ApiOperation({ summary: 'Start or end a class by ID' })
+  @ApiOperation({ summary: 'End a class by ID' })
   @Patch('modules/classes/:class_id/end')
   endClass(
     @GetUser('userId') user_id: string,
