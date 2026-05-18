@@ -30,7 +30,7 @@ import { QueryUserDto } from './dto/query-user.dto';
 @ApiTags('User')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
-@Controller('admin/user')
+@Controller('admin/users')
 export class UserController {
   constructor(private readonly userService: UserService) { }
 

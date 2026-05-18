@@ -9,11 +9,13 @@
 ## Auth Module
 
 ### Get Current User
+
 ```bash
 curl -X GET "http://localhost:7777/auth/me"
 ```
 
 ### Register
+
 ```bash
 curl -X POST "http://localhost:7777/auth/register" \
   -H "Content-Type: application/json" \
@@ -25,6 +27,7 @@ curl -X POST "http://localhost:7777/auth/register" \
 ```
 
 ### Login
+
 ```bash
 curl -X POST "http://localhost:7777/auth/login" \
   -H "Content-Type: application/json" \
@@ -35,6 +38,7 @@ curl -X POST "http://localhost:7777/auth/login" \
 ```
 
 ### Refresh Token
+
 ```bash
 curl -X POST "http://localhost:7777/auth/refresh-token" \
   -H "Content-Type: application/json" \
@@ -44,31 +48,37 @@ curl -X POST "http://localhost:7777/auth/refresh-token" \
 ```
 
 ### Logout
+
 ```bash
 curl -X POST "http://localhost:7777/auth/logout"
 ```
 
 ### Google Login
+
 ```bash
 curl -X GET "http://localhost:7777/auth/google"
 ```
 
 ### Google Redirect
+
 ```bash
 curl -X GET "http://localhost:7777/auth/google/redirect"
 ```
 
 ### Facebook Login
+
 ```bash
 curl -X GET "http://localhost:7777/auth/facebook"
 ```
 
 ### Facebook Redirect
+
 ```bash
 curl -X GET "http://localhost:7777/auth/facebook/redirect"
 ```
 
 ### Update User
+
 ```bash
 curl -X PATCH "http://localhost:7777/auth/update" \
   -F "name=John Doe" \
@@ -82,6 +92,7 @@ curl -X PATCH "http://localhost:7777/auth/update" \
 ```
 
 ### Forgot Password
+
 ```bash
 curl -X POST "http://localhost:7777/auth/forgot-password" \
   -H "Content-Type: application/json" \
@@ -91,6 +102,7 @@ curl -X POST "http://localhost:7777/auth/forgot-password" \
 ```
 
 ### Verify Email
+
 ```bash
 curl -X POST "http://localhost:7777/auth/verify-email" \
   -H "Content-Type: application/json" \
@@ -101,6 +113,7 @@ curl -X POST "http://localhost:7777/auth/verify-email" \
 ```
 
 ### Resend Verification Email
+
 ```bash
 curl -X POST "http://localhost:7777/auth/resend-verification-email" \
   -H "Content-Type: application/json" \
@@ -110,6 +123,7 @@ curl -X POST "http://localhost:7777/auth/resend-verification-email" \
 ```
 
 ### Reset Password
+
 ```bash
 curl -X POST "http://localhost:7777/auth/reset-password" \
   -H "Content-Type: application/json" \
@@ -121,6 +135,7 @@ curl -X POST "http://localhost:7777/auth/reset-password" \
 ```
 
 ### Change Password
+
 ```bash
 curl -X POST "http://localhost:7777/auth/change-password" \
   -H "Content-Type: application/json" \
@@ -131,6 +146,7 @@ curl -X POST "http://localhost:7777/auth/change-password" \
 ```
 
 ### Request Email Change
+
 ```bash
 curl -X POST "http://localhost:7777/auth/request-email-change" \
   -H "Content-Type: application/json" \
@@ -140,6 +156,7 @@ curl -X POST "http://localhost:7777/auth/request-email-change" \
 ```
 
 ### Change Email
+
 ```bash
 curl -X POST "http://localhost:7777/auth/change-email" \
   -H "Content-Type: application/json" \
@@ -150,11 +167,13 @@ curl -X POST "http://localhost:7777/auth/change-email" \
 ```
 
 ### Generate 2FA Secret
+
 ```bash
 curl -X POST "http://localhost:7777/auth/generate-2fa-secret"
 ```
 
 ### Verify 2FA
+
 ```bash
 curl -X POST "http://localhost:7777/auth/verify-2fa" \
   -H "Content-Type: application/json" \
@@ -164,11 +183,13 @@ curl -X POST "http://localhost:7777/auth/verify-2fa" \
 ```
 
 ### Enable 2FA
+
 ```bash
 curl -X POST "http://localhost:7777/auth/enable-2fa"
 ```
 
 ### Disable 2FA
+
 ```bash
 curl -X POST "http://localhost:7777/auth/disable-2fa"
 ```
@@ -178,16 +199,19 @@ curl -X POST "http://localhost:7777/auth/disable-2fa"
 ## Application Profile Module
 
 ### Get Profile
+
 ```bash
 curl -X GET "http://localhost:7777/profile"
 ```
 
 ### Get Personal Info
+
 ```bash
 curl -X GET "http://localhost:7777/profile/personal-info"
 ```
 
 ### Update Personal Info
+
 ```bash
 curl -X PUT "http://localhost:7777/profile/personal-info" \
   -H "Content-Type: application/json" \
@@ -206,21 +230,25 @@ curl -X PUT "http://localhost:7777/profile/personal-info" \
 ```
 
 ### Disable Account
+
 ```bash
 curl -X PUT "http://localhost:7777/profile/disable-account"
 ```
 
 ### Delete Account
+
 ```bash
 curl -X DELETE "http://localhost:7777/profile/delete-account"
 ```
 
 ### Activate Account
+
 ```bash
 curl -X PUT "http://localhost:7777/profile/activate-account"
 ```
 
 ### Profile Logout
+
 ```bash
 curl -X POST "http://localhost:7777/profile/logout"
 ```
@@ -230,6 +258,7 @@ curl -X POST "http://localhost:7777/profile/logout"
 ## Application Overview Module
 
 ### Get Student Overview
+
 ```bash
 curl -X GET "http://localhost:7777/overview"
 ```
@@ -239,6 +268,7 @@ curl -X GET "http://localhost:7777/overview"
 ## Application Contact Module
 
 ### Create Contact
+
 ```bash
 curl -X POST "http://localhost:7777/contact" \
   -H "Content-Type: application/json" \
@@ -256,11 +286,13 @@ curl -X POST "http://localhost:7777/contact" \
 ## Application FAQ Module
 
 ### Get All FAQ
+
 ```bash
 curl -X GET "http://localhost:7777/faq"
 ```
 
 ### Get FAQ By ID
+
 ```bash
 curl -X GET "http://localhost:7777/faq/:id"
 ```
@@ -270,11 +302,13 @@ curl -X GET "http://localhost:7777/faq/:id"
 ## Application Event Module
 
 ### Get All Events
+
 ```bash
 curl -X GET "http://localhost:7777/events"
 ```
 
 ### Get Event By ID
+
 ```bash
 curl -X GET "http://localhost:7777/events/:event_id"
 ```
@@ -284,46 +318,55 @@ curl -X GET "http://localhost:7777/events/:event_id"
 ## Application Course Module
 
 ### Get All Courses
+
 ```bash
 curl -X GET "http://localhost:7777/courses?my_courses=false"
 ```
 
 ### Get Course Details
+
 ```bash
 curl -X GET "http://localhost:7777/courses/:course_id"
 ```
 
 ### Get Course Assignments
+
 ```bash
 curl -X GET "http://localhost:7777/courses/:course_id/assignments"
 ```
 
 ### Get Course Assets
+
 ```bash
 curl -X GET "http://localhost:7777/courses/:course_id/assets?type=VIDEO"
 ```
 
 ### Get Module Details
+
 ```bash
 curl -X GET "http://localhost:7777/courses/modules/:module_id"
 ```
 
 ### Get Class Details
+
 ```bash
 curl -X GET "http://localhost:7777/courses/modules/classes/:class_id"
 ```
 
 ### Get Assignment Details
+
 ```bash
 curl -X GET "http://localhost:7777/courses/modules/classes/assignments/:assignment_id"
 ```
 
 ### Get Class Assignments
+
 ```bash
 curl -X GET "http://localhost:7777/courses/modules/classes/:class_id/assignments"
 ```
 
 ### Submit Assignment
+
 ```bash
 curl -X POST "http://localhost:7777/courses/modules/classes/assignments/:assignment_id" \
   -F "title=Submission Title" \
@@ -333,16 +376,19 @@ curl -X POST "http://localhost:7777/courses/modules/classes/assignments/:assignm
 ```
 
 ### Get Class Assets
+
 ```bash
 curl -X GET "http://localhost:7777/courses/modules/classes/:class_id/assets"
 ```
 
 ### Get Enrollment Current Step
+
 ```bash
 curl -X GET "http://localhost:7777/courses/:course_id/enrollment/current_step"
 ```
 
 ### Enroll User - Form Filling
+
 ```bash
 curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
   -H "Content-Type: application/json" \
@@ -359,6 +405,7 @@ curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
 ```
 
 ### Enroll User - Rules Signing
+
 ```bash
 curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
   -H "Content-Type: application/json" \
@@ -372,6 +419,7 @@ curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
 ```
 
 ### Enroll User - Contract Signing
+
 ```bash
 curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
   -H "Content-Type: application/json" \
@@ -385,6 +433,7 @@ curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
 ```
 
 ### Scan Attendance QR
+
 ```bash
 curl -X POST "http://localhost:7777/courses/attendance/scan-qr" \
   -H "Content-Type: application/json" \
@@ -398,6 +447,7 @@ curl -X POST "http://localhost:7777/courses/attendance/scan-qr" \
 ## Application Community Module
 
 ### Create Post
+
 ```bash
 curl -X POST "http://localhost:7777/community/post" \
   -F "post_type=POST" \
@@ -407,6 +457,7 @@ curl -X POST "http://localhost:7777/community/post" \
 ```
 
 ### Create Poll Post
+
 ```bash
 curl -X POST "http://localhost:7777/community/post" \
   -F "post_type=POLL" \
@@ -417,6 +468,7 @@ curl -X POST "http://localhost:7777/community/post" \
 ```
 
 ### Update Post
+
 ```bash
 curl -X PATCH "http://localhost:7777/community/post/:post_id" \
   -H "Content-Type: application/json" \
@@ -427,31 +479,37 @@ curl -X PATCH "http://localhost:7777/community/post/:post_id" \
 ```
 
 ### Get Community Feed
+
 ```bash
 curl -X GET "http://localhost:7777/community/feed?search=hello&cursor=CURSOR_VALUE&limit=10"
 ```
 
 ### Delete Post
+
 ```bash
 curl -X DELETE "http://localhost:7777/community/post/:post_id"
 ```
 
 ### Get Post Likes
+
 ```bash
 curl -X GET "http://localhost:7777/community/posts/:post_id/likes?cursor=CURSOR_VALUE&limit=10"
 ```
 
 ### Like Post
+
 ```bash
 curl -X POST "http://localhost:7777/community/posts/:post_id/like"
 ```
 
 ### Vote On Poll
+
 ```bash
 curl -X PATCH "http://localhost:7777/community/post/:post_id/vote/:option_id"
 ```
 
 ### Comment On Post
+
 ```bash
 curl -X POST "http://localhost:7777/community/post/:post_id/comment" \
   -H "Content-Type: application/json" \
@@ -462,21 +520,25 @@ curl -X POST "http://localhost:7777/community/post/:post_id/comment" \
 ```
 
 ### Get Post Comments
+
 ```bash
 curl -X GET "http://localhost:7777/community/post/:post_id/comments"
 ```
 
 ### Like Comment
+
 ```bash
 curl -X POST "http://localhost:7777/community/posts/comments/:comment_id/like"
 ```
 
 ### Delete Comment
+
 ```bash
 curl -X PATCH "http://localhost:7777/community/posts/comments/:comment_id/delete"
 ```
 
 ### Share Post
+
 ```bash
 curl -X POST "http://localhost:7777/community/posts/:post_id/share" \
   -H "Content-Type: application/json" \
@@ -486,11 +548,13 @@ curl -X POST "http://localhost:7777/community/posts/:post_id/share" \
 ```
 
 ### Get User Profile
+
 ```bash
 curl -X GET "http://localhost:7777/community/profile/:user_id"
 ```
 
 ### Report User
+
 ```bash
 curl -X POST "http://localhost:7777/community/report/:reported_user_id" \
   -H "Content-Type: application/json" \
@@ -505,6 +569,7 @@ curl -X POST "http://localhost:7777/community/report/:reported_user_id" \
 ## Admin Overview Module
 
 ### Get Admin Overview
+
 ```bash
 curl -X GET "http://localhost:7777/admin/overview"
 ```
@@ -514,8 +579,9 @@ curl -X GET "http://localhost:7777/admin/overview"
 ## Admin User Module
 
 ### Create User
+
 ```bash
-curl -X POST "http://localhost:7777/admin/user" \
+curl -X POST "http://localhost:7777/admin/users" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "John Doe",
@@ -529,28 +595,33 @@ curl -X POST "http://localhost:7777/admin/user" \
 ```
 
 ### Get All Users
+
 ```bash
-curl -X GET "http://localhost:7777/admin/user?search=john&type=STUDENT&page=1&limit=10&status=ACTIVE"
+curl -X GET "http://localhost:7777/admin/users?search=john&type=STUDENT&page=1&limit=10&status=ACTIVE"
 ```
 
 ### Approve User
+
 ```bash
-curl -X POST "http://localhost:7777/admin/user/:user_id/approve"
+curl -X POST "http://localhost:7777/admin/users/:user_id/approve"
 ```
 
 ### Reject User
+
 ```bash
-curl -X POST "http://localhost:7777/admin/user/:user_id/reject"
+curl -X POST "http://localhost:7777/admin/users/:user_id/reject"
 ```
 
 ### Get User By ID
+
 ```bash
-curl -X GET "http://localhost:7777/admin/user/:user_id"
+curl -X GET "http://localhost:7777/admin/users/:user_id"
 ```
 
 ### Update User
+
 ```bash
-curl -X PATCH "http://localhost:7777/admin/user/:user_id" \
+curl -X PATCH "http://localhost:7777/admin/users/:user_id" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Updated Name",
@@ -559,8 +630,9 @@ curl -X PATCH "http://localhost:7777/admin/user/:user_id" \
 ```
 
 ### Update User Status
+
 ```bash
-curl -X PATCH "http://localhost:7777/admin/user/:user_id/status" \
+curl -X PATCH "http://localhost:7777/admin/users/:user_id/status" \
   -H "Content-Type: application/json" \
   -d '{
     "status": "BLOCKED"
@@ -568,8 +640,9 @@ curl -X PATCH "http://localhost:7777/admin/user/:user_id/status" \
 ```
 
 ### Delete User
+
 ```bash
-curl -X DELETE "http://localhost:7777/admin/user/:user_id"
+curl -X DELETE "http://localhost:7777/admin/users/:user_id"
 ```
 
 ---
@@ -577,11 +650,13 @@ curl -X DELETE "http://localhost:7777/admin/user/:user_id"
 ## Admin Settings Module
 
 ### Get General Settings
+
 ```bash
 curl -X GET "http://localhost:7777/admin/settings/general-settings"
 ```
 
 ### Update General Settings
+
 ```bash
 curl -X POST "http://localhost:7777/admin/settings/general-settings" \
   -H "Content-Type: application/json" \
@@ -594,11 +669,13 @@ curl -X POST "http://localhost:7777/admin/settings/general-settings" \
 ```
 
 ### Get Profile Settings
+
 ```bash
 curl -X GET "http://localhost:7777/admin/settings/profile-settings"
 ```
 
 ### Update Profile Settings
+
 ```bash
 curl -X POST "http://localhost:7777/admin/settings/update-profile" \
   -H "Content-Type: application/json" \
@@ -617,6 +694,7 @@ curl -X POST "http://localhost:7777/admin/settings/update-profile" \
 ## Admin Website Info Module
 
 ### Update Website Info
+
 ```bash
 curl -X POST "http://localhost:7777/admin/website-info" \
   -F "name=My Website" \
@@ -630,6 +708,7 @@ curl -X POST "http://localhost:7777/admin/website-info" \
 ```
 
 ### Get Website Info
+
 ```bash
 curl -X GET "http://localhost:7777/admin/website-info"
 ```
@@ -639,6 +718,7 @@ curl -X GET "http://localhost:7777/admin/website-info"
 ## Admin Contact Module
 
 ### Create Contact
+
 ```bash
 curl -X POST "http://localhost:7777/admin/contact" \
   -H "Content-Type: application/json" \
@@ -652,16 +732,19 @@ curl -X POST "http://localhost:7777/admin/contact" \
 ```
 
 ### Get All Contacts
+
 ```bash
 curl -X GET "http://localhost:7777/admin/contact?q=john&status=1"
 ```
 
 ### Get Contact By ID
+
 ```bash
 curl -X GET "http://localhost:7777/admin/contact/:id"
 ```
 
 ### Update Contact
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/contact/:id" \
   -H "Content-Type: application/json" \
@@ -671,6 +754,7 @@ curl -X PATCH "http://localhost:7777/admin/contact/:id" \
 ```
 
 ### Delete Contact
+
 ```bash
 curl -X DELETE "http://localhost:7777/admin/contact/:id"
 ```
@@ -680,6 +764,7 @@ curl -X DELETE "http://localhost:7777/admin/contact/:id"
 ## Admin FAQ Module
 
 ### Create FAQ
+
 ```bash
 curl -X POST "http://localhost:7777/admin/faq" \
   -H "Content-Type: application/json" \
@@ -691,6 +776,7 @@ curl -X POST "http://localhost:7777/admin/faq" \
 ```
 
 ### Batch Create FAQ
+
 ```bash
 curl -X POST "http://localhost:7777/admin/faq/batch-create" \
   -H "Content-Type: application/json" \
@@ -706,16 +792,19 @@ curl -X POST "http://localhost:7777/admin/faq/batch-create" \
 ```
 
 ### Get All FAQ
+
 ```bash
 curl -X GET "http://localhost:7777/admin/faq"
 ```
 
 ### Get FAQ By ID
+
 ```bash
 curl -X GET "http://localhost:7777/admin/faq/:id"
 ```
 
 ### Update FAQ
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/faq/:id" \
   -H "Content-Type: application/json" \
@@ -726,6 +815,7 @@ curl -X PATCH "http://localhost:7777/admin/faq/:id" \
 ```
 
 ### Delete FAQ
+
 ```bash
 curl -X DELETE "http://localhost:7777/admin/faq/:id"
 ```
@@ -735,21 +825,25 @@ curl -X DELETE "http://localhost:7777/admin/faq/:id"
 ## Admin Event Module
 
 ### Get All Events
+
 ```bash
 curl -X GET "http://localhost:7777/admin/events?search=hiphop&page=1&limit=10&status=UPCOMING"
 ```
 
 ### Get Event By ID
+
 ```bash
 curl -X GET "http://localhost:7777/admin/events/:event_id"
 ```
 
 ### Get Event Members
+
 ```bash
 curl -X GET "http://localhost:7777/admin/events/:event_id/members?search=john&page=1&limit=10&start_date=2026-01-01&end_date=2026-12-31"
 ```
 
 ### Create Event
+
 ```bash
 curl -X POST "http://localhost:7777/admin/events" \
   -H "Content-Type: application/json" \
@@ -765,6 +859,7 @@ curl -X POST "http://localhost:7777/admin/events" \
 ```
 
 ### Update Event
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/events/:event_id" \
   -H "Content-Type: application/json" \
@@ -781,16 +876,19 @@ curl -X PATCH "http://localhost:7777/admin/events/:event_id" \
 Controller source: `src/modules/admin/course/courses.controller.ts`
 
 ### Generate Attendance QR
+
 ```bash
 curl -X POST "http://localhost:7777/admin/courses/attendance/generate-qr/:classId"
 ```
 
 ### Get All Attendance
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/attendance?status=PRESENT&date=2026-05-17&classId=CLASS_ID&courseId=COURSE_ID&search=john&page=1&limit=10"
 ```
 
 ### Mark Manual Attendance
+
 ```bash
 curl -X POST "http://localhost:7777/admin/courses/attendance/manual" \
   -H "Content-Type: application/json" \
@@ -803,6 +901,7 @@ curl -X POST "http://localhost:7777/admin/courses/attendance/manual" \
 ```
 
 ### Create Course
+
 ```bash
 curl -X POST "http://localhost:7777/admin/courses" \
   -H "Content-Type: application/json" \
@@ -823,26 +922,31 @@ curl -X POST "http://localhost:7777/admin/courses" \
 ```
 
 ### Get All Courses
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses?search=acting&page=1&limit=10&status=ACTIVE"
 ```
 
 ### Get All Courses - Teacher/Admin Basic
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses"
 ```
 
 ### Get Courses By User ID
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/courses/users/:user_id"
 ```
 
 ### Get Course By ID
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/:course_id"
 ```
 
 ### Update Course
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/courses/:course_id" \
   -H "Content-Type: application/json" \
@@ -852,6 +956,7 @@ curl -X PATCH "http://localhost:7777/admin/courses/:course_id" \
 ```
 
 ### Update Course - Full Example
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/courses/:course_id" \
   -H "Content-Type: application/json" \
@@ -872,11 +977,13 @@ curl -X PATCH "http://localhost:7777/admin/courses/:course_id" \
 ```
 
 ### Delete Course
+
 ```bash
 curl -X DELETE "http://localhost:7777/admin/courses/:course_id"
 ```
 
 ### Add Module
+
 ```bash
 curl -X POST "http://localhost:7777/admin/courses/:course_id/modules" \
   -H "Content-Type: application/json" \
@@ -888,16 +995,19 @@ curl -X POST "http://localhost:7777/admin/courses/:course_id/modules" \
 ```
 
 ### Get All Modules
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/:course_id/modules"
 ```
 
 ### Get Module By ID
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/modules/:module_id"
 ```
 
 ### Update Module
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/courses/modules/:module_id" \
   -H "Content-Type: application/json" \
@@ -907,6 +1017,7 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/:module_id" \
 ```
 
 ### Update Module - Full Example
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/courses/modules/:module_id" \
   -H "Content-Type: application/json" \
@@ -918,11 +1029,13 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/:module_id" \
 ```
 
 ### Delete Module
+
 ```bash
 curl -X DELETE "http://localhost:7777/admin/courses/modules/:module_id"
 ```
 
 ### Add Class
+
 ```bash
 curl -X POST "http://localhost:7777/admin/courses/modules/:module_id/classes" \
   -H "Content-Type: application/json" \
@@ -937,16 +1050,19 @@ curl -X POST "http://localhost:7777/admin/courses/modules/:module_id/classes" \
 ```
 
 ### Get All Classes
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/modules/:module_id/classes"
 ```
 
 ### Get Class By ID
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id"
 ```
 
 ### Update Class
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id" \
   -H "Content-Type: application/json" \
@@ -956,6 +1072,7 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id" \
 ```
 
 ### Update Class - Full Example
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id" \
   -H "Content-Type: application/json" \
@@ -970,21 +1087,25 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id" \
 ```
 
 ### Delete Class
+
 ```bash
 curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/:class_id"
 ```
 
 ### Start Class
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id/start"
 ```
 
 ### End Class
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id/end"
 ```
 
 ### Create Assignment
+
 ```bash
 curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assignments" \
   -F "title=Homework 1" \
@@ -995,16 +1116,19 @@ curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assi
 ```
 
 ### Get All Assignments
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id/assignments"
 ```
 
 ### Get Assignment By ID
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id"
 ```
 
 ### Update Assignment
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id" \
   -F "title=Updated Assignment Title" \
@@ -1013,6 +1137,7 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/assignments/:
 ```
 
 ### Update Assignment - Full Example
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id" \
   -F "title=Updated Assignment Title" \
@@ -1023,16 +1148,19 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/assignments/:
 ```
 
 ### Delete Assignment
+
 ```bash
 curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id"
 ```
 
 ### Get Assignment Submissions
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id/submissions?search=john&page=1&limit=10&status=SUBMITTED"
 ```
 
 ### Grade Submission
+
 ```bash
 curl -X POST "http://localhost:7777/admin/courses/modules/classes/assignments/submissions/:submission_id/grade" \
   -H "Content-Type: application/json" \
@@ -1044,6 +1172,7 @@ curl -X POST "http://localhost:7777/admin/courses/modules/classes/assignments/su
 ```
 
 ### Upload Class Assets
+
 ```bash
 curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assets" \
   -F "attachments=@/path/to/file1.pdf" \
@@ -1051,17 +1180,20 @@ curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/asse
 ```
 
 ### Upload Class Assets - Single File
+
 ```bash
 curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assets" \
   -F "attachments=@/path/to/file.pdf"
 ```
 
 ### Get Class Assets
+
 ```bash
 curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id/assets"
 ```
 
 ### Delete Class Asset
+
 ```bash
 curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/assets/:asset_id"
 ```
@@ -1071,6 +1203,7 @@ curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/assets/:asse
 ## Admin Community Module
 
 ### Create Admin Post
+
 ```bash
 curl -X POST "http://localhost:7777/admin/community" \
   -F "post_type=POST" \
@@ -1079,6 +1212,7 @@ curl -X POST "http://localhost:7777/admin/community" \
 ```
 
 ### Create Admin Poll Post
+
 ```bash
 curl -X POST "http://localhost:7777/admin/community" \
   -F "post_type=POLL" \
@@ -1088,16 +1222,19 @@ curl -X POST "http://localhost:7777/admin/community" \
 ```
 
 ### Get All Community Posts
+
 ```bash
 curl -X GET "http://localhost:7777/admin/community/posts?search=hello&status=ACTIVE&role=STUDENT&page=1&limit=10"
 ```
 
 ### Get Community Post By ID
+
 ```bash
 curl -X GET "http://localhost:7777/admin/community/posts/:post_id"
 ```
 
 ### Update Post Status
+
 ```bash
 curl -X PATCH "http://localhost:7777/admin/community/post/:post_id/status" \
   -H "Content-Type: application/json" \
@@ -1107,6 +1244,7 @@ curl -X PATCH "http://localhost:7777/admin/community/post/:post_id/status" \
 ```
 
 ### Delete Community Post
+
 ```bash
 curl -X DELETE "http://localhost:7777/admin/community/post/:post_id"
 ```
@@ -1116,6 +1254,7 @@ curl -X DELETE "http://localhost:7777/admin/community/post/:post_id"
 ## Admin Transaction Module
 
 ### Register Finance User
+
 ```bash
 curl -X POST "http://localhost:7777/admin/transactions/register" \
   -H "Content-Type: application/json" \
@@ -1130,6 +1269,7 @@ curl -X POST "http://localhost:7777/admin/transactions/register" \
 ```
 
 ### Update Finance User
+
 ```bash
 curl -X POST "http://localhost:7777/admin/transactions/update" \
   -H "Content-Type: application/json" \
@@ -1139,16 +1279,19 @@ curl -X POST "http://localhost:7777/admin/transactions/update" \
 ```
 
 ### Get Revenue Stats
+
 ```bash
 curl -X GET "http://localhost:7777/admin/transactions/revenue/stats"
 ```
 
 ### Get All Transactions
+
 ```bash
 curl -X GET "http://localhost:7777/admin/transactions/transactions?search=john&page=1&limit=10&payment_type=ONE_TIME&date=2026-05-17"
 ```
 
 ### Add Manual Payment
+
 ```bash
 curl -X POST "http://localhost:7777/admin/transactions/payments/manual" \
   -H "Content-Type: application/json" \
@@ -1169,6 +1312,7 @@ curl -X POST "http://localhost:7777/admin/transactions/payments/manual" \
 ```
 
 ### Get Finance And Payments Dashboard
+
 ```bash
 curl -X GET "http://localhost:7777/finance-and-payments"
 ```
