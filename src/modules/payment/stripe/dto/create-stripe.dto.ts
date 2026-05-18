@@ -3,11 +3,11 @@ import { IsOptional, IsString } from 'class-validator';
 export class CreateCheckoutDto {
   @IsString()
   @IsOptional()
-  enrollmentId?: string;
+  enrollment_id?: string;
 
   @IsString()
   @IsOptional()
-  eventId?: string;
+  event_id?: string;
 
   @IsString()
   @IsOptional()

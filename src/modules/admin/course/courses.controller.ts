@@ -48,7 +48,7 @@ import {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('admin/courses')
 export class CoursesController {
-  constructor(private readonly coursesService: CoursesService) { }
+  constructor(private readonly coursesService: CoursesService) {}
 
   @Roles(Role.ADMIN, Role.TEACHER)
   @Post('attendance/generate-qr/:classId')
@@ -119,14 +119,20 @@ export class CoursesController {
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get all courses' })
   @Get()
-  getAllCourses(@GetUser('userId') user_id: string, @Query() query: GetAllCourseQueryDto) {
+  getAllCourses(
+    @GetUser('userId') user_id: string,
+    @Query() query: GetAllCourseQueryDto,
+  ) {
     return this.coursesService.getAllCourses(user_id, query);
   }
 
   // updated
   @Roles(Role.ADMIN)
-  @Get("courses/users/:user_id")
-  async getCoursesByUserId(@Param("user_id") user_id: string, @GetUser("userId") admin_id: string) {
+  @Get('courses/users/:user_id')
+  async getCoursesByUserId(
+    @Param('user_id') user_id: string,
+    @GetUser('userId') admin_id: string,
+  ) {
     return this.coursesService.getCoursesByUserId(user_id, admin_id);
   }
 
@@ -134,7 +140,10 @@ export class CoursesController {
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Get a course by ID' })
   @Get(':course_id')
-  getCourseById(@GetUser('userId') user_id: string, @Param('course_id') course_id: string) {
+  getCourseById(
+    @GetUser('userId') user_id: string,
+    @Param('course_id') course_id: string,
+  ) {
     return this.coursesService.getCourseById(user_id, course_id);
   }
 
@@ -158,7 +167,10 @@ export class CoursesController {
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Delete a course by ID' })
   @Delete(':course_id')
-  deleteCourse(@GetUser('userId') user_id: string, @Param('course_id') course_id: string) {
+  deleteCourse(
+    @GetUser('userId') user_id: string,
+    @Param('course_id') course_id: string,
+  ) {
     return this.coursesService.deleteCourse(user_id, course_id);
   }
 

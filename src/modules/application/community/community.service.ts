@@ -571,7 +571,9 @@ export class CommunityService {
         throw new BadRequestException('parent comment not found');
       }
       if (parentComment.post_id !== post_id) {
-        throw new BadRequestException('parent comment does not belong to this post');
+        throw new BadRequestException(
+          'parent comment does not belong to this post',
+        );
       }
       if (parentComment.deleted_at) {
         throw new BadRequestException('cannot reply to a deleted comment');

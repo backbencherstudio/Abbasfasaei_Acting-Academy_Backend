@@ -1,7 +1,7 @@
 # API Curl List
 
 - Base URL: `http://localhost:7777`
-- Skipped modules: `payment`, `chat`, `notification`
+- Skipped modules: `chat`, `notification`
 - Note: `transaction` module include kora hoyeche, karon eta alada module
 
 ---
@@ -1315,4 +1315,53 @@ curl -X POST "http://localhost:7777/admin/transactions/payments/manual" \
 
 ```bash
 curl -X GET "http://localhost:7777/finance-and-payments"
+```
+
+---
+
+## Payment Module
+
+### Create Checkout Session (Course)
+
+```bash
+curl -X POST "http://localhost:7777/payment/stripe/checkout" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "enrollment_id": "ENROLLMENT_ID"
+  }'
+```
+
+### Create Checkout Session (Event)
+
+```bash
+curl -X POST "http://localhost:7777/payment/stripe/checkout" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_id": "EVENT_ID"
+  }'
+```
+
+### Verify Payment Session
+
+```bash
+curl -X GET "http://localhost:7777/payment/stripe/verify/:sessionId" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Stripe Webhook
+
+```bash
+curl -X POST "http://localhost:7777/payment/stripe/webhook" \
+  -H "stripe-signature: STRIPE_SIGNATURE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "checkout.session.completed",
+    "data": {
+      "object": {
+        "id": "cs_test_..."
+      }
+    }
+  }'
 ```

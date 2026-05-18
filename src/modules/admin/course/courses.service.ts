@@ -183,7 +183,6 @@ export class CoursesService {
   async getCoursesByUserId(user_id: string, admin_id: string) {
     if (!admin_id) throw new UnauthorizedException('Please login first!!');
 
-
     const user = await this.prisma.user.findUnique({
       where: {
         id: user_id,
@@ -193,10 +192,12 @@ export class CoursesService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    const where: Prisma.CourseWhereInput = {}
+    const where: Prisma.CourseWhereInput = {};
 
     if (user.type == Role.STUDENT) {
-      where.enrollments = { some: { user_id: user_id, status: 'ACTIVE', step: 'COMPLETED' } }
+      where.enrollments = {
+        some: { user_id: user_id, status: 'ACTIVE', step: 'COMPLETED' },
+      };
     }
     if (user.type == Role.TEACHER) {
       where.instructor_id = user_id;
@@ -248,8 +249,8 @@ export class CoursesService {
             100,
             course?.duration
               ? ((Date.now() - new Date(course.start_date).getTime()) /
-                (Number(course.duration) * 86400000)) *
-              100
+                  (Number(course.duration) * 86400000)) *
+                  100
               : 0,
           ),
         );
@@ -259,7 +260,7 @@ export class CoursesService {
           ...course,
           fee: course.fee_pence > 0 ? course.fee_pence / 100 : 0,
           total_enrollments,
-          course_progress
+          course_progress,
         };
       }),
     };
@@ -321,8 +322,8 @@ export class CoursesService {
         100,
         course?.duration
           ? ((Date.now() - new Date(course.start_date).getTime()) /
-            (Number(course.duration) * 86400000)) *
-          100
+              (Number(course.duration) * 86400000)) *
+              100
           : 0,
       ),
     );
@@ -816,7 +817,12 @@ export class CoursesService {
       )[0];
 
     let status = 'PENDING';
-    if (classData.start_at && new Date(classData.start_at) < now && classData.end_at && new Date(classData.end_at) < now) {
+    if (
+      classData.start_at &&
+      new Date(classData.start_at) < now &&
+      classData.end_at &&
+      new Date(classData.end_at) < now
+    ) {
       status = 'COMPLETED';
     } else if (nextClass && classData.id === nextClass.id) {
       status = 'NEXT';
@@ -921,7 +927,11 @@ export class CoursesService {
     };
   }
 
-  async startOrEndClass(user_id: string, class_id: string, status: 'START' | 'END') {
+  async startOrEndClass(
+    user_id: string,
+    class_id: string,
+    status: 'START' | 'END',
+  ) {
     if (!user_id) throw new UnauthorizedException('Unauthorized');
 
     const existingClass = await this.prisma.moduleClass.findUnique({
@@ -931,7 +941,6 @@ export class CoursesService {
     if (!existingClass) {
       throw new NotFoundException('Class not found');
     }
-
 
     if (status === 'START') {
       if (existingClass.start_at) {
@@ -943,7 +952,6 @@ export class CoursesService {
           start_at: new Date(),
         },
       });
-
     } else if (status === 'END') {
       if (!existingClass.start_at) {
         throw new InternalServerErrorException('Class not started');

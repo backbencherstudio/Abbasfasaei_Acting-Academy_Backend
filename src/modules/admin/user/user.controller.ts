@@ -10,18 +10,13 @@ import {
   Query,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import {
-  CreateUserDto,
-} from './dto/create-user.dto';
+import { CreateUserDto } from './dto/create-user.dto';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Role } from '../../../common/guard/role/role.enum';
 import { Roles } from '../../../common/guard/role/roles.decorator';
 import { RolesGuard } from '../../../common/guard/role/roles.guard';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import {
-  UpdateUserDto,
-  UpdateUserStatusDto,
-} from './dto/update-user.dto';
+import { UpdateUserDto, UpdateUserStatusDto } from './dto/update-user.dto';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 
 import { QueryUserDto } from './dto/query-user.dto';
@@ -32,7 +27,7 @@ import { QueryUserDto } from './dto/query-user.dto';
 @Roles(Role.ADMIN)
 @Controller('admin/users')
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService) {}
 
   // updated
   @ApiResponse({ description: 'Create a user' })

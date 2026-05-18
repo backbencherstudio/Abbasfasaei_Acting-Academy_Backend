@@ -30,7 +30,7 @@ import { memoryStorage } from 'multer';
 @Roles(Role.ADMIN)
 @Controller('admin/community')
 export class CommunityController {
-  constructor(private readonly communityService: CommunityService) { }
+  constructor(private readonly communityService: CommunityService) {}
 
   // updated
   @Post()

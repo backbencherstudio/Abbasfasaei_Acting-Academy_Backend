@@ -12,23 +12,34 @@ import appConfig from '../../../config/app.config';
 
 @Injectable()
 export class StripeService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   // ─── PUBLIC: Create Checkout Session ────────────────────────────────
   async createCheckout(userId: string, body: CreateCheckoutDto) {
-    const { enrollmentId, eventId, currency = 'usd' } = body;
+    const { enrollment_id: enrollmentId, event_id: eventId, currency = 'usd' } = body;
 
     if (!enrollmentId && !eventId) {
-      throw new BadRequestException('enrollmentId or eventId is required');
+      throw new BadRequestException('enrollment_id or event_id is required');
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new BadRequestException('User not found');
 
-    const customerId = await this.getOrCreateCustomer(userId, user.name, user.email, user.customer_id);
+    const customerId = await this.getOrCreateCustomer(
+      userId,
+      user.name,
+      user.email,
+      user.customer_id,
+    );
 
-    if (eventId) return this.createEventCheckout(userId, eventId, currency, customerId);
-    return this.createCourseCheckout(userId, enrollmentId!, currency, customerId);
+    if (eventId)
+      return this.createEventCheckout(userId, eventId, currency, customerId);
+    return this.createCourseCheckout(
+      userId,
+      enrollmentId!,
+      currency,
+      customerId,
+    );
   }
 
   // ─── Course Full Payment ───────────────────────────────────────────
@@ -46,7 +57,10 @@ export class StripeService {
     if (!enrollment || enrollment.user_id !== userId) {
       throw new BadRequestException('Invalid enrollment');
     }
-    if (enrollment.status === EnrollmentStatus.ACTIVE && enrollment.step === EnrollmentStep.COMPLETED) {
+    if (
+      enrollment.status === EnrollmentStatus.ACTIVE &&
+      enrollment.step === EnrollmentStep.COMPLETED
+    ) {
       throw new BadRequestException('Already enrolled in this course');
     }
     if (!enrollment.course_id) {
@@ -56,7 +70,7 @@ export class StripeService {
     const amount = Number(enrollment.course?.fee_pence ?? 0);
     if (amount <= 0) throw new BadRequestException('Course has no fee');
 
-    // Prevent duplicate pending orders for same course
+    // Check for existing pending order to resume
     const existingOrder = await this.prisma.order.findFirst({
       where: {
         user_id: userId,
@@ -64,9 +78,34 @@ export class StripeService {
         payment_mode: PaymentMode.FULL,
         status: 'PENDING',
       },
+      include: {
+        transactions: {
+          where: { status: 'PENDING' },
+          orderBy: { created_at: 'desc' },
+        },
+      },
     });
-    if (existingOrder) {
-      throw new BadRequestException('A pending payment already exists for this course');
+
+    if (existingOrder && existingOrder.transactions.length > 0) {
+      const tx = existingOrder.transactions[0];
+      if (tx.stripe_checkout_session_id) {
+        try {
+          const session = await StripePayment.retrieveCheckoutSession(
+            tx.stripe_checkout_session_id,
+          );
+          if (session && session.status === 'open' && session.url) {
+            return { success: true, data: { session_url: session.url } };
+          } else {
+            // session is expired or complete, mark tx as failed so we can create a new one
+            await this.prisma.paymentTransaction.update({
+              where: { id: tx.id },
+              data: { status: 'FAILED' },
+            });
+          }
+        } catch (e) {
+          // ignore error and proceed to create new
+        }
+      }
     }
 
     return this.createSessionAndOrder({
@@ -78,6 +117,7 @@ export class StripeService {
       productName: enrollment.course?.title ?? 'Course Enrollment',
       courseId: enrollment.course_id,
       metadata: { enrollmentId, userId, flow: 'COURSE_FULL' },
+      existingOrderId: existingOrder?.id,
     });
   }
 
@@ -88,16 +128,57 @@ export class StripeService {
     currency: string,
     customerId: string,
   ) {
-    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+    });
     if (!event || !event.amount_pence) {
       throw new BadRequestException('Invalid event or no ticket price');
     }
 
     // Check if already registered
-    const existing = await this.prisma.eventRegistration.findFirst({
+    const existingRegistration = await this.prisma.eventRegistration.findFirst({
       where: { user_id: userId, event_id: eventId },
     });
-    if (existing) throw new BadRequestException('Already registered for this event');
+    if (existingRegistration)
+      throw new BadRequestException('Already registered for this event');
+
+    // Check for existing pending order to resume
+    const existingOrder = await this.prisma.order.findFirst({
+      where: {
+        user_id: userId,
+        event_id: eventId,
+        item_type: OrderItemType.EVENT_TICKET,
+        payment_mode: PaymentMode.FULL,
+        status: 'PENDING',
+      },
+      include: {
+        transactions: {
+          where: { status: 'PENDING' },
+          orderBy: { created_at: 'desc' },
+        },
+      },
+    });
+
+    if (existingOrder && existingOrder.transactions.length > 0) {
+      const tx = existingOrder.transactions[0];
+      if (tx.stripe_checkout_session_id) {
+        try {
+          const session = await StripePayment.retrieveCheckoutSession(
+            tx.stripe_checkout_session_id,
+          );
+          if (session && session.status === 'open' && session.url) {
+            return { success: true, data: { session_url: session.url } };
+          } else {
+            await this.prisma.paymentTransaction.update({
+              where: { id: tx.id },
+              data: { status: 'FAILED' },
+            });
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
 
     return this.createSessionAndOrder({
       userId,
@@ -108,6 +189,7 @@ export class StripeService {
       productName: event.name,
       eventId,
       metadata: { eventId, userId, flow: 'EVENT_FULL' },
+      existingOrderId: existingOrder?.id,
     });
   }
 
@@ -122,8 +204,17 @@ export class StripeService {
     courseId?: string;
     eventId?: string;
     metadata: Record<string, string>;
+    existingOrderId?: string;
   }) {
-    const { userId, customerId, amount, currency, itemType, productName } = params;
+    const {
+      userId,
+      customerId,
+      amount,
+      currency,
+      itemType,
+      productName,
+      existingOrderId,
+    } = params;
     const clientUrl = appConfig().app.client_app_url || appConfig().app.url;
 
     const session = await StripePayment.createCheckoutSessionPayment({
@@ -136,28 +227,32 @@ export class StripeService {
       cancel_url: `${clientUrl}/payment/cancel`,
     });
 
-    const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    let orderId = existingOrderId;
 
-    const order = await this.prisma.order.create({
-      data: {
-        order_number: orderNumber,
-        user_id: userId,
-        item_type: itemType,
-        payment_mode: PaymentMode.FULL,
-        subtotal_amount: amount,
-        total_amount: amount,
-        due_amount: amount,
-        currency: currency.toUpperCase(),
-        status: 'PENDING',
-        course_id: params.courseId,
-        event_id: params.eventId,
-      },
-    });
+    if (!orderId) {
+      const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const order = await this.prisma.order.create({
+        data: {
+          order_number: orderNumber,
+          user_id: userId,
+          item_type: itemType,
+          payment_mode: PaymentMode.FULL,
+          subtotal_amount: amount,
+          total_amount: amount,
+          due_amount: amount,
+          currency: currency.toUpperCase(),
+          status: 'PENDING',
+          course_id: params.courseId,
+          event_id: params.eventId,
+        },
+      });
+      orderId = order.id;
+    }
 
     await this.prisma.paymentTransaction.create({
       data: {
         transaction_ref: session.id,
-        order_id: order.id,
+        order_id: orderId,
         user_id: userId,
         amount,
         currency: currency.toUpperCase(),
@@ -279,8 +374,10 @@ export class StripeService {
       },
     });
 
-    if (!transaction) return { success: false, message: 'Transaction not found' };
-    if (transaction.user_id !== userId) return { success: false, message: 'Unauthorized' };
+    if (!transaction)
+      return { success: false, message: 'Transaction not found' };
+    if (transaction.user_id !== userId)
+      return { success: false, message: 'Unauthorized' };
 
     return {
       success: true,
@@ -291,12 +388,12 @@ export class StripeService {
         paid_at: transaction.paid_at,
         order: transaction.order
           ? {
-            status: transaction.order.status,
-            item_type: transaction.order.item_type,
-            order_number: transaction.order.order_number,
-            course: transaction.order.course?.title,
-            event: transaction.order.event?.name,
-          }
+              status: transaction.order.status,
+              item_type: transaction.order.item_type,
+              order_number: transaction.order.order_number,
+              course: transaction.order.course?.title,
+              event: transaction.order.event?.name,
+            }
           : null,
       },
     };

@@ -4,7 +4,7 @@ import { Transform } from 'class-transformer';
 import { IsEnum, IsNotEmpty } from 'class-validator';
 import { UserStatus } from 'src/common/constants/user-status.enum';
 
-export class UpdateUserDto extends PartialType(CreateUserDto) { }
+export class UpdateUserDto extends PartialType(CreateUserDto) {}
 
 export class UpdateUserStatusDto {
   @ApiProperty({

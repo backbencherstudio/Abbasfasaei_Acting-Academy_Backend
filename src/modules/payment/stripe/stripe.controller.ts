@@ -30,7 +30,10 @@ export class StripeController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Get('verify/:sessionId')
-  async verifyPayment(@Req() req: Request, @Param('sessionId') sessionId: string) {
+  async verifyPayment(
+    @Req() req: Request,
+    @Param('sessionId') sessionId: string,
+  ) {
     if (!req.user.userId) throw new BadRequestException('Unauthorized');
     return this.stripeService.verifyPayment(sessionId, req.user.userId);
   }
