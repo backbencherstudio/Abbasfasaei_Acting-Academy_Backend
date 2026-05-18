@@ -14,8 +14,7 @@ import appConfig from '../../config/app.config';
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class NotificationGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleInit
-{
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
   @WebSocketServer()
   server: Server;
 
@@ -37,15 +36,14 @@ export class NotificationGateway
     this.redisSub.on('message', (_channel: string, message: string) => {
       if (!message) return;
       const data = JSON.parse(message);
-      
       const receiverId = data.receiver_id || data.userId;
       if (receiverId) {
         const targetSocketId = this.clients.get(receiverId);
         if (targetSocketId) {
-          this.server.to(targetSocketId).emit('receiveNotification', data);
+          this.server.to(targetSocketId).emit('notification', data);
         }
       } else {
-        this.server.emit('receiveNotification', data);
+        this.server.emit('notification', data);
       }
     });
   }
