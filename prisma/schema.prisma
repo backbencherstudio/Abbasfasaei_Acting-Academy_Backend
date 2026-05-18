@@ -84,10 +84,9 @@ model User {
   call_participants CallParticipant[]
 
   // Direct message/notification relations
-  receiver_messages      Message[]      @relation("receiver")
-  sender_messages        Message[]      @relation("sender")
-  receiver_notifications Notification[] @relation("receiver")
-  sender_notifications   Notification[] @relation("sender")
+  receiver_notifications Notification[]    @relation("receiver")
+  sender_notifications   Notification[]    @relation("sender")
+  message_reactions      MessageReaction[]
 
   // Courses & enrollments
   assigned_courses Course[]     @relation("instructor")
@@ -106,10 +105,9 @@ model User {
   ucodes        Ucode[]
 
   // Conversations (creator/participant)
-  creator_conversations     Conversation[] @relation("creator")
-  participant_conversations Conversation[] @relation("participant")
-  user_reports_as_reporter  UserReport[]   @relation("Reporter")
-  user_reports_as_reported  UserReport[]   @relation("ReportedUser")
+  creator_conversations    Conversation[] @relation("creator")
+  user_reports_as_reporter UserReport[]   @relation("Reporter")
+  user_reports_as_reported UserReport[]   @relation("ReportedUser")
 
   created_qr_sessions QRAttendanceSession[]
 
@@ -119,7 +117,7 @@ model User {
 
   created_assignment_grades AssignmentGrade[]
   created_module_classes    ModuleClass[]
-  courseModules             CourseModule[]
+  course_modules            CourseModule[]
 
   created_assignments   Assignment[]    @relation
   created_courses       Course[]        @relation("creator")
@@ -200,6 +198,7 @@ model RoleUser {
   @@map("role_users")
 }
 
+// updated
 model NotificationEvent {
   id            String         @id @default(cuid())
   created_at    DateTime       @default(now())
@@ -214,6 +213,7 @@ model NotificationEvent {
   @@map("notification_events")
 }
 
+// updated
 model Notification {
   id                    String             @id @default(cuid())
   created_at            DateTime           @default(now())
@@ -720,130 +720,184 @@ model UserReport {
 //---------------------------------- Chat Models -----------------//
 //
 
+enum ConversationType {
+  DM
+  GROUP
+}
+
 model Conversation {
-  id             String           @id @default(cuid())
-  creator_id     String?
-  participant_id String?
-  avatarUrl      String?
-  createdAt      DateTime         @default(now())
-  createdBy      String?
-  dmKey          String?          @unique
-  title          String?
-  type           ConversationType
-  updatedAt      DateTime         @updatedAt
-  receiverTitle  String?
-  senderTitle    String?
-  callSessions   CallSession[]
-  memberships    Membership[]
-  creator        User?            @relation("creator", fields: [creator_id], references: [id], onDelete: Cascade)
-  participant    User?            @relation("participant", fields: [participant_id], references: [id], onDelete: Cascade)
-  messages       Message[]
+  id            String           @id @default(cuid())
+  creator_id    String?
+  avatar_url    String?
+  created_at    DateTime         @default(now())
+  dm_key        String?          @unique
+  title         String?
+  type          ConversationType
+  updated_at    DateTime         @updatedAt
+  call_sessions CallSession[]
+  memberships   Membership[]
+  creator       User?            @relation("creator", fields: [creator_id], references: [id], onDelete: Cascade)
+  messages      Message[]
 
   @@map("conversations")
 }
 
-model Membership {
-  id             String       @id @default(cuid())
-  role           MemberRole   @default(MEMBER)
-  joinedAt       DateTime     @default(now())
-  lastReadAt     DateTime?
-  clearedAt      DateTime?
-  mutedUntil     DateTime?
-  archivedAt     DateTime?
-  leftAt         DateTime?
-  userId         String
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+enum MemberRole {
+  ADMIN
+  MEMBER
+}
 
-  @@unique([userId, conversationId])
-  @@index([conversationId, userId])
+model Membership {
+  id              String       @id @default(cuid())
+  role            MemberRole   @default(MEMBER)
+  nickname        String?
+  joined_at       DateTime     @default(now())
+  last_read_at    DateTime?
+  cleared_at      DateTime?
+  muted_until     DateTime?
+  archived_at     DateTime?
+  left_at         DateTime?
+  user_id         String
+  conversation_id String
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, conversation_id])
+  @@index([conversation_id, user_id])
+  @@map("memberships")
+}
+
+enum MessageKind {
+  TEXT
+  IMAGE
+  FILE
+  AUDIO
+  VIDEO
+  SYSTEM
 }
 
 model Message {
-  id             String       @id @default(cuid())
-  receiver_id    String?
-  content        Json
-  conversationId String
-  createdAt      DateTime     @default(now())
-  deletedAt      DateTime?
-  deletedById    String?
-  kind           MessageKind  @default(TEXT)
-  senderId       String
-  sender_user_id String?
-  readAt         DateTime?
-  media_Url      String?
-  receipts       Receipt[]
-  reports        Report[]
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  deletedBy      User?        @relation("MessageDeletedBy", fields: [deletedById], references: [id], onDelete: Cascade)
-  receiver       User?        @relation("receiver", fields: [receiver_id], references: [id], onDelete: Cascade)
-  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  sender_user    User?        @relation("sender", fields: [sender_user_id], references: [id], onDelete: Cascade)
+  id              String            @id @default(cuid())
+  content         Json
+  conversation_id String
+  created_at      DateTime          @default(now())
+  edited_at       DateTime?
+  deleted_at      DateTime?
+  deleted_by_id   String?
+  kind            MessageKind       @default(TEXT)
+  sender_id       String
+  read_at         DateTime?
+  media_url       String?
+  reply_to_id     String?
+  receipts        Receipt[]
+  reports         Report[]
+  reactions       MessageReaction[]
+  replies         Message[]         @relation("MessageReplies")
+  reply_to        Message?          @relation("MessageReplies", fields: [reply_to_id], references: [id])
+  conversation    Conversation      @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  deleted_by      User?             @relation("MessageDeletedBy", fields: [deleted_by_id], references: [id], onDelete: Cascade)
+  sender          User              @relation("MessageSender", fields: [sender_id], references: [id], onDelete: Cascade)
 
-  @@index([conversationId, createdAt])
+  @@index([conversation_id, created_at])
   @@map("messages")
 }
 
-model Receipt {
-  id        String        @id @default(cuid())
-  status    ReceiptStatus
-  at        DateTime      @default(now())
-  messageId String
-  userId    String
-  message   Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+model MessageReaction {
+  id         String   @id @default(cuid())
+  message_id String
+  user_id    String
+  emoji      String
+  created_at DateTime @default(now())
+  message    Message  @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, userId])
+  @@unique([message_id, user_id, emoji])
+  @@index([message_id])
+  @@map("message_reactions")
+}
+
+enum ReceiptStatus {
+  DELIVERED
+  READ
+}
+
+model Receipt {
+  id         String        @id @default(cuid())
+  status     ReceiptStatus
+  at         DateTime      @default(now())
+  message_id String
+  user_id    String
+  message    Message       @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([message_id, user_id])
+  @@map("receipts")
 }
 
 model Block {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  blockerId String
-  blockedId String
-  blocked   User     @relation("UserBlockedBy", fields: [blockedId], references: [id], onDelete: Cascade)
-  blocker   User     @relation("UserBlocks", fields: [blockerId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  blocker_id String
+  blocked_id String
+  blocked    User     @relation("UserBlockedBy", fields: [blocked_id], references: [id], onDelete: Cascade)
+  blocker    User     @relation("UserBlocks", fields: [blocker_id], references: [id], onDelete: Cascade)
 
-  @@unique([blockerId, blockedId])
+  @@unique([blocker_id, blocked_id])
+  @@map("blocks")
 }
 
 model Report {
-  id         String       @id @default(cuid())
-  messageId  String
-  reporterId String
-  reason     String
-  status     ReportStatus @default(OPEN)
-  createdAt  DateTime     @default(now())
-  message    Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  id          String       @id @default(cuid())
+  message_id  String
+  reporter_id String
+  reason      String
+  status      ReportStatus @default(OPEN)
+  created_at  DateTime     @default(now())
+  message     Message      @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  reporter    User         @relation(fields: [reporter_id], references: [id], onDelete: Cascade)
 
-  @@index([messageId])
+  @@index([message_id])
+}
+
+enum CallKind {
+  AUDIO
+  VIDEO
+}
+
+enum CallStatus {
+  ONGOING
+  ENDED
+  MISSED
 }
 
 model CallSession {
-  id             String            @id @default(cuid())
-  conversationId String
-  kind           CallKind
-  startedBy      String
-  startedAt      DateTime          @default(now())
-  endedAt        DateTime?
-  participants   CallParticipant[]
-  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id              String            @id @default(cuid())
+  conversation_id String
+  kind            CallKind
+  status          CallStatus        @default(ONGOING)
+  started_by      String
+  started_at      DateTime          @default(now())
+  ended_at        DateTime?
+  participants    CallParticipant[]
+  conversation    Conversation      @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@map("call_sessions")
 }
 
 model CallParticipant {
-  id         String      @id @default(cuid())
-  callId     String
-  userId     String
-  joinedAt   DateTime    @default(now())
-  leftAt     DateTime?
-  camera     String      @default("on")
-  microphone String      @default("on")
-  call       CallSession @relation(fields: [callId], references: [id], onDelete: Cascade)
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String      @id @default(cuid())
+  call_id           String
+  user_id           String
+  joined_at         DateTime    @default(now())
+  left_at           DateTime?
+  camera            Boolean     @default(true)
+  microphone        Boolean     @default(true)
+  is_screen_sharing Boolean     @default(false)
+  call              CallSession @relation(fields: [call_id], references: [id], onDelete: Cascade)
+  user              User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@index([callId])
+  @@index([call_id])
+  @@map("call_participants")
 }
 
 //
@@ -1004,35 +1058,6 @@ model UserSetting {
 enum AttendanceStatus {
   PRESENT
   ABSENT
-}
-
-enum ConversationType {
-  DM
-  GROUP
-}
-
-enum MemberRole {
-  ADMIN
-  MEMBER
-}
-
-enum MessageKind {
-  TEXT
-  IMAGE
-  FILE
-  AUDIO
-  VIDEO
-  SYSTEM
-}
-
-enum ReceiptStatus {
-  DELIVERED
-  READ
-}
-
-enum CallKind {
-  AUDIO
-  VIDEO
 }
 
 // -------------------------------------------------------------------
