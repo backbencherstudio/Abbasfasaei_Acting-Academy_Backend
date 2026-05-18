@@ -19,7 +19,7 @@ import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.
 @Controller('payment/stripe')
 @DisAllowDeactivated()
 export class StripeController {
-  constructor(private readonly stripeService: StripeService) {}
+  constructor(private readonly stripeService: StripeService) { }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Post('checkout')
@@ -29,13 +29,13 @@ export class StripeController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Get('verify/:sessionId')
+  @Get('verify/:session_id')
   async verifyPayment(
     @Req() req: Request,
-    @Param('sessionId') sessionId: string,
+    @Param('session_id') session_id: string,
   ) {
     if (!req.user.userId) throw new BadRequestException('Unauthorized');
-    return this.stripeService.verifyPayment(sessionId, req.user.userId);
+    return this.stripeService.verifyPayment(session_id, req.user.userId);
   }
 
   @Post('webhook')

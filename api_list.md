@@ -1325,7 +1325,6 @@ curl -X GET "http://localhost:7777/finance-and-payments"
 
 ```bash
 curl -X POST "http://localhost:7777/payment/stripe/checkout" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "enrollment_id": "ENROLLMENT_ID"
@@ -1336,7 +1335,6 @@ curl -X POST "http://localhost:7777/payment/stripe/checkout" \
 
 ```bash
 curl -X POST "http://localhost:7777/payment/stripe/checkout" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "event_id": "EVENT_ID"
@@ -1346,8 +1344,7 @@ curl -X POST "http://localhost:7777/payment/stripe/checkout" \
 ### Verify Payment Session
 
 ```bash
-curl -X GET "http://localhost:7777/payment/stripe/verify/:sessionId" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+curl -X GET "http://localhost:7777/payment/stripe/verify/:sessionId"
 ```
 
 ### Stripe Webhook
