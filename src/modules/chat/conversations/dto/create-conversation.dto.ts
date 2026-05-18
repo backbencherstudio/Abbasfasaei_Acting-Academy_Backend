@@ -1,70 +1,38 @@
-import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
   IsEnum,
+  IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
 } from 'class-validator';
 import { MessageKind } from '@prisma/client';
+import { ConversationType } from '@prisma/client';
+import { ValidateIf } from 'class-validator';
 
-export class CreateDmDto {
+export class CreateConversationDto {
+  @IsNotEmpty()
+  @IsEnum(ConversationType)
+  type: ConversationType;
+
+  @ValidateIf((o) => o.type === ConversationType.DM)
+  @IsNotEmpty()
   @IsString()
-  otherUserId: string;
-}
+  participant_id?: string;
 
-export class CreateGroupDto {
-  @ApiProperty({
-    description: 'Group conversation title',
-    example: 'Product Team',
-  })
+  @ValidateIf((o) => o.type === ConversationType.GROUP)
+  @IsNotEmpty()
   @IsString()
-  title: string;
+  title?: string;
 
-  @ApiProperty({
-    description: 'Initial members to add into the group',
-    type: [String],
-    example: ['cmmlhoxaa0000v83s6kxio16b', 'cmmliufke0000v8xs48uyxj6p'],
-  })
-  @Transform(({ value }) => {
-    if (Array.isArray(value)) {
-      return value.map((item) => String(item).trim()).filter(Boolean);
-    }
-
-    const raw = String(value ?? '').trim();
-    if (!raw) {
-      return [];
-    }
-
-    if (raw.startsWith('[') && raw.endsWith(']')) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          return parsed.map((item) => String(item).trim()).filter(Boolean);
-        }
-      } catch {
-        return [];
-      }
-    }
-
-    return raw
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean);
-  })
+  @ValidateIf((o) => o.type === ConversationType.GROUP)
+  @IsNotEmpty()
   @IsArray()
   @ArrayMinSize(1)
   @IsString({ each: true })
-  memberIds: string[];
-
-  @ApiProperty({
-    description: 'Optional group avatar image file',
-    type: 'string',
-    format: 'binary',
-  })
-  avatar?: Express.Multer.File;
+  participant_ids?: string[];
 }
 
 export class SendMessageDto {

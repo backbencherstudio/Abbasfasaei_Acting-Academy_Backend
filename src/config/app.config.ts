@@ -97,6 +97,7 @@ export default () => ({
     class_assets: 'course/class/assets',
     community: '/community',
     media: '/media',
+    conversation_avatar: '/conversation/avatar',
   },
 
   defaultUser: {

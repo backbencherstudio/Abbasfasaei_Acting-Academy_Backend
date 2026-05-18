@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 
 import { ConversationType, MemberRole, Prisma } from '@prisma/client';
@@ -10,356 +11,218 @@ import { UsersService } from '../users/users.service';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { extname } from 'path';
+import { CreateConversationDto } from './dto/create-conversation.dto';
+import { ConversationQueryDto } from './dto/query-conversation.dto';
 
 @Injectable()
 export class ConversationsService {
   constructor(
     private prisma: PrismaService,
-    private users: UsersService,
-  ) {}
+  ) { }
 
-  private dmKeyFor(a: string, b: string) {
-    return [a, b].sort().join('_');
-  }
 
-  private resolveAvatarUrl(avatar?: string | null) {
-    if (!avatar) return null;
-    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
-      return avatar;
-    }
-    const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
-    const name = avatar.replace(/^\/+/, '');
-    return NajimStorage.url(`${base}/${name}`);
-  }
+  async createConversation(user_id: string, createConversationDto: CreateConversationDto, group_avatar?: Express.Multer.File) {
 
-  private async validateExistingUsers(userIds: string[]) {
-    const uniqueIds = Array.from(
-      new Set(userIds.map((id) => String(id || '').trim()).filter(Boolean)),
-    );
+    if (!user_id) throw new UnauthorizedException('Please login first!')
+    const { type, participant_id, participant_ids, title } = createConversationDto
 
-    if (uniqueIds.length === 0) {
-      return { validIds: [], invalidIds: [] };
+    if (participant_id === user_id || participant_ids?.includes(user_id)) throw new BadRequestException('Invalid participants!')
+
+    const where: Prisma.ConversationWhereInput = {
+      type,
     }
 
-    const users = await this.prisma.user.findMany({
-      where: { id: { in: uniqueIds } },
-      select: { id: true },
-    });
-
-    const foundIds = new Set(users.map((user) => user.id));
-    const invalidIds = uniqueIds.filter((id) => !foundIds.has(id));
-
-    return { validIds: uniqueIds.filter((id) => foundIds.has(id)), invalidIds };
-  }
-
-  async ensureMember(conversationId: string, userId: string) {
-    const m = await this.prisma.membership.findFirst({
-      where: { conversationId, userId },
-      select: { id: true },
-    });
-    if (!m) throw new ForbiddenException('Not a member of this conversation');
-  }
-
-  async requireAdmin(conversationId: string, userId: string) {
-    const m = await this.prisma.membership.findFirst({
-      where: { conversationId, userId },
-      select: { role: true },
-    });
-    if (!m) throw new ForbiddenException('Not a member');
-    if (m.role !== MemberRole.ADMIN) throw new ForbiddenException('Admin only');
-  }
-
-  // ---- conversation management ----
-  async createDm(currentUserId: string, otherUserId: string) {
-    if (currentUserId === otherUserId) {
-      throw new BadRequestException('Cannot DM yourself');
-    }
-
-    const key = this.dmKeyFor(currentUserId, otherUserId);
-
-    if (await this.users.isBlocked(currentUserId, otherUserId)) {
-      throw new ForbiddenException('You are blocked from messaging this user');
-    }
-
-    const existing = await this.prisma.conversation.findFirst({
-      where: { type: ConversationType.DM, dmKey: key },
-      include: { memberships: true },
-    });
-
-    if (existing) return existing;
-
-    const otherUser = await this.prisma.user.findUnique({
-      where: { id: otherUserId },
-      select: { name: true },
-    });
-
-    if (!otherUser) {
-      throw new BadRequestException('The recipient does not exist');
-    }
-
-    const currentUser = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { name: true },
-    });
-
-    if (!currentUser) {
-      throw new BadRequestException('The sender does not exist');
-    }
-
-    const senderTitle = currentUser.name || 'Unknown';
-    const receiverTitle = otherUser.name || 'Unknown';
-
-    const conversation = await this.prisma.conversation.create({
-      data: {
-        type: ConversationType.DM,
-        dmKey: key,
-        senderTitle: senderTitle,
-        receiverTitle: receiverTitle,
-        createdBy: currentUserId,
-        avatarUrl: otherUserId,
-        creator_id: currentUserId,
-
-        participant_id: otherUserId,
-
-        memberships: {
-          create: [
-            { userId: currentUserId, lastReadAt: new Date() },
-            { userId: otherUserId, lastReadAt: new Date() },
-          ],
-        },
-      },
-      include: { memberships: true },
-    });
-
-    return conversation;
-  }
-
-  // ---- group conversation management ----
-  async createGroup(
-    currentUserId: string,
-    title: string,
-    memberIds: string[],
-    avatar?: Express.Multer.File,
-    _createdBy?: string,
-  ) {
-    let avatarUrl: string | undefined;
-
-    if (avatar) {
-      if (!avatar.mimetype?.startsWith('image/')) {
-        throw new BadRequestException('Group avatar must be an image file');
+    if (type === ConversationType.DM) {
+      if (!participant_id) throw new BadRequestException('Participant id is required for DM')
+      where.memberships = {
+        some: {
+          AND: [
+            { user_id: user_id },
+            { user_id: participant_id }
+          ]
+        }
       }
+    }
+    let avatar: string;
+    if (type === ConversationType.GROUP) {
+      if (!title) throw new BadRequestException('Title is required for GROUP')
+      if (!participant_ids || participant_ids.length < 1) throw new BadRequestException('Participant ids is required for GROUP and must be more than 1')
+      where.title = { equals: title }
+      if (group_avatar) {
+        try {
+          const filename = NajimStorage.generateFileName(group_avatar.originalname)
+          const objectKey = appConfig().storageUrl.conversation_avatar + '/' + filename
+          await NajimStorage.put(objectKey, group_avatar)
+          avatar = objectKey
+        } catch (error) {
+          throw new BadRequestException('Failed to upload group avatar')
+        }
 
-      const maxBytes = 5 * 1024 * 1024;
-      if (avatar.size > maxBytes) {
-        throw new BadRequestException('Group avatar size must be 5MB or less');
+
       }
-
-      const avatarFolder = appConfig()
-        .storageUrl.avatar.replace(/^\/+/, '')
-        .replace(/\/+$/, '');
-      const safeExt =
-        extname(avatar.originalname || '').toLowerCase() ||
-        (avatar.mimetype === 'image/png'
-          ? '.png'
-          : avatar.mimetype === 'image/webp'
-            ? '.webp'
-            : '.jpg');
-      const fileKey = `${avatarFolder}/group-${Date.now()}-${currentUserId}${safeExt}`;
-
-      await NajimStorage.put(fileKey, avatar.buffer);
-      avatarUrl = NajimStorage.url(fileKey);
     }
 
-    const currentUser = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { id: true },
-    });
-
-    if (!currentUser) {
-      throw new BadRequestException('Current user not found');
-    }
-
-    const { validIds, invalidIds } = await this.validateExistingUsers([
-      currentUserId,
-      ...memberIds,
-    ]);
-
-    if (invalidIds.length > 0) {
-      throw new BadRequestException(
-        `Invalid user IDs: ${invalidIds.join(', ')}`,
-      );
-    }
-
-    const uniqueMembers = validIds;
-    return this.prisma.conversation.create({
-      data: {
-        type: ConversationType.GROUP,
-        title,
-        avatarUrl: avatarUrl,
-        createdBy: currentUserId,
-        memberships: {
-          create: uniqueMembers.map((uid) => ({
-            userId: uid,
-            role: uid === currentUserId ? 'ADMIN' : 'MEMBER',
-            lastReadAt: new Date(),
-          })),
-        },
-      },
-      include: { memberships: true },
-    });
-  }
-
-  // list conversations the user is in
-  async myConversations(
-    userId: string,
-    take = 20,
-    skip = 0,
-    opts?: {
-      unreadOnly?: boolean;
-      from?: Date;
-      to?: Date;
-    },
-  ) {
-    const convs = await this.prisma.conversation.findMany({
-      where: {
-        memberships: { some: { userId, archivedAt: null } },
-        ...(opts?.from || opts?.to
-          ? { updatedAt: { gte: opts?.from, lte: opts?.to } }
-          : {}),
-      },
-      orderBy: { updatedAt: 'desc' },
-      take,
-      skip,
-      include: {
-        memberships: {
+    const existConversation = await this.prisma.conversation.findFirst({
+      where,
+      select: {
+        id: true,
+        title: true,
+        avatar: true,
+        type: true,
+        _count: {
           select: {
-            userId: true,
-            role: true,
-            lastReadAt: true,
-            clearedAt: true,
-          },
-        },
-        messages: {
-          where: { deletedAt: null },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-        },
-        creator: {
-          select: { id: true, avatar: true },
-        },
-        participant: {
-          select: { id: true, avatar: true },
-        },
-      },
-    });
-    if (convs.length === 0) return [];
-
-    // Compute per conversation lowerBound for the user
-    const bounds: Record<string, Date> = {};
-    for (const c of convs) {
-      const me = c.memberships.find((m) => m.userId === userId);
-      const lb = new Date(
-        Math.max(me?.lastReadAt?.getTime() ?? 0, me?.clearedAt?.getTime() ?? 0),
-      );
-      bounds[c.id] = lb;
-    }
-
-    const enriched = [] as any[];
-    for (const c of convs) {
-      const lb = bounds[c.id];
-      const unread = await this.prisma.message.count({
-        where: {
-          conversationId: c.id,
-          deletedAt: null,
-          senderId: { not: userId },
-          createdAt: { gt: lb },
-        },
-      });
-
-      // Add the other participant's avatar for DMs
-      let otherUserAvatar = null;
-      if (c.type === ConversationType.DM) {
-        // For DM, get the avatar of the "other" participant
-        const otherUser = c.creator_id === userId ? c.participant : c.creator;
-        if (otherUser?.avatar) {
-          // If avatar is already a full URL, use it as-is; otherwise construct the URL
-          if (otherUser.avatar.startsWith('http')) {
-            otherUserAvatar = otherUser.avatar;
-          } else {
-            otherUserAvatar = NajimStorage.url(
-              `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(otherUser.avatar).replace(/^\/+/, '')}`,
-            );
+            memberships: true
           }
         }
       }
-
-      enriched.push({ ...c, unread, otherUserAvatar });
+    })
+    const existCount = existConversation?._count?.memberships
+    delete existConversation?._count
+    existConversation.avatar = existConversation.avatar ? NajimStorage.url(existConversation.avatar) : null
+    if (existConversation) return {
+      success: true,
+      message: 'Conversation already exists',
+      data: { ...existConversation, total_members: existCount }
     }
-    return opts?.unreadOnly ? enriched.filter((c) => c.unread > 0) : enriched;
+
+
+    const conversation = await this.prisma.conversation.create({
+      data: {
+        type,
+        creator_id: user_id,
+        title,
+        avatar: avatar,
+        memberships: {
+          create: [
+            { user_id: user_id, role: MemberRole.ADMIN },
+            ...(participant_id ? [{ user_id: participant_id }] : participant_ids?.length > 0 ? participant_ids?.map((id) => ({ user_id: id })) : []),
+          ],
+        },
+      },
+      select: {
+        id: true,
+        title: true,
+        avatar: true,
+        type: true,
+        _count: {
+          select: {
+            memberships: true
+          }
+        }
+      }
+    });
+
+    const count = conversation._count.memberships
+    delete conversation._count
+    conversation.avatar = conversation.avatar ? NajimStorage.url(conversation.avatar) : null
+    return {
+      success: true,
+      message: 'Conversation created successfully',
+      data: { ...conversation, total_members: count, }
+    }
   }
 
-  async listGroupConversations(userId: string) {
-    const groups = await this.prisma.conversation.findMany({
-      where: {
-        type: ConversationType.GROUP,
-        memberships: { some: { userId } },
-      },
-      include: {
+
+
+  async getMyConversations(user_id: string, query: ConversationQueryDto) {
+    const { cursor, limit, type } = query
+
+    const where: Prisma.ConversationWhereInput = {
+      memberships: {
+        some: {
+          user_id: user_id
+        }
+      }
+    }
+    if (type) where.type = type
+
+    const conversations = await this.prisma.conversation.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        avatar: true,
+        type: true,
         memberships: {
           select: {
-            userId: true,
-            role: true,
-            lastReadAt: true,
-            clearedAt: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+                avatar: true
+              }
+            }
           },
-        },
-        messages: {
-          where: { deletedAt: null },
-          orderBy: { createdAt: 'desc' },
+          where: {
+            user_id: {
+              not: user_id
+            }
+          },
           take: 1,
         },
+        _count: {
+          select: {
+            memberships: true,
+            messages: {
+              where: {
+                read_at: null
+              }
+            }
+          }
+        }
       },
-    });
-    return groups;
+      take: limit,
+      cursor: cursor ? {
+        id: cursor
+      } : undefined,
+    })
+    return {
+      success: true,
+      message: 'Conversations fetched successfully',
+      data: conversations.map((conversation) => {
+        const other_member = conversation.memberships[0]
+        const { memberships: total_members, messages: unread_messages } = conversation._count
+        delete conversation.memberships
+        delete conversation._count
+        conversation.avatar = conversation.avatar ? NajimStorage.url(conversation.avatar) : other_member?.user?.avatar ? NajimStorage.url(other_member?.user?.avatar) : null
+        return {
+          ...conversation,
+          total_members,
+          unread_messages,
+          participant: other_member?.user ?? null,
+        }
+      })
+    }
   }
 
   // mark read up to now or specific timestamp
-  async markRead(conversationId: string, userId: string, upTo?: Date) {
-    await this.ensureMember(conversationId, userId);
-
-    let at = upTo;
-    if (!at) {
-      const last = await this.prisma.message.findFirst({
-        where: { conversationId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true },
-      });
-      at = last?.createdAt ?? new Date();
-    }
-
-    const m = await this.prisma.membership.findFirst({
-      where: { conversationId, userId },
-      select: { lastReadAt: true },
-    });
-
-    const floor = m?.lastReadAt ?? new Date(0);
-    const candidate = at < floor ? floor : at;
-    const next =
-      m?.lastReadAt && m.lastReadAt > candidate ? m.lastReadAt : candidate;
-
-    await this.prisma.membership.updateMany({
-      where: { conversationId, userId },
-      data: { lastReadAt: next },
-    });
-
-    const unread = await this.prisma.message.count({
+  async markRead(conversation_id: string, user_id: string) {
+    if (!user_id) throw new UnauthorizedException('Please login first!')
+    const conversation = await this.prisma.conversation.findUnique({
       where: {
-        conversationId,
-        createdAt: { gt: next },
-        senderId: { not: userId },
+        id: conversation_id
+      }
+    })
+    if (!conversation) throw new BadRequestException('Conversation not found')
+
+    const membership = await this.prisma.membership.findFirst({
+      where: {
+        conversation_id: conversation_id,
+        user_id: user_id
+      }
+    })
+    if (!membership) throw new ForbiddenException('Not a member of this conversation')
+
+    const last_read_at = new Date()
+    await this.prisma.membership.update({
+      where: {
+        id: membership.id
       },
-    });
-    return { conversationId, lastReadAt: next, unread };
+      data: {
+        last_read_at: last_read_at,
+      }
+    })
   }
 
   // ---- member management ----
@@ -368,10 +231,7 @@ export class ConversationsService {
     currentUserId: string,
     memberIds: string[],
   ) {
-    await this.requireAdmin(conversationId, currentUserId);
 
-    const { validIds, invalidIds } =
-      await this.validateExistingUsers(memberIds);
 
     if (invalidIds.length > 0) {
       throw new BadRequestException(
@@ -383,12 +243,12 @@ export class ConversationsService {
 
     const existing = await this.prisma.membership.findMany({
       where: {
-        conversationId,
-        userId: { in: unique },
+        conversation_id: conversationId,
+        user_id: { in: unique },
       },
-      select: { userId: true },
+      select: { user_id: true },
     });
-    const existingIds = new Set(existing.map((m) => m.userId));
+    const existingIds = new Set(existing.map((m) => m.user_id));
 
     const toAdd = unique.filter((uid) => !existingIds.has(uid));
     if (toAdd.length === 0) {
@@ -397,10 +257,10 @@ export class ConversationsService {
 
     await this.prisma.membership.createMany({
       data: toAdd.map((uid) => ({
-        conversationId,
-        userId: uid,
+        conversation_id: conversationId,
+        user_id: uid,
         role: 'MEMBER',
-        lastReadAt: new Date(),
+        last_read_at: new Date(),
       })),
       skipDuplicates: true,
     });
@@ -414,7 +274,6 @@ export class ConversationsService {
     currentUserId: string,
     role?: MemberRole,
   ) {
-    await this.ensureMember(conversationId, currentUserId);
 
     const conv = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
@@ -428,23 +287,23 @@ export class ConversationsService {
 
     const members = await this.prisma.membership.findMany({
       where: {
-        conversationId,
+        conversation_id: conversationId,
         ...(role ? { role } : {}),
       },
       select: {
-        userId: true,
+        user_id: true,
         role: true,
         user: { select: { name: true, username: true, avatar: true } },
       },
-      orderBy: [{ role: 'desc' }, { joinedAt: 'asc' }],
+      orderBy: [{ role: 'desc' }, { joined_at: 'asc' }],
     });
 
     return members.map((m) => ({
-      userId: m.userId,
+      userId: m.user_id,
       displayName: m.user.name,
       username: m.user.username,
       avatarUrl: this.resolveAvatarUrl(m.user.avatar),
-      isCurrentUser: m.userId === currentUserId,
+      isCurrentUser: m.user_id === currentUserId,
       role: m.role,
     }));
   }
@@ -455,9 +314,8 @@ export class ConversationsService {
     currentUserId: string,
     targetUserId: string,
   ) {
-    await this.requireAdmin(conversationId, currentUserId);
     await this.prisma.membership.deleteMany({
-      where: { conversationId, userId: targetUserId },
+      where: { conversation_id: conversationId, user_id: targetUserId },
     });
     return { ok: true };
   }
@@ -469,40 +327,22 @@ export class ConversationsService {
     targetUserId: string,
     role: MemberRole,
   ) {
-    await this.requireAdmin(conversationId, currentUserId);
     await this.prisma.membership.updateMany({
-      where: { conversationId, userId: targetUserId },
+      where: { conversation_id: conversationId, user_id: targetUserId },
       data: { role },
     });
     return { ok: true };
   }
 
-  // get unread count for a conversation
-  async unreadFor(conversationId: string, userId: string) {
-    const me = await this.prisma.membership.findFirst({
-      where: { conversationId, userId },
-      select: { lastReadAt: true },
-    });
-    if (!me) throw new ForbiddenException('Not a member');
-    const unread = await this.prisma.message.count({
-      where: {
-        conversationId,
-        createdAt: { gt: me.lastReadAt ?? new Date(0) },
-        senderId: { not: userId },
-      },
-    });
-    return { conversationId, unread };
-  }
-
   //------ clear conversation for me----
+
   async clearForUser(conversationId: string, userId: string, upTo?: Date) {
-    await this.ensureMember(conversationId, userId);
 
     const at = upTo ?? new Date();
 
     await this.prisma.membership.updateMany({
-      where: { conversationId, userId },
-      data: { clearedAt: at, lastReadAt: at },
+      where: { conversation_id: conversationId, user_id: userId },
+      data: { cleared_at: at, last_read_at: at },
     });
 
     return { ok: true, conversationId, clearedAt: at.toISOString() };

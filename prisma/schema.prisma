@@ -454,7 +454,9 @@ model Attachment {
   assignment_id            String?
   assignment_submission_id String?
   community_post_id        String?
+  message_id               String?
 
+  message               Message?              @relation(fields: [message_id], references: [id], onDelete: Cascade)
   class                 ModuleClass?          @relation(fields: [class_id], references: [id], onDelete: Cascade)
   enrollment            Enrollment?           @relation(fields: [enrollment_id], references: [id], onDelete: Cascade)
   assignment            Assignment?           @relation(fields: [assignment_id], references: [id], onDelete: Cascade)
@@ -728,7 +730,7 @@ enum ConversationType {
 model Conversation {
   id            String           @id @default(cuid())
   creator_id    String?
-  avatar_url    String?
+  avatar        String?
   created_at    DateTime         @default(now())
   dm_key        String?          @unique
   title         String?
@@ -736,7 +738,7 @@ model Conversation {
   updated_at    DateTime         @updatedAt
   call_sessions CallSession[]
   memberships   Membership[]
-  creator       User?            @relation("creator", fields: [creator_id], references: [id], onDelete: Cascade)
+  creator       User?            @relation("creator", fields: [creator_id], references: [id], onDelete: SetNull)
   messages      Message[]
 
   @@map("conversations")
@@ -748,10 +750,9 @@ enum MemberRole {
 }
 
 model Membership {
-  id              String       @id @default(cuid())
-  role            MemberRole   @default(MEMBER)
+  id              String    @id @default(cuid())
   nickname        String?
-  joined_at       DateTime     @default(now())
+  joined_at       DateTime  @default(now())
   last_read_at    DateTime?
   cleared_at      DateTime?
   muted_until     DateTime?
@@ -759,11 +760,13 @@ model Membership {
   left_at         DateTime?
   user_id         String
   conversation_id String
-  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@unique([user_id, conversation_id])
-  @@index([conversation_id, user_id])
+  role MemberRole @default(MEMBER)
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([conversation_id, user_id])
   @@map("memberships")
 }
 
@@ -777,26 +780,27 @@ enum MessageKind {
 }
 
 model Message {
-  id              String            @id @default(cuid())
+  id              String      @id @default(cuid())
   content         Json
   conversation_id String
-  created_at      DateTime          @default(now())
+  created_at      DateTime    @default(now())
   edited_at       DateTime?
   deleted_at      DateTime?
   deleted_by_id   String?
-  kind            MessageKind       @default(TEXT)
+  kind            MessageKind @default(TEXT)
   sender_id       String
   read_at         DateTime?
-  media_url       String?
-  reply_to_id     String?
-  receipts        Receipt[]
-  reports         Report[]
-  reactions       MessageReaction[]
-  replies         Message[]         @relation("MessageReplies")
-  reply_to        Message?          @relation("MessageReplies", fields: [reply_to_id], references: [id])
-  conversation    Conversation      @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  deleted_by      User?             @relation("MessageDeletedBy", fields: [deleted_by_id], references: [id], onDelete: Cascade)
-  sender          User              @relation("MessageSender", fields: [sender_id], references: [id], onDelete: Cascade)
+
+  reply_to_id  String?
+  attachments  Attachment[]
+  receipts     Receipt[]
+  reports      Report[]
+  reactions    MessageReaction[]
+  replies      Message[]         @relation("MessageReplies")
+  reply_to     Message?          @relation("MessageReplies", fields: [reply_to_id], references: [id])
+  conversation Conversation      @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  deleted_by   User?             @relation("MessageDeletedBy", fields: [deleted_by_id], references: [id], onDelete: Cascade)
+  sender       User              @relation("MessageSender", fields: [sender_id], references: [id], onDelete: Cascade)
 
   @@index([conversation_id, created_at])
   @@map("messages")
