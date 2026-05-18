@@ -207,7 +207,8 @@ model NotificationEvent {
   deleted_at    DateTime?
   status        Int?           @default(1) @db.SmallInt
   type          String?
-  text          String?
+  title         String?
+  content       String?
   notifications Notification[]
 
   @@map("notification_events")
