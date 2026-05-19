@@ -60,3 +60,17 @@ export class SendMessageDto {
   @IsString()
   media_Url?: string;
 }
+
+export class MarkAsReadDto {
+  @IsString()
+  @IsNotEmpty()
+  up_to_message_id: string;
+}
+
+export class AddMemberDto {
+  @IsArray()
+  @IsNotEmpty()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  member_ids: string[];
+}

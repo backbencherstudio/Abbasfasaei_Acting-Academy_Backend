@@ -16,7 +16,11 @@ export class StripeService {
 
   // ─── PUBLIC: Create Checkout Session ────────────────────────────────
   async createCheckout(userId: string, body: CreateCheckoutDto) {
-    const { enrollment_id: enrollmentId, event_id: eventId, currency = 'usd' } = body;
+    const {
+      enrollment_id: enrollmentId,
+      event_id: eventId,
+      currency = 'usd',
+    } = body;
 
     if (!enrollmentId && !eventId) {
       throw new BadRequestException('enrollment_id or event_id is required');

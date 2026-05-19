@@ -818,7 +818,7 @@ export class CourseService {
     for (const file of files) {
       const filename = NajimStorage.generateFileName(file.originalname);
       const objectKey = appConfig().storageUrl.assignment + '/' + filename;
-      await NajimStorage.put(objectKey, file);
+      await NajimStorage.put(objectKey, file.buffer);
       attachments.push({
         file_name: filename,
         file_path: objectKey,

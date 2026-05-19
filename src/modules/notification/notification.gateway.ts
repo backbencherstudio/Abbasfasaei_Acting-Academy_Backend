@@ -14,7 +14,12 @@ import appConfig from '../../config/app.config';
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class NotificationGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
+  implements
+    OnGatewayInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnModuleInit
+{
   @WebSocketServer()
   server: Server;
 

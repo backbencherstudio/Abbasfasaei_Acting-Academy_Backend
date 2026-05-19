@@ -776,12 +776,13 @@ enum MessageKind {
   FILE
   AUDIO
   VIDEO
+  CALL
   SYSTEM
 }
 
 model Message {
   id              String      @id @default(cuid())
-  content         Json
+  content         Json?
   conversation_id String
   created_at      DateTime    @default(now())
   edited_at       DateTime?
@@ -789,20 +790,28 @@ model Message {
   deleted_by_id   String?
   kind            MessageKind @default(TEXT)
   sender_id       String
-  read_at         DateTime?
 
-  reply_to_id  String?
-  attachments  Attachment[]
-  receipts     Receipt[]
-  reports      Report[]
-  reactions    MessageReaction[]
-  replies      Message[]         @relation("MessageReplies")
-  reply_to     Message?          @relation("MessageReplies", fields: [reply_to_id], references: [id])
-  conversation Conversation      @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  deleted_by   User?             @relation("MessageDeletedBy", fields: [deleted_by_id], references: [id], onDelete: Cascade)
-  sender       User              @relation("MessageSender", fields: [sender_id], references: [id], onDelete: Cascade)
+  reply_to_id     String?
+  call_session_id String?
+
+  attachments Attachment[]
+  receipts    Receipt[]
+  reports     Report[]
+  reactions   MessageReaction[]
+
+  replies  Message[] @relation("MessageReplies")
+  reply_to Message?  @relation("MessageReplies", fields: [reply_to_id], references: [id], onDelete: SetNull)
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  deleted_by   User?        @relation("MessageDeletedBy", fields: [deleted_by_id], references: [id], onDelete: SetNull)
+  sender       User         @relation("MessageSender", fields: [sender_id], references: [id], onDelete: Cascade)
+
+  call_session CallSession? @relation(fields: [call_session_id], references: [id], onDelete: SetNull)
 
   @@index([conversation_id, created_at])
+  @@index([sender_id])
+  @@index([reply_to_id])
+  @@index([call_session_id])
   @@map("messages")
 }
 
@@ -821,6 +830,7 @@ model MessageReaction {
 }
 
 enum ReceiptStatus {
+  SENT
   DELIVERED
   READ
 }
@@ -875,15 +885,17 @@ enum CallStatus {
 }
 
 model CallSession {
-  id              String            @id @default(cuid())
+  id              String     @id @default(cuid())
   conversation_id String
   kind            CallKind
-  status          CallStatus        @default(ONGOING)
+  status          CallStatus @default(ONGOING)
   started_by      String
-  started_at      DateTime          @default(now())
+  started_at      DateTime   @default(now())
   ended_at        DateTime?
-  participants    CallParticipant[]
-  conversation    Conversation      @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  participants CallParticipant[]
+  messages     Message[]
+  conversation Conversation      @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
 
   @@map("call_sessions")
 }

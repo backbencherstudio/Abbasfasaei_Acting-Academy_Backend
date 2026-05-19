@@ -10,7 +10,7 @@ import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class NotificationService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   // ─── Get All ───────────────────────────────────────────────────────
   async findAll(
@@ -150,7 +150,7 @@ export class NotificationService {
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────
-  private attachAvatarUrl(user: { avatar?: string;[key: string]: any }) {
+  private attachAvatarUrl(user: { avatar?: string; [key: string]: any }) {
     if (!user.avatar) return;
     const avatar = String(user.avatar);
     if (/^https?:\/\//i.test(avatar)) {

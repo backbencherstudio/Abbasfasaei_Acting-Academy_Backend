@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -12,7 +13,11 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
-import { CreateConversationDto } from './dto/create-conversation.dto';
+import {
+  AddMemberDto,
+  CreateConversationDto,
+  MarkAsReadDto,
+} from './dto/create-conversation.dto';
 import { id } from 'date-fns/locale';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
@@ -22,7 +27,10 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOkResponse } from '@nestjs/swagger';
 
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
-import { ConversationQueryDto } from './dto/query-conversation.dto';
+import {
+  ConversationQueryDto,
+  QueryGroupMembersDto,
+} from './dto/query-conversation.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('conversations')
@@ -43,9 +51,12 @@ export class ConversationsController {
     @Body() createConversationDto: CreateConversationDto,
     @UploadedFile() avatar?: Express.Multer.File,
   ) {
-    return this.service.createConversation(user_id, createConversationDto, avatar);
+    return this.service.createConversation(
+      user_id,
+      createConversationDto,
+      avatar,
+    );
   }
-
 
   // updated
   @Get()
@@ -58,64 +69,63 @@ export class ConversationsController {
 
   // updated
   @Patch(':conversation_id/read')
-  markRead(
+  markAsRead(
     @Param('conversation_id') conversation_id: string,
     @GetUser('userId') user_id: string,
+    @Body() markAsReadDto: MarkAsReadDto,
   ) {
-    return this.service.markRead(conversation_id, user_id);
+    return this.service.markAsRead(conversation_id, user_id, markAsReadDto);
   }
 
-
-
-
-
   // --- member management ---
-  // updated
+  //updated
   @Post(':conversation_id/members')
   addMembers(
     @Param('conversation_id') conversation_id: string,
     @GetUser('userId') user_id: string,
-    @Body() body: { memberIds: string[] },
+    @Body() addMemberDto: AddMemberDto,
   ) {
-    return this.service.addMembers(conversation_id, user_id, body.memberIds || []);
+    return this.service.addMembers(conversation_id, user_id, addMemberDto);
   }
 
-  @Get(':id/members')
+  // updated
+  @Get(':conversation_id/members')
   getMembers(
-    @Param('id') id: string,
-    @GetUser() user: any,
-    @Query('role') role?: MemberRole,
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+    @Query() query: QueryGroupMembersDto,
   ) {
-    return this.service.getGroupMembers(id, user.userId, role);
+    return this.service.getGroupMembers(conversation_id, user_id, query);
   }
 
-  @Patch(':id/members/:userId/role')
-  setRole(
-    @Param('id') id: string,
-    @Param('userId') targetUserId: string,
-    @GetUser() user: any,
+  // updated
+  @Patch(':conversation_id/members/:member_id/role')
+  updateMemberRole(
+    @Param('conversation_id') conversation_id: string,
+    @Param('member_id') member_id: string,
+    @GetUser('userId') user_id: string,
     @Body() body: { role: MemberRole },
   ) {
-    return this.service.setRole(id, user.userId, targetUserId, body.role);
+    return this.service.updateMemberRole(conversation_id, user_id, member_id, body.role);
   }
 
-  @Post(':id/members/:userId/remove')
-  remove(
-    @Param('id') id: string,
-    @Param('userId') targetUserId: string,
-    @GetUser() user: any,
+  // updated
+  @Delete(':conversation_id/members/:member_id')
+  removeMember(
+    @Param('conversation_id') conversation_id: string,
+    @Param('member_id') member_id: string,
+    @GetUser('userId') user_id: string,
   ) {
-    return this.service.removeMember(id, user.userId, targetUserId);
+    return this.service.removeMember(conversation_id, user_id, member_id);
   }
 
-  //------ clear conversation for me----
-  @Patch(':id/clear')
+
+  // updated
+  @Patch(':conversation_id/clear')
   clearForMe(
-    @Param('id') id,
-    @GetUser() user: any,
-    @Body() body?: { upTo?: string },
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
   ) {
-    const upTo = body?.upTo ? new Date(body.upTo) : undefined;
-    return this.service.clearForUser(id, user.userId, upTo);
+    return this.service.clearForMe(conversation_id, user_id);
   }
 }

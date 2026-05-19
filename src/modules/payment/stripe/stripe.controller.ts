@@ -19,7 +19,7 @@ import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.
 @Controller('payment/stripe')
 @DisAllowDeactivated()
 export class StripeController {
-  constructor(private readonly stripeService: StripeService) { }
+  constructor(private readonly stripeService: StripeService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Post('checkout')

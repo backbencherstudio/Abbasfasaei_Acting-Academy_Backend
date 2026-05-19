@@ -34,13 +34,13 @@ export class NotificationRepository {
     title?: string;
     content?: string;
     type?:
-    | 'message'
-    | 'comment'
-    | 'review'
-    | 'booking'
-    | 'payment_transaction'
-    | 'package'
-    | 'blog';
+      | 'message'
+      | 'comment'
+      | 'review'
+      | 'booking'
+      | 'payment_transaction'
+      | 'package'
+      | 'blog';
     entity_id?: string;
   }): Promise<Notification> {
     const notificationEventData = {};
@@ -80,13 +80,16 @@ export class NotificationRepository {
       },
     });
 
-    redisPublisher.publish('notification', JSON.stringify({
-      id: notification.id,
-      title: notificationEvent.title,
-      content: notificationEvent.content,
-      type: notificationEvent.type,
-      entity_id: notification.entity_id,
-    }));
+    redisPublisher.publish(
+      'notification',
+      JSON.stringify({
+        id: notification.id,
+        title: notificationEvent.title,
+        content: notificationEvent.content,
+        type: notificationEvent.type,
+        entity_id: notification.entity_id,
+      }),
+    );
 
     return notification;
   }

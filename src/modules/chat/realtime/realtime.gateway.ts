@@ -160,28 +160,28 @@ export class RealtimeGateway
       });
       return;
     }
-    try {
-      this.dbg('onJoin:incoming', { userId, body });
-      await this.conversationsService.ensureMember(body.conversationId, userId);
-      socket.join(`conv:${body.conversationId}`);
-      socket.emit('conversation:joined', {
-        conversationId: body.conversationId,
-      });
-      socket
-        .to(`conv:${body.conversationId}`)
-        .emit('presence:update', { userId, online: true });
-      this.dbg('onJoin:success', {
-        userId,
-        conversationId: body.conversationId,
-        rooms: Array.from(socket.rooms),
-      });
-    } catch (err) {
-      this.dbg('onJoin:failed', { userId, body, err: (err as any)?.message });
-      socket.emit('error:conversation', {
-        code: 'JOIN_FAILED',
-        message: 'Not a member of conversation',
-      });
-    }
+    // try {
+    //   this.dbg('onJoin:incoming', { userId, body });
+    //   await this.conversationsService.ensureMember(body.conversationId, userId);
+    //   socket.join(`conv:${body.conversationId}`);
+    //   socket.emit('conversation:joined', {
+    //     conversationId: body.conversationId,
+    //   });
+    //   socket
+    //     .to(`conv:${body.conversationId}`)
+    //     .emit('presence:update', { userId, online: true });
+    //   this.dbg('onJoin:success', {
+    //     userId,
+    //     conversationId: body.conversationId,
+    //     rooms: Array.from(socket.rooms),
+    //   });
+    // } catch (err) {
+    //   this.dbg('onJoin:failed', { userId, body, err: (err as any)?.message });
+    //   socket.emit('error:conversation', {
+    //     code: 'JOIN_FAILED',
+    //     message: 'Not a member of conversation',
+    //   });
+    // }
   }
 
   // Send a message
@@ -233,35 +233,35 @@ export class RealtimeGateway
     recent.push(now);
     this.messageTimestamps.set(userId, recent);
 
-    try {
-      await this.conversationsService.ensureMember(conversationId, userId);
-      this.dbg('onSend:validated', { userId, conversationId, kind });
-      const msg = await this.messagesService.sendMessage(
-        conversationId,
-        userId,
-        (kind as MessageKind) || MessageKind.TEXT,
-        content,
-      );
-      socket.to(`conv:${conversationId}`).emit('message:new', msg);
-      // Echo back for unified stream UX
-      socket.emit('message:new', msg);
-      socket.emit('message:ack', { messageId: msg.id });
-      this.dbg('onSend:delivered', {
-        messageId: msg.id,
-        conversationId,
-        userId,
-      });
-    } catch (e) {
-      this.dbg('onSend:failed', {
-        userId,
-        conversationId,
-        err: (e as any)?.message,
-      });
-      socket.emit('error:message', {
-        code: 'SEND_FAILED',
-        message: 'Failed to send message',
-      });
-    }
+    // try {
+    //   await this.conversationsService.ensureMember(conversationId, userId);
+    //   this.dbg('onSend:validated', { userId, conversationId, kind });
+    //   const msg = await this.messagesService.sendMessage(
+    //     conversationId,
+    //     userId,
+    //     (kind as MessageKind) || MessageKind.TEXT,
+    //     content,
+    //   );
+    //   socket.to(`conv:${conversationId}`).emit('message:new', msg);
+    //   // Echo back for unified stream UX
+    //   socket.emit('message:new', msg);
+    //   socket.emit('message:ack', { messageId: msg.id });
+    //   this.dbg('onSend:delivered', {
+    //     messageId: msg.id,
+    //     conversationId,
+    //     userId,
+    //   });
+    // } catch (e) {
+    //   this.dbg('onSend:failed', {
+    //     userId,
+    //     conversationId,
+    //     err: (e as any)?.message,
+    //   });
+    //   socket.emit('error:message', {
+    //     code: 'SEND_FAILED',
+    //     message: 'Failed to send message',
+    //   });
+    // }
   }
 
   // Handle typing event
@@ -305,16 +305,16 @@ export class RealtimeGateway
     @MessageBody() b: { conversationId: string; at?: string },
   ) {
     const userId = socket.data.userId as string;
-    await this.conversationsService.ensureMember(b.conversationId, userId);
-    await this.messagesService.markRead(
-      b.conversationId,
-      userId,
-      b.at ? new Date(b.at) : undefined,
-    );
-    this.io.to(`conv:${b.conversationId}`).emit('message:read', {
-      conversationId: b.conversationId,
-      userId,
-      at: b.at ?? new Date().toISOString(),
-    });
+    // await this.conversationsService.ensureMember(b.conversationId, userId);
+    // await this.messagesService.markRead(
+    //   b.conversationId,
+    //   userId,
+    //   b.at ? new Date(b.at) : undefined,
+    // );
+    // this.io.to(`conv:${b.conversationId}`).emit('message:read', {
+    //   conversationId: b.conversationId,
+    //   userId,
+    //   at: b.at ?? new Date().toISOString(),
+    // });
   }
 }

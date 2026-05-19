@@ -1151,10 +1151,10 @@ export class CoursesService {
       message: 'Assignment retrieved successfully',
       success: true,
       data: {
-        id: assignment.id,
-        title: assignment.title,
-        description: assignment.description,
-        attachments: assignment.attachments.map((attachment) => {
+        id: assignment?.id,
+        title: assignment?.title,
+        description: assignment?.description,
+        attachments: assignment?.attachments?.map((attachment) => {
           return {
             file_name: attachment.file_name,
             file_path: attachment.file_path
@@ -1163,16 +1163,16 @@ export class CoursesService {
             mime_type: attachment.mime_type,
           };
         }),
-        submission_date: assignment.submission_date,
-        total_marks: assignment.total_marks,
-        class_id: assignment.class.id,
+        submission_date: assignment?.submission_date,
+        total_marks: assignment?.total_marks,
+        class_id: assignment?.class?.id,
         instructor: {
-          id: assignment.class.module.course.instructor.id,
-          name: assignment.class.module.course.instructor.name,
+          id: assignment?.class?.module?.course?.instructor?.id,
+          name: assignment?.class?.module?.course?.instructor?.name,
         },
-        submissions: assignment._count.submissions,
-        grades: assignment._count.grades,
-        average_score: average_score._avg.grade_number ?? 0,
+        submissions: assignment?._count?.submissions,
+        grades: assignment?._count?.grades,
+        average_score: average_score?._avg?.grade_number ?? 0,
       },
     };
   }
@@ -1477,7 +1477,7 @@ export class CoursesService {
         const filename = NajimStorage.generateFileName(file.originalname);
         const objectKey = `${appConfig().storageUrl.class_assets}/${filename}`;
 
-        await NajimStorage.put(objectKey, file);
+        await NajimStorage.put(objectKey, file.buffer);
 
         let fileType: AttachmentType = 'FILE';
         if (file.mimetype.startsWith('video/')) fileType = 'VIDEO';

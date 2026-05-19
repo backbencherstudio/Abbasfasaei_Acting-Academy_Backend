@@ -32,197 +32,197 @@ export class RtcService {
     private convs: ConversationsService,
   ) {}
 
-  validateEnv(): string | null {
-    if (!this.apiKey || !this.apiSecret || !this.publicUrl) {
-      return 'LiveKit env vars missing (LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL or LIVEKIT_PUBLIC_URL)';
-    }
-    if (this.publicUrl.includes('your-livekit-host')) {
-      return 'LIVEKIT_URL is still the placeholder (wss://your-livekit-host:7880). Set it to your LiveKit server, e.g. ws://localhost:7880 for local dev.';
-    }
-    return null;
-  }
+  // validateEnv(): string | null {
+  //   if (!this.apiKey || !this.apiSecret || !this.publicUrl) {
+  //     return 'LiveKit env vars missing (LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL or LIVEKIT_PUBLIC_URL)';
+  //   }
+  //   if (this.publicUrl.includes('your-livekit-host')) {
+  //     return 'LIVEKIT_URL is still the placeholder (wss://your-livekit-host:7880). Set it to your LiveKit server, e.g. ws://localhost:7880 for local dev.';
+  //   }
+  //   return null;
+  // }
 
-  private async createLivekitToken(
-    userId: string,
-    roomName: string,
-    opts?: { displayName?: string; audioOnly?: boolean },
-  ): Promise<LivekitTokenResponse> {
-    const error = this.validateEnv();
-    if (error) throw new BadRequestException(error);
+  // private async createLivekitToken(
+  //   userId: string,
+  //   roomName: string,
+  //   opts?: { displayName?: string; audioOnly?: boolean },
+  // ): Promise<LivekitTokenResponse> {
+  //   const error = this.validateEnv();
+  //   if (error) throw new BadRequestException(error);
 
-    if (!userId) throw new BadRequestException('userId is required');
-    if (!roomName || !this.roomRegex.test(roomName)) {
-      throw new BadRequestException('Invalid room name');
-    }
+  //   if (!userId) throw new BadRequestException('userId is required');
+  //   if (!roomName || !this.roomRegex.test(roomName)) {
+  //     throw new BadRequestException('Invalid room name');
+  //   }
 
-    const at = new AccessToken(this.apiKey!, this.apiSecret!, {
-      identity: userId,
-      name: opts?.displayName || userId,
-      ttl: this.tokenTtlSeconds,
-    });
+  //   const at = new AccessToken(this.apiKey!, this.apiSecret!, {
+  //     identity: userId,
+  //     name: opts?.displayName || userId,
+  //     ttl: this.tokenTtlSeconds,
+  //   });
 
-    at.addGrant({
-      room: roomName,
-      roomJoin: true,
-      canPublish: true,
-      canSubscribe: true,
-      canPublishData: true,
-    });
+  //   at.addGrant({
+  //     room: roomName,
+  //     roomJoin: true,
+  //     canPublish: true,
+  //     canSubscribe: true,
+  //     canPublishData: true,
+  //   });
 
-    const jwt = await at.toJwt();
-    return {
-      token: jwt,
-      roomName,
-      url: this.publicUrl!,
-      audioOnlySuggested: !!opts?.audioOnly,
-    };
-  }
+  //   const jwt = await at.toJwt();
+  //   return {
+  //     token: jwt,
+  //     roomName,
+  //     url: this.publicUrl!,
+  //     audioOnlySuggested: !!opts?.audioOnly,
+  //   };
+  // }
 
-  // ---- Call session lifecycle ----
-  // Build a slug from conversation info (title for groups, combined names for DMs) + short id suffix for uniqueness
-  private buildConversationRoomName(conv: any): string {
-    let base: string;
-    if (conv.type === 'GROUP') {
-      base = conv.title?.trim() || 'group';
-    } else {
-      // DM: derive from up to 2 participant names (excluding null). Fallback to 'dm'.
-      const names = (conv.memberships || [])
-        .map((m) => m.user?.name || '')
-        .filter(Boolean)
-        .slice(0, 2);
-      base = names.length === 2 ? `${names[0]}-${names[1]}` : names[0] || 'dm';
-    }
-    const slug =
-      base
-        .toLowerCase()
-        .replace(/[^a-z0-9_-]+/g, '-') // allowed chars
-        .replace(/-{2,}/g, '-')
-        .replace(/^[-_]+|[-_]+$/g, '')
-        .slice(0, 40) || 'room';
-    const suffix = conv.id.slice(0, 6).toLowerCase();
-    const room = `${slug}-${suffix}`;
-    // Ensure fits regex & length boundaries
-    if (!this.roomRegex.test(room)) {
-      return `room-${suffix}`; // guaranteed fallback
-    }
-    return room;
-  }
+  // // ---- Call session lifecycle ----
+  // // Build a slug from conversation info (title for groups, combined names for DMs) + short id suffix for uniqueness
+  // private buildConversationRoomName(conv: any): string {
+  //   let base: string;
+  //   if (conv.type === 'GROUP') {
+  //     base = conv.title?.trim() || 'group';
+  //   } else {
+  //     // DM: derive from up to 2 participant names (excluding null). Fallback to 'dm'.
+  //     const names = (conv.memberships || [])
+  //       .map((m) => m.user?.name || '')
+  //       .filter(Boolean)
+  //       .slice(0, 2);
+  //     base = names.length === 2 ? `${names[0]}-${names[1]}` : names[0] || 'dm';
+  //   }
+  //   const slug =
+  //     base
+  //       .toLowerCase()
+  //       .replace(/[^a-z0-9_-]+/g, '-') // allowed chars
+  //       .replace(/-{2,}/g, '-')
+  //       .replace(/^[-_]+|[-_]+$/g, '')
+  //       .slice(0, 40) || 'room';
+  //   const suffix = conv.id.slice(0, 6).toLowerCase();
+  //   const room = `${slug}-${suffix}`;
+  //   // Ensure fits regex & length boundaries
+  //   if (!this.roomRegex.test(room)) {
+  //     return `room-${suffix}`; // guaranteed fallback
+  //   }
+  //   return room;
+  // }
 
-  async startCall(conversationId: string, userId: string, kind: CallKind) {
-    await this.convs.ensureMember(conversationId, userId);
-    // ensure no active session
-    const existing = await this.prisma.callSession.findFirst({
-      where: { conversationId, endedAt: null },
-      select: { id: true },
-    });
-    if (existing) {
-      return { ok: true, alreadyActive: true, callId: existing.id };
-    }
-    const call = await this.prisma.callSession.create({
-      data: { conversationId, kind, startedBy: userId },
-      select: { id: true, startedAt: true, kind: true },
-    });
-    return { ok: true, call };
-  }
+  // async startCall(conversationId: string, userId: string, kind: CallKind) {
+  //   await this.convs.ensureMember(conversationId, userId);
+  //   // ensure no active session
+  //   const existing = await this.prisma.callSession.findFirst({
+  //     where: { conversationId, endedAt: null },
+  //     select: { id: true },
+  //   });
+  //   if (existing) {
+  //     return { ok: true, alreadyActive: true, callId: existing.id };
+  //   }
+  //   const call = await this.prisma.callSession.create({
+  //     data: { conversationId, kind, startedBy: userId },
+  //     select: { id: true, startedAt: true, kind: true },
+  //   });
+  //   return { ok: true, call };
+  // }
 
-  async joinCall(conversationId: string, userId: string) {
-    await this.convs.ensureMember(conversationId, userId);
-    const session = await this.prisma.callSession.findFirst({
-      where: { conversationId, endedAt: null },
-      select: { id: true },
-    });
-    if (!session) throw new BadRequestException('No active call');
-    // upsert participant (idempotent)
-    const existing = await this.prisma.callParticipant.findFirst({
-      where: { callId: session.id, userId },
-      select: { id: true },
-    });
-    if (!existing) {
-      await this.prisma.callParticipant.create({
-        data: { callId: session.id, userId },
-      });
-    }
-    return { ok: true, callId: session.id };
-  }
+  // async joinCall(conversationId: string, userId: string) {
+  //   await this.convs.ensureMember(conversationId, userId);
+  //   const session = await this.prisma.callSession.findFirst({
+  //     where: { conversationId, endedAt: null },
+  //     select: { id: true },
+  //   });
+  //   if (!session) throw new BadRequestException('No active call');
+  //   // upsert participant (idempotent)
+  //   const existing = await this.prisma.callParticipant.findFirst({
+  //     where: { callId: session.id, userId },
+  //     select: { id: true },
+  //   });
+  //   if (!existing) {
+  //     await this.prisma.callParticipant.create({
+  //       data: { callId: session.id, userId },
+  //     });
+  //   }
+  //   return { ok: true, callId: session.id };
+  // }
 
-  async leaveCall(conversationId: string, userId: string) {
-    await this.convs.ensureMember(conversationId, userId);
-    const session = await this.prisma.callSession.findFirst({
-      where: { conversationId, endedAt: null },
-      select: { id: true },
-    });
-    if (!session) return { ok: true, alreadyEnded: true };
-    await this.prisma.callParticipant.deleteMany({
-      where: { callId: session.id, userId },
-    });
-    return { ok: true };
-  }
+  // async leaveCall(conversationId: string, userId: string) {
+  //   await this.convs.ensureMember(conversationId, userId);
+  //   const session = await this.prisma.callSession.findFirst({
+  //     where: { conversationId, endedAt: null },
+  //     select: { id: true },
+  //   });
+  //   if (!session) return { ok: true, alreadyEnded: true };
+  //   await this.prisma.callParticipant.deleteMany({
+  //     where: { callId: session.id, userId },
+  //   });
+  //   return { ok: true };
+  // }
 
-  async endCall(conversationId: string, userId: string) {
-    await this.convs.ensureMember(conversationId, userId);
-    const session = await this.prisma.callSession.findFirst({
-      where: { conversationId, endedAt: null },
-      select: { id: true, startedBy: true },
-    });
-    if (!session) return { ok: true, alreadyEnded: true };
-    if (session.startedBy !== userId) {
-      // allow any member to end if starter gone (future enhancement: check presence)
-      // For now, permit any member:
-    }
-    await this.prisma.callSession.update({
-      where: { id: session.id },
-      data: { endedAt: new Date() },
-    });
-    return { ok: true };
-  }
+  // async endCall(conversationId: string, userId: string) {
+  //   await this.convs.ensureMember(conversationId, userId);
+  //   const session = await this.prisma.callSession.findFirst({
+  //     where: { conversationId, endedAt: null },
+  //     select: { id: true, startedBy: true },
+  //   });
+  //   if (!session) return { ok: true, alreadyEnded: true };
+  //   if (session.startedBy !== userId) {
+  //     // allow any member to end if starter gone (future enhancement: check presence)
+  //     // For now, permit any member:
+  //   }
+  //   await this.prisma.callSession.update({
+  //     where: { id: session.id },
+  //     data: { endedAt: new Date() },
+  //   });
+  //   return { ok: true };
+  // }
 
-  async issueCallToken(conversationId: string, userId: string) {
-    // Ensure active call session exists (auto start for DM convenience?)
-    await this.convs.ensureMember(conversationId, userId);
-    let session = await this.prisma.callSession.findFirst({
-      where: { conversationId, endedAt: null },
-      select: { id: true },
-    });
-    if (!session) {
-      // Auto start for DM, deny for group? We'll auto start universally for simplicity.
-      session = await this.prisma.callSession.create({
-        data: { conversationId, kind: 'VIDEO', startedBy: userId },
-        select: { id: true },
-      });
-    }
-    // Add participant record
-    await this.joinCall(conversationId, userId);
-    // Fetch conversation details to build human-friendly slug
-    const conv = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: {
-        id: true,
-        type: true,
-        title: true,
-        memberships: { select: { user: { select: { name: true } } } },
-      },
-    });
-    if (!conv) throw new BadRequestException('Conversation not found');
-    const roomName = this.buildConversationRoomName(conv);
-    return this.createLivekitToken(userId, roomName);
-  }
+  // async issueCallToken(conversationId: string, userId: string) {
+  //   // Ensure active call session exists (auto start for DM convenience?)
+  //   await this.convs.ensureMember(conversationId, userId);
+  //   let session = await this.prisma.callSession.findFirst({
+  //     where: { conversationId, endedAt: null },
+  //     select: { id: true },
+  //   });
+  //   if (!session) {
+  //     // Auto start for DM, deny for group? We'll auto start universally for simplicity.
+  //     session = await this.prisma.callSession.create({
+  //       data: { conversationId, kind: 'VIDEO', startedBy: userId },
+  //       select: { id: true },
+  //     });
+  //   }
+  //   // Add participant record
+  //   await this.joinCall(conversationId, userId);
+  //   // Fetch conversation details to build human-friendly slug
+  //   const conv = await this.prisma.conversation.findUnique({
+  //     where: { id: conversationId },
+  //     select: {
+  //       id: true,
+  //       type: true,
+  //       title: true,
+  //       memberships: { select: { user: { select: { name: true } } } },
+  //     },
+  //   });
+  //   if (!conv) throw new BadRequestException('Conversation not found');
+  //   const roomName = this.buildConversationRoomName(conv);
+  //   return this.createLivekitToken(userId, roomName);
+  // }
 
-  health() {
-    const envError = this.validateEnv();
-    return {
-      ok: !envError,
-      error: envError || null,
-      url: this.publicUrl,
-      apiKeyPresent: !!this.apiKey,
-      tokenTtlSeconds: this.tokenTtlSeconds,
-    };
-  }
+  // health() {
+  //   const envError = this.validateEnv();
+  //   return {
+  //     ok: !envError,
+  //     error: envError || null,
+  //     url: this.publicUrl,
+  //     apiKeyPresent: !!this.apiKey,
+  //     tokenTtlSeconds: this.tokenTtlSeconds,
+  //   };
+  // }
 
-  async getConversationMemberIds(conversationId: string): Promise<string[]> {
-    const members = await this.prisma.membership.findMany({
-      where: { conversationId },
-      select: { userId: true },
-    });
-    return members.map((m) => m.userId);
-  }
+  // async getConversationMemberIds(conversationId: string): Promise<string[]> {
+  //   const members = await this.prisma.membership.findMany({
+  //     where: { conversationId },
+  //     select: { userId: true },
+  //   });
+  //   return members.map((m) => m.userId);
+  // }
 }

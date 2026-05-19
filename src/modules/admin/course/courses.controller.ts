@@ -449,7 +449,7 @@ export class CoursesController {
     @UploadedFiles(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 50 }),
+          new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 1024 }),
 
           new FileTypeValidator({
             fileType:
