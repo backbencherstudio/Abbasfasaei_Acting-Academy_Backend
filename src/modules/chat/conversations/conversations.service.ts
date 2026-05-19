@@ -21,7 +21,7 @@ import {
 
 @Injectable()
 export class ConversationsService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async createConversation(
     user_id: string,
@@ -238,8 +238,8 @@ export class ConversationsService {
       take: limit,
       cursor: cursor
         ? {
-          id: cursor,
-        }
+            id: cursor,
+          }
         : undefined,
     });
     return {

@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import appConfig from '../../../config/app.config';
 import { ArrayHelper } from '../../helper/array.helper';
 import { Role } from '../../guard/role/role.enum';
+import { UserStatus } from 'src/common/constants/user-status.enum';
 
 const prisma = new PrismaClient();
 
@@ -301,6 +302,7 @@ export class UserRepository {
       phone_number,
       experience,
       join_date,
+      status,
       role_id = null,
       type = 'user',
     }: {
@@ -311,6 +313,7 @@ export class UserRepository {
       experience?: string;
       join_date?: Date;
       role_id?: string;
+      status?: UserStatus;
       type?: string;
     },
   ) {
@@ -349,6 +352,10 @@ export class UserRepository {
       }
       if (join_date) {
         data['joined_at'] = join_date;
+      }
+
+      if (status) {
+        data['status'] = status;
       }
 
       if (ArrayHelper.inArray(type, Object.values(Role))) {

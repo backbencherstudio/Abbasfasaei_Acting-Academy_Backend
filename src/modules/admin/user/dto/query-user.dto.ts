@@ -12,7 +12,7 @@ export class QueryUserDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @Transform(({ value }) => (Role[value] ? Role[value] : undefined))
+  @Transform(({ value }) => (Role[value.toUpperCase()] ? Role[value.toUpperCase()] : undefined))
   @IsEnum(Role)
   type?: Role;
 
@@ -30,7 +30,7 @@ export class QueryUserDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @Transform(({ value }) => (UserStatus[value] ? UserStatus[value] : undefined))
+  @Transform(({ value }) => (UserStatus[value.toUpperCase()] ? UserStatus[value.toUpperCase()] : undefined))
   @IsEnum(UserStatus)
   status?: UserStatus;
 }

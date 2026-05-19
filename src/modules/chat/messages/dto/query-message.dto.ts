@@ -19,7 +19,7 @@ export class CursorPaginationDto {
   @IsInt()
   @Min(1)
   @Max(500)
-  take: number = 20;
+  limit: number = 20;
 }
 
 export class SearchMessagesDto {

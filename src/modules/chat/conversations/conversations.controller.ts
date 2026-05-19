@@ -36,7 +36,7 @@ import {
 @Controller('conversations')
 @DisAllowDeactivated()
 export class ConversationsController {
-  constructor(private readonly service: ConversationsService) { }
+  constructor(private readonly service: ConversationsService) {}
 
   // updated
   @Post()
@@ -77,7 +77,6 @@ export class ConversationsController {
     return this.service.markAsRead(conversation_id, user_id, markAsReadDto);
   }
 
-
   //updated
   @Post(':conversation_id/members')
   addMembers(
@@ -106,7 +105,12 @@ export class ConversationsController {
     @GetUser('userId') user_id: string,
     @Body() body: { role: MemberRole },
   ) {
-    return this.service.updateMemberRole(conversation_id, user_id, member_id, body.role);
+    return this.service.updateMemberRole(
+      conversation_id,
+      user_id,
+      member_id,
+      body.role,
+    );
   }
 
   // updated

@@ -39,22 +39,20 @@ import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.
 @Controller()
 @DisAllowDeactivated()
 export class MessagesController {
-  constructor(private readonly service: MessagesService) {}
+  constructor(private readonly service: MessagesService) { }
 
-  // @Get('conversations/:id/messages')
-  // @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-  // list(
-  //   @Param('id') conversationId: string,
-  //   @GetUser() user: any,
-  //   @Query() query: CursorPaginationDto,
-  // ) {
-  //   return this.service.list(
-  //     conversationId,
-  //     user.userId,
-  //     query.cursor,
-  //     query.take,
-  //   );
-  // }
+  @Get('conversations/:conversation_id/messages')
+  getConversationMessages(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+    @Query() query: CursorPaginationDto,
+  ) {
+    return this.service.getConversationMessages(
+      conversation_id,
+      user_id,
+      query
+    );
+  }
 
   // @Post('conversations/:id/messages')
   // sendMessage(

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma, MessageKind, ConversationType } from '@prisma/client';
 import { ConversationsService } from '../conversations/conversations.service';
@@ -12,6 +13,7 @@ import { UsersService } from '../users/users.service';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { StringHelper } from 'src/common/helper/string.helper';
+import { CursorPaginationDto } from './dto/query-message.dto';
 
 @Injectable()
 export class MessagesService {
@@ -19,7 +21,7 @@ export class MessagesService {
     private prisma: PrismaService,
     private conv: ConversationsService,
     private users: UsersService,
-  ) {}
+  ) { }
 
   // private resolveAvatarUrl(avatar?: string | null) {
   //   if (!avatar) return null;
@@ -35,48 +37,96 @@ export class MessagesService {
   //  * List messages in a conversation with cursor pagination.
   //  * Respects per-user "clearedAt" (clear chat for me) and global soft-deletes.
   //  */
-  // async list(
-  //   conversationId: string,
-  //   userId: string,
-  //   cursor?: string,
-  //   take = 50,
-  // ) {
-  //   await this.conv.ensureMember(conversationId, userId);
+  async getConversationMessages(
+    conversation_id: string,
+    user_id: string,
+    query: CursorPaginationDto,
+  ) {
 
-  //   const me = await this.prisma.membership.findFirst({
-  //     where: { conversationId, userId },
-  //     select: { clearedAt: true },
-  //   });
-  //   if (!me) throw new ForbiddenException('Not a member of this conversation');
+    if (!user_id) throw new UnauthorizedException('Please login first')
+    if (!conversation_id) throw new BadRequestException('Invalid conversation id')
 
-  //   const floor = me.clearedAt ?? new Date(0);
 
-  //   const items = await this.prisma.message.findMany({
-  //     where: {
-  //       conversationId,
-  //       deletedAt: null,
-  //       createdAt: { gt: floor }, // hide everything cleared for THIS user
-  //     },
-  //     orderBy: { createdAt: 'desc' },
-  //     take,
-  //     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-  //     include: {
-  //       sender: {
-  //         select: { id: true, name: true, avatar: true },
-  //       },
-  //     },
-  //   });
+    const membership = await this.prisma.membership.findFirst({
+      where: {
+        conversation_id: conversation_id,
+        user_id: user_id,
+      },
+      select: { id: true, cleared_at: true }
+    })
 
-  //   const nextCursor =
-  //     items.length === take ? items[items.length - 1].id : null;
+    if (!membership) throw new NotFoundException('Conversation not found')
+    const { cursor, limit } = query
 
-  //   const normalizedItems = items.map((m) => ({
-  //     ...m,
-  //     senderAvatarUrl: this.resolveAvatarUrl(m.sender?.avatar),
-  //   }));
+    const messages = await this.prisma.message.findMany({
+      where: {
+        AND: [
+          { conversation_id },
+          { deleted_at: null },
+          { created_at: { gt: membership.cleared_at } },
+          {
+            OR: [
+              {
+                receipts: {
+                  some: {
+                    user_id: user_id,
+                  },
+                },
+              },
+              {
+                sender_id: user_id,
+              },
+            ],
+          },
+        ],
+      },
+      select: {
+        id: true,
+        conversation_id: true,
+        kind: true,
+        content: true,
+        attachments: {
+          select: {
+            file_name: true,
+            file_path: true,
+            mime_type: true,
+            type: true,
+          },
+          orderBy: { created_at: 'asc' },
+        },
+        created_at: true,
+        deleted_at: true,
+        sender: {
+          select: { id: true, name: true, avatar: true }
+        }
+      },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      skip: cursor ? 1 : 0,
+      cursor: cursor ? { id: cursor } : undefined,
+    })
 
-  //   return { items: normalizedItems, nextCursor };
-  // }
+    return {
+      success: true,
+      message: "Message fetched successfully",
+      data: messages.map(m => {
+        const { sender, attachments } = m
+        return {
+          ...m,
+          attachments: attachments.map(attachment => {
+            return {
+              ...attachment,
+              file_path: attachment?.file_path ? NajimStorage.url(attachment?.file_path) : null,
+            }
+          }),
+          sender: {
+            ...sender,
+            avatar: sender?.avatar ? NajimStorage.url(sender?.avatar) : null,
+          }
+        }
+      })
+    }
+  }
 
   // async sendMessage(
   //   conversationId: string,

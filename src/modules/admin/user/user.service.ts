@@ -16,7 +16,7 @@ import { UserStatus } from 'src/common/constants/user-status.enum';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(createUserDto: CreateUserDto, admin_id: string) {
     if (!admin_id) {
@@ -42,8 +42,8 @@ export class UserService {
       throw new UnauthorizedException('User not found');
     }
 
-    const where: Prisma.UserWhereInput = {};
     const { page, limit, status, type, search } = query;
+    const where: Prisma.UserWhereInput = {};
     if (search) {
       where['OR'] = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -56,6 +56,9 @@ export class UserService {
 
     if (type) {
       where['type'] = type;
+    }
+    if (status) {
+      where['status'] = status;
     }
 
     const users = await this.prisma.user.findMany({
