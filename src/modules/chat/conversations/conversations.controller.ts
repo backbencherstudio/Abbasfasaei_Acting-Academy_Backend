@@ -77,7 +77,7 @@ export class ConversationsController {
     return this.service.markAsRead(conversation_id, user_id, markAsReadDto);
   }
 
-  // --- member management ---
+
   //updated
   @Post(':conversation_id/members')
   addMembers(
@@ -118,7 +118,6 @@ export class ConversationsController {
   ) {
     return this.service.removeMember(conversation_id, user_id, member_id);
   }
-
 
   // updated
   @Patch(':conversation_id/clear')

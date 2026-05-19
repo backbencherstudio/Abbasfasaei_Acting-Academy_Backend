@@ -220,7 +220,7 @@ export class UserRepository {
         data['experience'] = experience;
       }
       if (join_date) {
-        data['join_date'] = join_date;
+        data['joined_at'] = join_date;
       }
       if (email) {
         // Check if email already exist
@@ -348,7 +348,7 @@ export class UserRepository {
         data['experience'] = experience;
       }
       if (join_date) {
-        data['join_date'] = join_date;
+        data['joined_at'] = join_date;
       }
 
       if (ArrayHelper.inArray(type, Object.values(Role))) {
