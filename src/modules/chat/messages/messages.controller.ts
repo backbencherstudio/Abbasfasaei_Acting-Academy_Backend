@@ -13,8 +13,8 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { MessagesService } from './messages.service';
-import { UseInterceptors, UploadedFile } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage, memoryStorage } from 'multer';
 import { extname } from 'path';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
@@ -39,7 +39,7 @@ import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.
 @Controller()
 @DisAllowDeactivated()
 export class MessagesController {
-  constructor(private readonly service: MessagesService) { }
+  constructor(private readonly service: MessagesService) {}
 
   @Get('conversations/:conversation_id/messages')
   getConversationMessages(
@@ -50,23 +50,40 @@ export class MessagesController {
     return this.service.getConversationMessages(
       conversation_id,
       user_id,
-      query
+      query,
     );
   }
 
-  // @Post('conversations/:id/messages')
-  // sendMessage(
-  //   @Param('id') conversationId: string,
-  //   @GetUser() user: any,
-  //   @Body() dto: SendMessageDto,
-  // ) {
-  //   return this.service.sendMessage(
-  //     conversationId,
-  //     user.userId,
-  //     dto.kind,
-  //     dto.content,
-  //   );
-  // }
+  @Post('conversations/:conversation_id/messages')
+  @UseInterceptors(
+    FilesInterceptor('attachments', 10, {
+      storage: memoryStorage(),
+      fileFilter: (_req, file, cb) => {
+        if (
+          !file.originalname.match(
+            /.(jpg|jpeg|png|gif|mp4|mpeg|mkv|mov|avi|webp|pdf|doc|docx|txt|zip|rar)$/i,
+          )
+        ) {
+          return cb(new BadRequestException('Invalid file type'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  sendMessage(
+    @Param('conversation_id') conversationId: string,
+    @GetUser('userId') user_id: string,
+    @Body() sendMessageDto: SendMessageDto,
+    @UploadedFiles() attachments?: Express.Multer.File[],
+  ) {
+    return this.service.sendMessage(
+      conversationId,
+      user_id,
+      sendMessageDto,
+      attachments,
+    );
+  }
 
   // // /messages/search?q=hello&conversationId=...&take=20&skip=0
   // @Get('messages/search')

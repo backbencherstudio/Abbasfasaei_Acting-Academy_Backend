@@ -10,6 +10,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { QueryCommunityDto } from './dto/query-community.dto';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
+import { UpdateCommunityStatusDto } from './dto/update-community.dto';
 
 @Injectable()
 export class CommunityService {
@@ -226,9 +227,15 @@ export class CommunityService {
     };
   }
 
-  async changePostStatus(user_id: string, post_id: string, status: PostStatus) {
+  async changePostStatus(
+    user_id: string,
+    post_id: string,
+    updateCommunityStatusDto: UpdateCommunityStatusDto,
+  ) {
     if (!user_id) throw new UnauthorizedException('Unauthorized');
     if (!post_id) throw new BadRequestException('Post not found');
+    const { status } = updateCommunityStatusDto;
+    if (!status) throw new BadRequestException('Status is required');
 
     const post = await this.prisma.communityPost.update({
       where: { id: post_id },

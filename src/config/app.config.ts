@@ -98,6 +98,7 @@ export default () => ({
     community: '/community',
     media: '/media',
     conversation_avatar: '/conversation/avatar',
+    message_attachments: '/conversation/attachments',
   },
 
   defaultUser: {

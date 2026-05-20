@@ -56,9 +56,9 @@ export class SendMessageDto {
   })
   content?: Record<string, any>;
 
-  @IsOptional()
   @IsString()
-  media_Url?: string;
+  @IsOptional()
+  reply_to_id?: string;
 }
 
 export class MarkAsReadDto {

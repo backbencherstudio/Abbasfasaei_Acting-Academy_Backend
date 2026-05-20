@@ -23,6 +23,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
 import {
+  QueryCommunityAllowedListDto,
   QueryCommunityFeedDto,
   QueryCommunityPostLikesDto,
 } from './dto/query-community.dto';
@@ -66,6 +67,16 @@ export class CommunityController {
     @Query() query: QueryCommunityFeedDto,
   ) {
     return this.service.getFeed(user_id, query);
+  }
+
+  // updated
+  @Get('post/:post_id/allowed_list')
+  getAllowedList(
+    @Param('post_id') post_id: string,
+    @GetUser('userId') user_id: string,
+    @Query() query: QueryCommunityAllowedListDto,
+  ) {
+    return this.service.getAllowedList(user_id, post_id, query);
   }
 
   // updated

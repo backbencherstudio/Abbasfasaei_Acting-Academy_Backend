@@ -8,13 +8,13 @@ export class PaginationDto {
   @IsOptional()
   @Transform(({ value }) => (value ? Number(value) : 1))
   @IsNumber()
-  page?: number;
+  page?: number = 1;
 
   @ApiPropertyOptional()
   @IsOptional()
   @Transform(({ value }) => (value ? Number(value) : 10))
   @IsNumber()
-  limit?: number;
+  limit?: number = 10;
 }
 
 export class QueryCommunityDto extends PaginationDto {

@@ -15,6 +15,7 @@ import { UpdatePostDto } from './dto/update-community.dto';
 import { UserStatus } from 'src/common/constants/user-status.enum';
 import { PostStatus, PostType, PostVisibility, Prisma } from '@prisma/client';
 import {
+  QueryCommunityAllowedListDto,
   QueryCommunityFeedDto,
   QueryCommunityPostLikesDto,
 } from './dto/query-community.dto';
@@ -27,11 +28,17 @@ export class CommunityService {
     const post = await this.prisma.communityPost.findFirst({
       where: {
         id: post_id,
-        author: { status: UserStatus.ACTIVE },
         OR: [
           { author_id: user_id },
           {
-            status: { in: [PostStatus.APPROVED, PostStatus.ANNOUNCEMENT] },
+            author: { status: UserStatus.ACTIVE },
+            status: {
+              in: [
+                PostStatus.APPROVED,
+                PostStatus.ANNOUNCEMENT,
+                PostStatus.FLAGGED,
+              ],
+            },
             OR: [
               { visibility: PostVisibility.PUBLIC },
               { allowed_friends: { some: { id: user_id } } },
@@ -274,14 +281,24 @@ export class CommunityService {
     const { user_id, search, cursor, limit } = query;
 
     const where: Prisma.CommunityPostWhereInput = {
-      status: { in: [PostStatus.APPROVED, PostStatus.ANNOUNCEMENT] },
-      author: { status: UserStatus.ACTIVE },
       AND: [
         {
           OR: [
-            { visibility: PostVisibility.PUBLIC },
             { author_id: my_id },
-            { allowed_friends: { some: { id: my_id } } },
+            {
+              author: { status: UserStatus.ACTIVE },
+              status: {
+                in: [
+                  PostStatus.APPROVED,
+                  PostStatus.ANNOUNCEMENT,
+                  PostStatus.FLAGGED,
+                ],
+              },
+              OR: [
+                { visibility: PostVisibility.PUBLIC },
+                { allowed_friends: { some: { id: my_id } } },
+              ],
+            },
           ],
         },
       ],
@@ -303,7 +320,9 @@ export class CommunityService {
     }
 
     if (user_id) {
-      where.author_id = user_id;
+      (where.AND as Prisma.CommunityPostWhereInput[]).push({
+        author_id: user_id,
+      });
     }
 
     const posts = await this.prisma.communityPost.findMany({
@@ -314,14 +333,14 @@ export class CommunityService {
         post_type: true,
         visibility: true,
         status: true,
-        allowed_friends: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            avatar: true,
-          },
-        },
+        // allowed_friends: {
+        //   select: {
+        //     id: true,
+        //     name: true,
+        //     username: true,
+        //     avatar: true,
+        //   },
+        // },
         author: {
           select: {
             id: true,
@@ -432,6 +451,58 @@ export class CommunityService {
     };
   }
 
+  async getAllowedList(
+    user_id: string,
+    post_id: string,
+    query: QueryCommunityAllowedListDto,
+  ) {
+    if (!user_id) throw new UnauthorizedException('user not found');
+    if (!post_id) throw new BadRequestException('invalid post id');
+
+    const { cursor, limit } = query;
+    const post = await this.prisma.communityPost.findUnique({
+      where: { id: post_id },
+      select: {
+        id: true,
+        allowed_friends: {
+          select: {
+            id: true,
+            avatar: true,
+            username: true,
+            name: true,
+          },
+          take: limit + 1,
+          cursor: cursor ? { id: cursor } : undefined,
+          orderBy: { created_at: 'desc' },
+        },
+      },
+    });
+    if (!post) {
+      throw new NotFoundException('post not found');
+    }
+
+    const nextCursor =
+      post.allowed_friends.length > limit
+        ? post.allowed_friends[post.allowed_friends.length - 1].id
+        : null;
+    if (post.allowed_friends.length > limit) {
+      post.allowed_friends.pop();
+    }
+
+    return {
+      success: true,
+      message: 'Allowed list fetched successfully',
+      data: post?.allowed_friends?.map((friend) => ({
+        ...friend,
+        avatar: friend.avatar ? NajimStorage.url(friend.avatar) : null,
+      })),
+      meta_data: {
+        limit,
+        next_cursor: nextCursor,
+      },
+    };
+  }
+
   async getLikes(
     post_id: string,
     user_id: string,
@@ -443,7 +514,15 @@ export class CommunityService {
     const { cursor, limit } = query;
     const where: Prisma.CommunityLikeWhereInput = {
       post_id: post_id,
-      post: { status: 'APPROVED' },
+      post: {
+        status: {
+          in: [
+            PostStatus.APPROVED,
+            PostStatus.ANNOUNCEMENT,
+            PostStatus.FLAGGED,
+          ],
+        },
+      },
     };
     const likes = await this.prisma.communityLike.findMany({
       where,

@@ -23,6 +23,7 @@ import { QueryCommunityDto } from './dto/query-community.dto';
 import { PostStatus } from '@prisma/client';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import { UpdateCommunityStatusDto } from './dto/update-community.dto';
 
 @ApiBearerAuth()
 @ApiTags('Community')
@@ -74,9 +75,13 @@ export class CommunityController {
   updatePostStatus(
     @Param('post_id') post_id: string,
     @GetUser('userId') user_id: string,
-    @Body('status') status: PostStatus,
+    @Body() updateCommunityStatusDto: UpdateCommunityStatusDto,
   ) {
-    return this.communityService.changePostStatus(user_id, post_id, status);
+    return this.communityService.changePostStatus(
+      user_id,
+      post_id,
+      updateCommunityStatusDto,
+    );
   }
 
   // updated

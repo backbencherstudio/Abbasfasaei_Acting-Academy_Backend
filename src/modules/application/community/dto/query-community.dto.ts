@@ -25,3 +25,14 @@ export class QueryCommunityPostLikesDto extends OmitType(
   QueryCommunityFeedDto,
   ['search', 'user_id'],
 ) {}
+
+export class QueryCommunityAllowedListDto {
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  limit?: number = 100;
+}
