@@ -432,6 +432,7 @@ enum AttachmentType {
   IMAGE
   DOCUMENT
   VIDEO
+  AUDIO
   RULES_REGULATIONS
   DIGITAL_CONTRACT
   FILE
@@ -750,14 +751,17 @@ enum MemberRole {
 }
 
 model Membership {
-  id              String    @id @default(cuid())
-  nickname        String?
-  joined_at       DateTime  @default(now())
-  last_read_at    DateTime?
-  cleared_at      DateTime?
-  muted_until     DateTime?
-  archived_at     DateTime?
-  left_at         DateTime?
+  id           String    @id @default(cuid())
+  nickname     String?
+  joined_at    DateTime  @default(now())
+  last_read_at DateTime?
+  cleared_at   DateTime?
+  muted_until  DateTime?
+
+  archived_at DateTime?
+
+  left_at DateTime?
+
   user_id         String
   conversation_id String
 

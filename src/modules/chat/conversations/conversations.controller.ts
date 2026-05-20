@@ -28,7 +28,9 @@ import { ApiOkResponse } from '@nestjs/swagger';
 
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
 import {
+  AttachmentsQueryDto,
   ConversationQueryDto,
+  QueryDiscoverUsersDto,
   QueryGroupMembersDto,
 } from './dto/query-conversation.dto';
 
@@ -130,5 +132,23 @@ export class ConversationsController {
     @GetUser('userId') user_id: string,
   ) {
     return this.service.clearForMe(conversation_id, user_id);
+  }
+
+  // updated
+  @Get(':conversation_id/attachments')
+  getAttachments(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+    @Query() query: AttachmentsQueryDto,
+  ) {
+    return this.service.getAttachments(conversation_id, user_id, query);
+  }
+
+  @Get('discover_users')
+  discoverUsers(
+    @GetUser('userId') user_id: string,
+    @Query() query: QueryDiscoverUsersDto,
+  ) {
+    return this.service.discoverUsers(user_id, query);
   }
 }

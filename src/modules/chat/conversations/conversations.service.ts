@@ -15,7 +15,9 @@ import {
   MarkAsReadDto,
 } from './dto/create-conversation.dto';
 import {
+  AttachmentsQueryDto,
   ConversationQueryDto,
+  QueryDiscoverUsersDto,
   QueryGroupMembersDto,
 } from './dto/query-conversation.dto';
 
@@ -568,8 +570,6 @@ export class ConversationsService {
     };
   }
 
-  //------ clear conversation for me----
-
   async clearForMe(conversation_id: string, user_id: string) {
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
@@ -595,5 +595,88 @@ export class ConversationsService {
       success: true,
       message: 'Conversation cleared successfully',
     };
+  }
+
+  async getAttachments(
+    conversation_id: string,
+    user_id: string,
+    query: AttachmentsQueryDto,
+  ) {
+    const { cursor, limit, type } = query;
+
+    const where: Prisma.AttachmentWhereInput = {
+      message: {
+        conversation_id,
+        receipts: {
+          some: {
+            user_id,
+          },
+        },
+      },
+    };
+
+    if (type === 'media') {
+      where.OR = [
+        { type: 'IMAGE' },
+        { type: 'VIDEO' },
+        { type: 'AUDIO' },
+        { mime_type: { startsWith: 'image' } },
+        { mime_type: { startsWith: 'video' } },
+        { mime_type: { startsWith: 'audio' } },
+      ];
+    } else if (type === 'file') {
+      where.OR = [
+        { type: { not: 'IMAGE' } },
+        { type: { not: 'VIDEO' } },
+        { type: { not: 'AUDIO' } },
+        { mime_type: { not: { startsWith: 'image' } } },
+        { mime_type: { not: { startsWith: 'video' } } },
+        { mime_type: { not: { startsWith: 'audio' } } },
+      ];
+    }
+
+    const attachments = await this.prisma.attachment.findMany({
+      where,
+      select: {
+        id: true,
+        type: true,
+        file_name: true,
+        file_path: true,
+        mime_type: true,
+        message_id: true,
+      },
+      take: limit + 1,
+      cursor: cursor ? { id: cursor } : undefined,
+    });
+
+    const nextCursor =
+      attachments.length > limit
+        ? attachments[attachments.length - 1].id
+        : null;
+    const data = attachments.slice(0, limit).map((att) => ({
+      id: att.id,
+      type: att.type,
+      file_name: att.file_name,
+      file_path: att.file_path ? NajimStorage.url(att.file_path) : null,
+      mime_type: att.mime_type,
+      message_id: att.message_id,
+    }));
+
+    return {
+      success: true,
+      message: 'Attachments fetched successfully',
+      data: data,
+      meta_data: {
+        limit,
+        next_cursor: nextCursor,
+      },
+    };
+  }
+
+  async discoverUsers(user_id: string, query: QueryDiscoverUsersDto) {
+    if (!user_id) throw new UnauthorizedException('Please login first');
+    const { cursor, limit, search, type } = query;
+
+    const where: Prisma.UserWhereInput = {};
   }
 }
