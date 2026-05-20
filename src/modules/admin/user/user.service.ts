@@ -16,7 +16,7 @@ import { UserStatus } from 'src/common/constants/user-status.enum';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   async create(createUserDto: CreateUserDto, admin_id: string) {
     if (!admin_id) {

@@ -20,7 +20,6 @@ import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { SendMessageDto } from '../conversations/dto/create-conversation.dto';
 import { CursorPaginationDto } from './dto/query-message.dto';
-import { ReportMessageDto } from './dto/create-message.dto';
 
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
 

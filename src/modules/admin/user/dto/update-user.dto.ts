@@ -11,7 +11,11 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
     example: 'BLOCKED',
   })
   @IsOptional()
-  @Transform(({ value }) => (UserStatus[value.toUpperCase()] ? UserStatus[value.toUpperCase()] : undefined))
+  @Transform(({ value }) =>
+    UserStatus[value.toUpperCase()]
+      ? UserStatus[value.toUpperCase()]
+      : undefined,
+  )
   @IsEnum(UserStatus)
   status?: UserStatus;
 }
@@ -23,7 +27,11 @@ export class UpdateUserStatusDto {
     example: 'BLOCKED',
   })
   @IsNotEmpty()
-  @Transform(({ value }) => (UserStatus[value.toUpperCase()] ? UserStatus[value.toUpperCase()] : undefined))
+  @Transform(({ value }) =>
+    UserStatus[value.toUpperCase()]
+      ? UserStatus[value.toUpperCase()]
+      : undefined,
+  )
   @IsEnum(UserStatus)
   status: UserStatus;
 }
