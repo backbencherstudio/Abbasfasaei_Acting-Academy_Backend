@@ -67,6 +67,7 @@ export class AttachmentsQueryDto {
 enum userType {
   ALL = 'all',
   ADMIN = 'admin',
+  TEACHER = 'teacher',
 }
 
 export class QueryDiscoverUsersDto {
