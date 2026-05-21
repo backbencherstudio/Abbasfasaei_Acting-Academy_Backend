@@ -91,3 +91,9 @@ export class UpdateConversationSilentDto {
   @IsDateString()
   until_at?: string;
 }
+
+export class CreateUserReportDto {
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}

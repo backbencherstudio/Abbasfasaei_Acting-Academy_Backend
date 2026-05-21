@@ -55,7 +55,7 @@ export class CoursesService {
     const { instructor_id, ...courseData } = createCourseDto;
 
     if (instructor_id) {
-      const instructor = await this.prisma.user.findUnique({
+      const instructor = await this.prisma.user.findFirst({
         where: {
           id: instructor_id,
           type: Role.TEACHER,
@@ -362,36 +362,56 @@ export class CoursesService {
     if (!course) {
       throw new NotFoundException('Course not found');
     }
-    if (updateCourseDto.instructor_id) {
-      const instructor = await this.prisma.user.findUnique({
-        where: { id: updateCourseDto.instructor_id },
+
+    const instructorId =
+      typeof updateCourseDto.instructor_id === 'string'
+        ? updateCourseDto.instructor_id.trim()
+        : undefined;
+
+    if (instructorId) {
+      const instructor = await this.prisma.user.findFirst({
+        where: {
+          id: instructorId,
+          type: Role.TEACHER,
+        },
       });
+
       if (!instructor) {
         throw new NotFoundException('Instructor not found');
       }
     }
 
+    const data: Prisma.CourseUpdateInput = {
+      title: updateCourseDto.title ?? course.title,
+      seat_capacity: updateCourseDto.seat_capacity ?? course.seat_capacity,
+      fee_pence:
+        updateCourseDto.fee_pence !== undefined
+          ? Number(updateCourseDto.fee_pence) * 100
+          : course.fee_pence,
+      duration: updateCourseDto.duration ?? course.duration,
+      class_time: updateCourseDto.class_time ?? course.class_time,
+      start_date: updateCourseDto.start_date ?? course.start_date,
+      course_overview:
+        updateCourseDto.course_overview ?? course.course_overview,
+      installment_process:
+        updateCourseDto.installment_process ?? course.installment_process,
+      rules_regulations:
+        updateCourseDto.rules_regulations ?? course.rules_regulations,
+      contract: updateCourseDto.contract ?? course.contract,
+      status: updateCourseDto.status ?? course.status,
+    };
+
+    if (instructorId !== undefined) {
+      data.instructor = {
+        connect: {
+          id: instructorId,
+        },
+      };
+    }
+
     await this.prisma.course.update({
       where: { id: id },
-      data: {
-        title: updateCourseDto.title ?? course.title,
-        seat_capacity: updateCourseDto.seat_capacity ?? course.seat_capacity,
-        fee_pence: updateCourseDto.fee_pence
-          ? +updateCourseDto.fee_pence * 100 || 0
-          : course.fee_pence,
-        duration: updateCourseDto.duration ?? course.duration,
-        class_time: updateCourseDto.class_time ?? course.class_time,
-        start_date: updateCourseDto.start_date ?? course.start_date,
-        instructor_id: updateCourseDto.instructor_id ?? course.instructor_id,
-        course_overview:
-          updateCourseDto.course_overview ?? course.course_overview,
-        installment_process:
-          updateCourseDto.installment_process ?? course.installment_process,
-        rules_regulations:
-          updateCourseDto.rules_regulations ?? course.rules_regulations,
-        contract: updateCourseDto.contract ?? course.contract,
-        status: updateCourseDto.status ?? course.status,
-      },
+      data,
     });
 
     return {

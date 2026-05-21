@@ -1,4 +1,4 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { ApiProperty, OmitType, PartialType } from '@nestjs/swagger';
 import {
   CreateCourseDto,
   CreateAssignmentDto,
@@ -6,9 +6,17 @@ import {
   CreateClassDto,
   CreateModuleDto,
 } from './create-course.dto';
-import { IsString } from 'class-validator';
+import { IsString, IsOptional, IsEnum } from 'class-validator';
+import { CourseStatus } from '@prisma/client';
 
-export class UpdateCourseDto extends PartialType(CreateCourseDto) {}
+export class UpdateCourseDto extends PartialType(
+  OmitType(CreateCourseDto, ['status']),
+) {
+  @IsOptional()
+  @ApiProperty({ example: CourseStatus.DRAFT })
+  @IsEnum(CourseStatus, { each: true })
+  status?: CourseStatus;
+}
 
 export class UpdateAssignmentDto extends PartialType(CreateAssignmentDto) {}
 

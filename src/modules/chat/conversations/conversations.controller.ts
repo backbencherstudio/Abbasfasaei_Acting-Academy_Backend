@@ -15,6 +15,7 @@ import {
 import { ConversationsService } from './conversations.service';
 import {
   AddMemberDto,
+  CreateUserReportDto,
   CreateConversationDto,
   MarkAsReadDto,
   UpdateConversationSilentDto,
@@ -164,5 +165,14 @@ export class ConversationsController {
     @Query() query: QueryDiscoverUsersDto,
   ) {
     return this.service.discoverUsers(user_id, query);
+  }
+
+  @Post('report/:reported_user_id')
+  reportUser(
+    @GetUser('userId') user_id: string,
+    @Param('reported_user_id') reported_user_id: string,
+    @Body() body: CreateUserReportDto,
+  ) {
+    return this.service.reportUser(user_id, reported_user_id, body);
   }
 }

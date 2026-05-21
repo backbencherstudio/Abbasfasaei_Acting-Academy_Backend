@@ -59,6 +59,11 @@ export class CreateCourseDto {
   class_time: string;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  })
   @IsString()
   @ApiProperty({ example: 'cmm5xlw8y0000kg30zwvz5s21' })
   instructor_id?: string;

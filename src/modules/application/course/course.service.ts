@@ -352,12 +352,14 @@ export class CourseService {
       data: {
         ...course,
         fee: course.fee_pence > 0 ? course.fee_pence / 100 : 0,
-        instructor: {
-          ...course.instructor,
-          avatar: course.instructor?.avatar
-            ? NajimStorage.url(course.instructor.avatar)
-            : null,
-        },
+        instructor: course.instructor
+          ? {
+              ...course.instructor,
+              avatar: course.instructor?.avatar
+                ? NajimStorage.url(course.instructor.avatar)
+                : null,
+            }
+          : null,
         ...(nextClass && { next_class: nextClass }),
       },
     };

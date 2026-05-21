@@ -13,6 +13,7 @@ import { UserStatus } from 'src/common/constants/user-status.enum';
 import {
   AddMemberDto,
   ConversationSilentMode,
+  CreateUserReportDto,
   CreateConversationDto,
   MarkAsReadDto,
   UpdateConversationSilentDto,
@@ -1080,6 +1081,47 @@ export class ConversationsService {
               })
             : null,
       },
+    };
+  }
+
+  async reportUser(
+    reporter_id: string,
+    reported_id: string,
+    body: CreateUserReportDto,
+  ) {
+    if (!reporter_id) throw new UnauthorizedException('Please login first!');
+    if (!reported_id)
+      throw new BadRequestException('Reported user id is required');
+
+    if (reporter_id === reported_id) {
+      throw new BadRequestException('You cannot report yourself');
+    }
+
+    const reportedUser = await this.prisma.user.findUnique({
+      where: {
+        id: reported_id,
+        status: UserStatus.ACTIVE,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!reportedUser) {
+      throw new BadRequestException('Reported user not found');
+    }
+
+    await this.prisma.userReport.create({
+      data: {
+        reporter_id,
+        reported_id,
+        reason: body.reason?.trim() || 'No reason provided',
+      },
+    });
+
+    return {
+      success: true,
+      message: 'User reported successfully',
     };
   }
 }

@@ -123,6 +123,8 @@ model User {
   created_courses       Course[]        @relation("creator")
   allowed_friends_posts CommunityPost[] @relation("VisibilityAllowedFriends")
 
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_name_trgm_idx")
+  @@index([username(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_username_trgm_idx")
   @@map("users")
 }
 
@@ -511,12 +513,12 @@ model Enrollment {
 
   user_id String
 
-  name             String
-  email            String
-  phone            String
-  address          String
-  date_of_birth    DateTime
-  experience_level String?
+  name          String
+  email         String
+  phone         String
+  address       String
+  date_of_birth DateTime
+  experience    String?
 
   course_id String?
   order_id  String? @unique
@@ -552,6 +554,7 @@ model Enrollment {
   attachments Attachment[]
 
   @@unique([user_id, course_id])
+  @@index([user_id, course_id, status], map: "enrollments_user_course_status_idx")
   @@index([user_id])
   @@index([course_id])
   @@index([status])
@@ -615,6 +618,8 @@ model CommunityPost {
   poll_options CommunityPollOption[]
   author       User                  @relation(fields: [author_id], references: [id], onDelete: Cascade)
   shares       CommunityShare[]
+
+  @@index([author_id], map: "community_posts_author_idx")
 }
 
 // updated
@@ -629,6 +634,8 @@ model CommunityLike {
   user    User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
   post    CommunityPost?    @relation(fields: [post_id], references: [id], onDelete: Cascade)
   comment CommunityComment? @relation(fields: [comment_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, post_id], map: "community_likes_user_post_idx")
 }
 
 // updated
@@ -650,6 +657,8 @@ model CommunityComment {
   user    User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
   post    CommunityPost      @relation(fields: [post_id], references: [id], onDelete: Cascade)
   parent  CommunityComment?  @relation("CommentReplies", fields: [parent_id], references: [id], onDelete: Restrict)
+
+  @@index([user_id, post_id, deleted_at], map: "community_comments_user_post_deleted_idx")
 }
 
 // updated
@@ -677,6 +686,7 @@ model CommunityPollOption {
   votes CommunityPollVote[]
   post  CommunityPost       @relation(fields: [post_id], references: [id], onDelete: Cascade)
 
+  @@index([post_id], map: "community_poll_options_post_idx")
   @@map("community_poll_options")
 }
 
@@ -692,6 +702,7 @@ model CommunityPollVote {
   user   User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, option_id])
+  @@index([user_id, option_id], map: "community_poll_votes_user_option_idx")
   @@map("community_poll_votes")
 }
 
@@ -861,6 +872,7 @@ model Block {
   blocker    User     @relation("UserBlocks", fields: [blocker_id], references: [id], onDelete: Cascade)
 
   @@unique([blocker_id, blocked_id])
+  @@index([blocker_id, blocked_id], map: "blocks_blocker_blocked_idx")
   @@map("blocks")
 }
 
