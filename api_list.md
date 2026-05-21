@@ -1,8 +1,37 @@
 # API Curl List
 
 - Base URL: `http://localhost:7777`
-- Skipped modules: `chat`, `notification`
+- Skipped modules: `chat/users`, `chat/rtc` (active route nai)
 - Note: `transaction` module include kora hoyeche, karon eta alada module
+
+---
+
+## App Module
+
+### Root Health Check
+
+```bash
+curl -X GET "http://localhost:7777/"
+```
+
+### Test Chunk Stream
+
+```bash
+curl -X GET "http://localhost:7777/test-chunk-stream"
+```
+
+### Test File Stream
+
+```bash
+curl -X GET "http://localhost:7777/test-file-stream"
+```
+
+### Test File Upload
+
+```bash
+curl -X POST "http://localhost:7777/test-file-upload" \
+  -F "image=@/path/to/image.jpg"
+```
 
 ---
 
@@ -482,6 +511,12 @@ curl -X PATCH "http://localhost:7777/community/post/:post_id" \
 
 ```bash
 curl -X GET "http://localhost:7777/community/feed?search=hello&cursor=CURSOR_VALUE&limit=10"
+```
+
+### Get Post Allowed List
+
+```bash
+curl -X GET "http://localhost:7777/community/post/:post_id/allowed_list"
 ```
 
 ### Delete Post
@@ -1319,6 +1354,223 @@ curl -X GET "http://localhost:7777/finance-and-payments"
 
 ---
 
+## Notification Module
+
+### Get Notifications
+
+```bash
+curl -X GET "http://localhost:7777/notification?page=1&limit=10&search=message"
+```
+
+### Mark Notification As Read
+
+```bash
+curl -X PATCH "http://localhost:7777/notification/:id/read"
+```
+
+### Mark All Notifications As Read
+
+```bash
+curl -X PATCH "http://localhost:7777/notification/read-all"
+```
+
+### Delete Notification
+
+```bash
+curl -X DELETE "http://localhost:7777/notification/:id"
+```
+
+### Delete All Notifications
+
+```bash
+curl -X DELETE "http://localhost:7777/notification"
+```
+
+---
+
+## Chat Uploads Module
+
+### Upload Chat File
+
+```bash
+curl -X POST "http://localhost:7777/uploads" \
+  -F "file=@/path/to/file.pdf"
+```
+
+---
+
+## Chat Conversations Module
+
+### Create DM Conversation
+
+```bash
+curl -X POST "http://localhost:7777/conversations" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "DM",
+    "participant_id": "USER_ID"
+  }'
+```
+
+### Create Group Conversation
+
+```bash
+curl -X POST "http://localhost:7777/conversations" \
+  -F "type=GROUP" \
+  -F "title=Acting Batch Group" \
+  -F "participant_ids=user_1" \
+  -F "participant_ids=user_2" \
+  -F "avatar=@/path/to/group-avatar.jpg"
+```
+
+### Get My Conversations
+
+```bash
+curl -X GET "http://localhost:7777/conversations?type=DM&limit=10&cursor=CONVERSATION_ID"
+```
+
+### Mark Conversation As Read
+
+```bash
+curl -X PATCH "http://localhost:7777/conversations/:conversation_id/read" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "up_to_message_id": "MESSAGE_ID"
+  }'
+```
+
+### Add Conversation Members
+
+```bash
+curl -X POST "http://localhost:7777/conversations/:conversation_id/members" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "member_ids": ["USER_ID_1", "USER_ID_2"]
+  }'
+```
+
+### Get Group Members
+
+```bash
+curl -X GET "http://localhost:7777/conversations/:conversation_id/members?role=ADMIN"
+```
+
+### Update Member Role
+
+```bash
+curl -X PATCH "http://localhost:7777/conversations/:conversation_id/members/:member_id/role" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "role": "ADMIN"
+  }'
+```
+
+### Remove Member
+
+```bash
+curl -X DELETE "http://localhost:7777/conversations/:conversation_id/members/:member_id"
+```
+
+### Clear Conversation For Me
+
+```bash
+curl -X PATCH "http://localhost:7777/conversations/:conversation_id/clear"
+```
+
+### Update Conversation Silent
+
+```bash
+curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "until",
+    "until_at": "2026-12-31T23:59:59.999Z"
+  }'
+```
+
+### Update Conversation Silent Forever
+
+```bash
+curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "forever"
+  }'
+```
+
+### Turn Off Conversation Silent
+
+```bash
+curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "off"
+  }'
+```
+
+### Get Conversation Attachments
+
+```bash
+curl -X GET "http://localhost:7777/conversations/:conversation_id/attachments?type=media&limit=10&cursor=ATTACHMENT_ID"
+```
+
+### Discover Users For Conversation
+
+```bash
+curl -X GET "http://localhost:7777/conversations/discover_users?search=ab&type=teacher&limit=10&cursor=CURSOR_VALUE"
+```
+
+### Report User From Chat
+
+```bash
+curl -X POST "http://localhost:7777/conversations/report/:reported_user_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "abusive behavior"
+  }'
+```
+
+---
+
+## Chat Messages Module
+
+### Get Conversation Messages
+
+```bash
+curl -X GET "http://localhost:7777/conversations/:conversation_id/messages?limit=20&cursor=MESSAGE_ID"
+```
+
+### Send Text Message
+
+```bash
+curl -X POST "http://localhost:7777/conversations/:conversation_id/messages" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "kind": "TEXT",
+    "content": {
+      "text": "Hello"
+    }
+  }'
+```
+
+### Send Message With Attachments
+
+```bash
+curl -X POST "http://localhost:7777/conversations/:conversation_id/messages" \
+  -F "kind=FILE" \
+  -F "content={\"text\":\"See attachment\"}" \
+  -F "attachments=@/path/to/file.pdf" \
+  -F "attachments=@/path/to/image.jpg"
+```
+
+### Delete Message
+
+```bash
+curl -X DELETE "http://localhost:7777/conversations/messages/:message_id"
+```
+
+---
+
 ## Payment Module
 
 ### Create Checkout Session (Course)
@@ -1344,7 +1596,7 @@ curl -X POST "http://localhost:7777/payment/stripe/checkout" \
 ### Verify Payment Session
 
 ```bash
-curl -X GET "http://localhost:7777/payment/stripe/verify/:sessionId"
+curl -X GET "http://localhost:7777/payment/stripe/verify/:session_id"
 ```
 
 ### Stripe Webhook
