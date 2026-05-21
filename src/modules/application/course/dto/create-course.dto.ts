@@ -13,6 +13,7 @@ import {
   IsEnum,
   ValidateIf,
   IsOptional,
+  IsDate,
 } from 'class-validator';
 
 export class CreateEnrollmentDto {
@@ -46,8 +47,9 @@ export class CreateEnrollmentDto {
 
   @ValidateIf((o) => o.step === EnrollmentStep.FORM_FILLING)
   @IsNotEmpty()
-  @IsISO8601()
-  date_of_birth: string;
+  @Type(() => Date)
+  @IsDate()
+  date_of_birth: Date;
 
   @ValidateIf((o) => o.step === EnrollmentStep.FORM_FILLING)
   @IsOptional()

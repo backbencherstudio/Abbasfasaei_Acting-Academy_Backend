@@ -14,6 +14,10 @@ import appConfig from '../../../config/app.config';
 export class StripeService {
   constructor(private prisma: PrismaService) {}
 
+  private toMajorUnitAmount(amountInSmallestUnit: number) {
+    return Number((amountInSmallestUnit / 100).toFixed(2));
+  }
+
   // ─── PUBLIC: Create Checkout Session ────────────────────────────────
   async createCheckout(userId: string, body: CreateCheckoutDto) {
     const {
@@ -220,6 +224,7 @@ export class StripeService {
       existingOrderId,
     } = params;
     const clientUrl = appConfig().app.client_app_url || appConfig().app.url;
+    const majorUnitAmount = this.toMajorUnitAmount(amount);
 
     const session = await StripePayment.createCheckoutSessionPayment({
       customer: customerId,
@@ -241,9 +246,9 @@ export class StripeService {
           user_id: userId,
           item_type: itemType,
           payment_mode: PaymentMode.FULL,
-          subtotal_amount: amount,
-          total_amount: amount,
-          due_amount: amount,
+          subtotal_amount: majorUnitAmount,
+          total_amount: majorUnitAmount,
+          due_amount: majorUnitAmount,
           currency: currency.toUpperCase(),
           status: 'PENDING',
           course_id: params.courseId,
@@ -258,7 +263,7 @@ export class StripeService {
         transaction_ref: session.id,
         order_id: orderId,
         user_id: userId,
-        amount,
+        amount: majorUnitAmount,
         currency: currency.toUpperCase(),
         status: 'PENDING',
         gateway: 'STRIPE',

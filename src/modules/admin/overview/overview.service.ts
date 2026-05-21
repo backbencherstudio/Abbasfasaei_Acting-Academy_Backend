@@ -89,6 +89,7 @@ export class OverviewService {
           my_active_courses: myActiveCourses,
           total_assignments: totalAssignments,
           total_classes: totalClasses,
+          attendance: [],
           up_coming_classes: upComingClasses.map((cls) => ({
             id: cls.id,
             class_title: cls.class_title,
@@ -177,6 +178,7 @@ export class OverviewService {
           total_teachers: results[1],
           ongoing_courses: results[2],
           monthly_revenue: monthlyRevenue,
+          attendance: [],
           recent_enrollments: recentEnrollments.map((enrollment: any) => ({
             id: enrollment.id,
             status: enrollment.status,

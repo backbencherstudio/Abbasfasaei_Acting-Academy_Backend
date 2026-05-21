@@ -12,8 +12,10 @@ import appConfig from 'src/config/app.config';
 import { UserStatus } from 'src/common/constants/user-status.enum';
 import {
   AddMemberDto,
+  ConversationSilentMode,
   CreateConversationDto,
   MarkAsReadDto,
+  UpdateConversationSilentDto,
 } from './dto/create-conversation.dto';
 import {
   AttachmentsQueryDto,
@@ -74,6 +76,32 @@ function decodeDiscoverUsersCursor(
   } catch {
     throw new BadRequestException('Invalid discover users cursor');
   }
+}
+
+const FOREVER_MUTE_UNTIL = new Date('9999-12-31T23:59:59.999Z');
+
+function normalizeConversationSilentState(mutedUntil: Date | null) {
+  if (!mutedUntil || mutedUntil.getTime() <= Date.now()) {
+    return {
+      is_silenced: false,
+      mode: ConversationSilentMode.OFF,
+      muted_until: null,
+    };
+  }
+
+  if (mutedUntil.getTime() === FOREVER_MUTE_UNTIL.getTime()) {
+    return {
+      is_silenced: true,
+      mode: ConversationSilentMode.FOREVER,
+      muted_until: mutedUntil,
+    };
+  }
+
+  return {
+    is_silenced: true,
+    mode: ConversationSilentMode.UNTIL,
+    muted_until: mutedUntil,
+  };
 }
 
 @Injectable()
@@ -251,6 +279,7 @@ export class ConversationsService {
         memberships: {
           select: {
             cleared_at: true,
+            muted_until: true,
             user: {
               select: {
                 id: true,
@@ -309,6 +338,9 @@ export class ConversationsService {
         const other_member = conversation.memberships?.find(
           (m) => m?.user?.id !== user_id,
         );
+        const silentState = normalizeConversationSilentState(
+          me?.muted_until ?? null,
+        );
         const { memberships: total_members, messages: unread_messages } =
           conversation._count;
         let last_message = conversation.messages?.[0];
@@ -329,6 +361,8 @@ export class ConversationsService {
           total_members,
           unread_messages,
           participant: other_member?.user ?? null,
+          is_silenced: silentState.is_silenced,
+          muted_until: silentState.muted_until,
           last_message: last_message
             ? { ...last_message, is_me: last_message.sender.id === user_id }
             : null,
@@ -662,6 +696,69 @@ export class ConversationsService {
     return {
       success: true,
       message: 'Conversation cleared successfully',
+    };
+  }
+
+  async updateConversationSilent(
+    conversation_id: string,
+    user_id: string,
+    body: UpdateConversationSilentDto,
+  ) {
+    if (!user_id) throw new UnauthorizedException('Please login first!');
+
+    const membership = await this.prisma.membership.findFirst({
+      where: {
+        conversation_id,
+        user_id,
+        left_at: null,
+      },
+      select: {
+        id: true,
+        conversation_id: true,
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this conversation');
+    }
+
+    let mutedUntil: Date | null = null;
+
+    if (body.mode === ConversationSilentMode.FOREVER) {
+      mutedUntil = FOREVER_MUTE_UNTIL;
+    } else if (body.mode === ConversationSilentMode.UNTIL) {
+      mutedUntil = new Date(body.until_at as string);
+      if (Number.isNaN(mutedUntil.getTime()) || mutedUntil <= new Date()) {
+        throw new BadRequestException('until_at must be a future date');
+      }
+    }
+
+    const updatedMembership = await this.prisma.membership.update({
+      where: {
+        id: membership.id,
+      },
+      data: {
+        muted_until: mutedUntil,
+      },
+      select: {
+        conversation_id: true,
+        muted_until: true,
+      },
+    });
+
+    const silentState = normalizeConversationSilentState(
+      updatedMembership.muted_until,
+    );
+
+    return {
+      success: true,
+      message: 'Conversation silent preference updated successfully',
+      data: {
+        conversation_id: updatedMembership.conversation_id,
+        is_silenced: silentState.is_silenced,
+        mode: silentState.mode,
+        muted_until: silentState.muted_until,
+      },
     };
   }
 

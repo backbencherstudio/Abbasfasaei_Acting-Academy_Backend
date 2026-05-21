@@ -17,6 +17,7 @@ import {
   AddMemberDto,
   CreateConversationDto,
   MarkAsReadDto,
+  UpdateConversationSilentDto,
 } from './dto/create-conversation.dto';
 import { id } from 'date-fns/locale';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
@@ -132,6 +133,19 @@ export class ConversationsController {
     @GetUser('userId') user_id: string,
   ) {
     return this.service.clearForMe(conversation_id, user_id);
+  }
+
+  @Patch(':conversation_id/silent')
+  updateSilent(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+    @Body() body: UpdateConversationSilentDto,
+  ) {
+    return this.service.updateConversationSilent(
+      conversation_id,
+      user_id,
+      body,
+    );
   }
 
   // updated

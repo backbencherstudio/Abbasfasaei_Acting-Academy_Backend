@@ -158,10 +158,14 @@ export class CourseController {
   @Post(':course_id/enrollment')
   enrollUser(
     @GetUser('userId') userId: string,
-    @Param('courseId') courseId: string,
+    @Param('course_id') course_id: string,
     @Body() createEnrollmentDto: CreateEnrollmentDto,
   ) {
-    return this.courseService.enrollUser(userId, courseId, createEnrollmentDto);
+    return this.courseService.enrollUser(
+      userId,
+      course_id,
+      createEnrollmentDto,
+    );
   }
   // --------------------------------------------------------------
 

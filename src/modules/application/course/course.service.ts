@@ -54,33 +54,12 @@ export class CourseService {
       },
     });
 
-    let currentStep: EnrollmentStep;
-    switch (enrollment.step) {
-      case EnrollmentStep.FORM_FILLING:
-        currentStep = EnrollmentStep.RULES_SIGNING;
-        break;
-      case EnrollmentStep.RULES_SIGNING:
-        currentStep = EnrollmentStep.CONTRACT_SIGNING;
-        break;
-      case EnrollmentStep.CONTRACT_SIGNING:
-        currentStep = EnrollmentStep.PAYMENT;
-        break;
-      case EnrollmentStep.PAYMENT:
-        currentStep = EnrollmentStep.COMPLETED;
-        break;
-      case EnrollmentStep.COMPLETED:
-        currentStep = EnrollmentStep.COMPLETED;
-        break;
-      default:
-        currentStep = EnrollmentStep.FORM_FILLING;
-    }
-
     return {
       success: true,
       message: 'Enrollment step fetched successfully',
       data: {
-        enrollment_id: enrollment.id,
-        current_step: currentStep,
+        enrollment_id: enrollment?.id,
+        current_step: enrollment?.step || EnrollmentStep.FORM_FILLING,
       },
     };
   }
@@ -196,6 +175,11 @@ export class CourseService {
     return {
       success: true,
       message: 'Submitted successfully',
+      data: {
+        step: step,
+        next_step: step,
+        enrollment_id: existingEnrollment?.id,
+      },
     };
   }
 

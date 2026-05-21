@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsDateString,
   IsEnum,
   IsNotEmpty,
   IsObject,
@@ -73,4 +74,20 @@ export class AddMemberDto {
   @ArrayMinSize(1)
   @IsString({ each: true })
   member_ids: string[];
+}
+
+export enum ConversationSilentMode {
+  OFF = 'off',
+  FOREVER = 'forever',
+  UNTIL = 'until',
+}
+
+export class UpdateConversationSilentDto {
+  @IsEnum(ConversationSilentMode)
+  mode: ConversationSilentMode;
+
+  @ValidateIf((o) => o.mode === ConversationSilentMode.UNTIL)
+  @IsNotEmpty()
+  @IsDateString()
+  until_at?: string;
 }
