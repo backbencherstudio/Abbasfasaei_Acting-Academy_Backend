@@ -5,12 +5,13 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Prisma, MessageKind, ConversationType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { CursorPaginationDto } from './dto/query-message.dto';
 import { SendMessageDto } from '../conversations/dto/create-conversation.dto';
+import { ChatRepository } from 'src/common/repository/chat/chat.repository';
 
 @Injectable()
 export class MessagesService {
@@ -24,14 +25,10 @@ export class MessagesService {
     if (!conversation_id)
       throw new BadRequestException('Invalid conversation id');
 
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        conversation_id: conversation_id,
-        user_id: user_id,
-        left_at: null,
-      },
-      select: { id: true, cleared_at: true },
-    });
+    const membership = await ChatRepository.getMembership(
+      conversation_id,
+      user_id,
+    );
 
     if (!membership) throw new NotFoundException('Conversation not found');
     const { cursor, limit } = query;
@@ -103,35 +100,7 @@ export class MessagesService {
     return {
       success: true,
       message: 'Message fetched successfully',
-      data: messages.map((m) => {
-        const { sender, attachments, reply_to } = m;
-        return {
-          ...m,
-          reply_to: reply_to
-            ? {
-                ...reply_to,
-                attachments: reply_to.attachments.map((att) => ({
-                  ...att,
-                  file_path: att?.file_path
-                    ? NajimStorage.url(att.file_path)
-                    : null,
-                })),
-              }
-            : null,
-          attachments: attachments.map((attachment) => {
-            return {
-              ...attachment,
-              file_path: attachment?.file_path
-                ? NajimStorage.url(attachment?.file_path)
-                : null,
-            };
-          }),
-          sender: {
-            ...sender,
-            avatar: sender?.avatar ? NajimStorage.url(sender?.avatar) : null,
-          },
-        };
-      }),
+      data: messages.map((m) => ChatRepository.formatMessage(m)),
     };
   }
 
@@ -145,70 +114,7 @@ export class MessagesService {
     if (!conversation_id)
       throw new BadRequestException('Invalid conversation id');
 
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        conversation_id: conversation_id,
-        user_id: user_id,
-      },
-      select: {
-        id: true,
-        conversation: { select: { type: true } },
-      },
-    });
-
-    if (!membership) throw new NotFoundException('Conversation not found');
-
-    // Block checks only apply to DM conversations
-    if (membership.conversation.type === 'DM') {
-      const otherMember = await this.prisma.membership.findFirst({
-        where: {
-          conversation_id: conversation_id,
-          user_id: { not: user_id },
-        },
-        select: { user_id: true },
-      });
-
-      if (otherMember) {
-        const blockedByOther = await this.prisma.block.findFirst({
-          where: {
-            blocker_id: otherMember.user_id,
-            blocked_id: user_id,
-          },
-        });
-        if (blockedByOther)
-          throw new BadRequestException('You have been blocked by this user');
-
-        const blockedByMe = await this.prisma.block.findFirst({
-          where: {
-            blocker_id: user_id,
-            blocked_id: otherMember.user_id,
-          },
-        });
-        if (blockedByMe)
-          throw new BadRequestException(
-            'You have blocked this user. Unblock to send messages',
-          );
-      }
-    }
-
     const { content, kind, reply_to_id } = sendMessageDto;
-
-    // Validate reply_to_id if provided
-    if (reply_to_id) {
-      const replyMessage = await this.prisma.message.findFirst({
-        where: {
-          id: reply_to_id,
-          conversation_id: conversation_id,
-          deleted_at: null,
-        },
-        select: { id: true },
-      });
-      if (!replyMessage) {
-        throw new BadRequestException(
-          'Reply message not found in this conversation',
-        );
-      }
-    }
 
     const attachmentData: Prisma.AttachmentCreateInput[] = [];
 
@@ -245,47 +151,21 @@ export class MessagesService {
     if (!content && attachmentData.length < 1) {
       throw new BadRequestException('Message content is required');
     }
-
-    await this.prisma.$transaction(async (tx) => {
-      const msg = await tx.message.create({
-        data: {
-          conversation_id,
-          sender_id: user_id,
-          kind: kind || 'TEXT',
-          content,
-          ...(reply_to_id && { reply_to_id }),
-          attachments: { create: attachmentData },
-        },
-      });
-
-      // Create SENT receipts for unblocked, active members (excluding sender)
-      const members = await tx.membership.findMany({
-        where: {
-          conversation_id,
-          user_id: { not: user_id },
-          left_at: null,
-          user: {
-            blocks_initiated: { none: { blocked_id: user_id } },
-            blocked_by: { none: { blocker_id: user_id } },
-          },
-        },
-        select: { user_id: true },
-      });
-
-      if (members.length > 0) {
-        await tx.receipt.createMany({
-          data: members.map((m) => ({
-            message_id: msg.id,
-            user_id: m.user_id,
-            status: 'SENT' as const,
-          })),
-        });
-      }
-    });
+    const msg = await ChatRepository.sendMessage(
+      conversation_id,
+      user_id,
+      {
+        content,
+        kind,
+        replyToId: reply_to_id,
+      },
+      attachmentData,
+    );
 
     return {
       success: true,
       message: 'Message sent successfully',
+      data: msg,
     };
   }
 

@@ -7,6 +7,7 @@ import {
 
 import { ConversationType, MemberRole, Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { ChatRepository } from 'src/common/repository/chat/chat.repository';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { UserStatus } from 'src/common/constants/user-status.enum';
@@ -495,19 +496,12 @@ export class ConversationsService {
       throw new BadRequestException('Some users do not exist');
     }
 
-    const conversation = await this.prisma.conversation.findFirst({
-      where: {
-        id: conversation_id,
-        memberships: {
-          some: {
-            user_id: user_id,
-            role: 'ADMIN',
-          },
-        },
-      },
-    });
+    const membership = await ChatRepository.getMembership(
+      conversation_id,
+      user_id,
+    );
 
-    if (!conversation) {
+    if (!membership || membership.role !== 'ADMIN') {
       throw new ForbiddenException('You are not admin of this conversation');
     }
 
@@ -535,16 +529,7 @@ export class ConversationsService {
     user_id: string,
     query: QueryGroupMembersDto,
   ) {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: {
-        id: conversation_id,
-        memberships: { some: { user_id: user_id } },
-      },
-      select: { type: true },
-    });
-    if (!conversation) {
-      throw new ForbiddenException('You are not a member of this conversation');
-    }
+    await ChatRepository.ensureMember(conversation_id, user_id);
 
     const members = await this.prisma.membership.findMany({
       where: {
@@ -592,20 +577,14 @@ export class ConversationsService {
   ) {
     if (!user_id) throw new UnauthorizedException('Please login first!');
 
-    const conversation = await this.prisma.conversation.findFirst({
-      where: {
-        id: conversation_id,
-        memberships: {
-          some: {
-            user_id: user_id,
-            role: 'ADMIN',
-          },
-        },
-      },
-    });
+    const membership = await ChatRepository.getMembership(
+      conversation_id,
+      user_id,
+    );
 
-    if (!conversation)
+    if (!membership || membership.role !== 'ADMIN') {
       throw new ForbiddenException('You are not admin of this conversation');
+    }
 
     const member = await this.prisma.membership.findFirst({
       where: {
@@ -634,20 +613,14 @@ export class ConversationsService {
   ) {
     if (!user_id) throw new UnauthorizedException('Please login first!');
 
-    const conversation = await this.prisma.conversation.findFirst({
-      where: {
-        id: conversation_id,
-        memberships: {
-          some: {
-            user_id: user_id,
-            role: 'ADMIN',
-          },
-        },
-      },
-    });
+    const membership = await ChatRepository.getMembership(
+      conversation_id,
+      user_id,
+    );
 
-    if (!conversation)
+    if (!membership || membership.role !== 'ADMIN') {
       throw new ForbiddenException('You are not admin of this conversation');
+    }
 
     const member = await this.prisma.membership.findFirst({
       where: {
@@ -707,17 +680,10 @@ export class ConversationsService {
   ) {
     if (!user_id) throw new UnauthorizedException('Please login first!');
 
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        conversation_id,
-        user_id,
-        left_at: null,
-      },
-      select: {
-        id: true,
-        conversation_id: true,
-      },
-    });
+    const membership = await ChatRepository.getMembership(
+      conversation_id,
+      user_id,
+    );
 
     if (!membership) {
       throw new ForbiddenException('You are not a member of this conversation');
