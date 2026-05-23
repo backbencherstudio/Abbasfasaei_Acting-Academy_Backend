@@ -771,6 +771,8 @@ export class ConversationsService {
           AND (
             COALESCE(name, '') ILIKE ${`%${normalizedSearch}%`}
             OR COALESCE(username, '') ILIKE ${`%${normalizedSearch}%`}
+            OR COALESCE(email, '') ILIKE ${`%${normalizedSearch}%`}
+            OR COALESCE(phone_number, '') ILIKE ${`%${normalizedSearch}%`}
             OR similarity_rank > 100000
           )
         `
@@ -852,7 +854,7 @@ export class ConversationsService {
         `;
 
     const rows = await this.prisma.$queryRaw<DiscoverUsersRow[]>(Prisma.sql`
-      WITH current_user AS (
+      WITH req_user AS (
         SELECT LOWER(COALESCE(type, '')) AS normalized_type
         FROM users
         WHERE id = ${user_id}
@@ -862,6 +864,8 @@ export class ConversationsService {
           u.id,
           u.name,
           u.username,
+          u.email,
+          u.phone_number,
           u.avatar,
           u.type,
           LOWER(COALESCE(u.type, '')) AS normalized_type,
@@ -913,7 +917,7 @@ export class ConversationsService {
           END AS has_my_post_activity,
           ${similarityExpression} AS similarity_rank
         FROM users u
-        CROSS JOIN current_user cu
+        CROSS JOIN req_user cu
         WHERE u.id <> ${user_id}
           AND u.deleted_at IS NULL
           AND u.status = ${UserStatus.ACTIVE}
@@ -942,6 +946,8 @@ export class ConversationsService {
         id,
         name,
         username,
+        email,
+        phone_number,
         avatar,
         type,
         created_at,
