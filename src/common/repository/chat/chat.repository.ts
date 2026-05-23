@@ -4,6 +4,11 @@ import Redis from 'ioredis';
 import appConfig from 'src/config/app.config';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 
+/**
+ * Standalone PrismaClient for ChatRepository's static methods.
+ * Cannot use NestJS-managed PrismaService because this is a static class
+ * outside the DI container. Maintains its own connection pool.
+ */
 const prisma = new PrismaClient();
 const redisPublisher = new Redis({
   host: appConfig().redis.host,

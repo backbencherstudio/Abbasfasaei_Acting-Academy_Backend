@@ -20,7 +20,6 @@ import {
   MarkAsReadDto,
   UpdateConversationSilentDto,
 } from './dto/create-conversation.dto';
-import { id } from 'date-fns/locale';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { ConversationType, MemberRole } from '@prisma/client';

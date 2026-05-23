@@ -129,11 +129,10 @@ export class ConversationsService {
     if (type === ConversationType.DM) {
       if (!participant_id)
         throw new BadRequestException('Participant id is required for DM');
-      where.memberships = {
-        some: {
-          AND: [{ user_id: user_id }, { user_id: participant_id }],
-        },
-      };
+      where.AND = [
+        { memberships: { some: { user_id: user_id, left_at: null } } },
+        { memberships: { some: { user_id: participant_id, left_at: null } } },
+      ];
     }
     let avatar: string;
     if (type === ConversationType.GROUP) {
@@ -172,17 +171,17 @@ export class ConversationsService {
         },
       },
     });
-    const existCount = existConversation?._count?.memberships;
-    delete existConversation?._count;
-    existConversation.avatar = existConversation.avatar
-      ? NajimStorage.url(existConversation.avatar)
-      : null;
-    if (existConversation)
+
+    if (existConversation) {
+      const existCount = existConversation._count?.memberships;
+      const { _count, ...rest } = existConversation;
+      rest.avatar = rest.avatar ? NajimStorage.url(rest.avatar) : null;
       return {
         success: true,
         message: 'Conversation already exists',
-        data: { ...existConversation, total_members: existCount },
+        data: { ...rest, total_members: existCount },
       };
+    }
 
     const conversation = await this.prisma.conversation.create({
       data: {
@@ -292,16 +291,7 @@ export class ConversationsService {
             },
           },
           where: {
-            OR: [
-              {
-                user_id: user_id,
-              },
-              {
-                user_id: {
-                  not: user_id,
-                },
-              },
-            ],
+            left_at: null,
           },
           take: 2,
         },
@@ -323,6 +313,7 @@ export class ConversationsService {
           },
         },
       },
+      orderBy: { updated_at: 'desc' },
       take: limit,
       cursor: cursor
         ? {
@@ -345,21 +336,24 @@ export class ConversationsService {
         );
         const { memberships: total_members, messages: unread_messages } =
           conversation._count;
-        let last_message = conversation.messages?.[0];
+        let last_message = conversation.messages?.[0] ?? null;
         if (last_message && me?.cleared_at) {
           last_message =
             last_message.created_at > me?.cleared_at ? last_message : null;
         }
-        delete conversation.messages;
-        delete conversation.memberships;
-        delete conversation._count;
-        conversation.avatar = conversation.avatar
-          ? NajimStorage.url(conversation.avatar)
+        const {
+          messages: _msgs,
+          memberships: _mbrs,
+          _count: _cnt,
+          ...conv
+        } = conversation;
+        conv.avatar = conv.avatar
+          ? NajimStorage.url(conv.avatar)
           : other_member?.user?.avatar
             ? NajimStorage.url(other_member?.user?.avatar)
             : null;
         return {
-          ...conversation,
+          ...conv,
           total_members,
           unread_messages,
           participant: other_member?.user ?? null,
@@ -453,7 +447,7 @@ export class ConversationsService {
       data: member_ids.map((member_id) => ({
         conversation_id,
         user_id: member_id,
-        role: 'MEMBER',
+        role: MemberRole.MEMBER,
       })),
       skipDuplicates: true,
     });
@@ -701,10 +695,8 @@ export class ConversationsService {
         { mime_type: { startsWith: 'audio' } },
       ];
     } else if (type === 'file') {
-      where.OR = [
-        { type: { not: 'IMAGE' } },
-        { type: { not: 'VIDEO' } },
-        { type: { not: 'AUDIO' } },
+      where.AND = [
+        { type: { notIn: ['IMAGE', 'VIDEO', 'AUDIO'] } },
         { mime_type: { not: { startsWith: 'image' } } },
         { mime_type: { not: { startsWith: 'video' } } },
         { mime_type: { not: { startsWith: 'audio' } } },
