@@ -12,6 +12,8 @@ const redisPublisher = new Redis({
 });
 
 export class ChatRepository {
+  static onlineUsers = new Set<string>();
+
   static async userExists(userId: string): Promise<boolean> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -239,6 +241,7 @@ export class ChatRepository {
     }
 
     let createdMessage: any = null;
+    let sentMembers: any[] = [];
     await prisma.$transaction(async (tx) => {
       createdMessage = await tx.message.create({
         data: {
@@ -299,17 +302,25 @@ export class ChatRepository {
         },
         select: { user_id: true },
       });
+      sentMembers = members;
 
       if (members.length > 0) {
         await tx.receipt.createMany({
           data: members.map((m) => ({
             message_id: createdMessage.id,
             user_id: m.user_id,
-            status: 'SENT',
+            status: ChatRepository.onlineUsers.has(m.user_id) ? 'DELIVERED' : 'SENT',
           })),
         });
       }
     });
+
+    if (createdMessage) {
+      createdMessage.receipts = sentMembers.map((m: any) => ({
+        status: ChatRepository.onlineUsers.has(m.user_id) ? 'DELIVERED' : 'SENT',
+        user_id: m.user_id,
+      }));
+    }
 
     const formattedMessage = this.formatMessage(createdMessage);
 
@@ -326,11 +337,183 @@ export class ChatRepository {
     return formattedMessage;
   }
 
+  static async markAsRead(
+    conversationId: string,
+    userId: string,
+    upToMessageId: string,
+  ) {
+    const targetMessage = await prisma.message.findFirst({
+      where: {
+        id: upToMessageId,
+        conversation_id: conversationId,
+      },
+      select: { created_at: true },
+    });
+
+    if (!targetMessage) return null;
+
+    const now = new Date();
+
+    return prisma.$transaction(async (tx) => {
+      // 1. Update membership last_read_at
+      await tx.membership.updateMany({
+        where: {
+          conversation_id: conversationId,
+          user_id: userId,
+          OR: [
+            { last_read_at: null },
+            { last_read_at: { lt: targetMessage.created_at } },
+          ],
+        },
+        data: {
+          last_read_at: targetMessage.created_at,
+        },
+      });
+
+      // 2. Find pending receipts
+      const pendingReceipts = await tx.receipt.findMany({
+        where: {
+          user_id: userId,
+          status: { not: 'READ' },
+          message: {
+            conversation_id: conversationId,
+            sender_id: { not: userId },
+            created_at: { lte: targetMessage.created_at },
+          },
+        },
+        select: {
+          message_id: true,
+        },
+      });
+
+      if (pendingReceipts.length === 0) {
+        return {
+          last_read_at: targetMessage.created_at,
+          marked_count: 0,
+        };
+      }
+
+      const messageIds = pendingReceipts.map((r) => r.message_id);
+
+      // 3. Update receipts status to READ
+      await tx.receipt.updateMany({
+        where: {
+          user_id: userId,
+          message_id: { in: messageIds },
+        },
+        data: {
+          status: 'READ',
+          at: now,
+        },
+      });
+
+      // 4. Publish status update to Redis
+      await redisPublisher
+        .publish(
+          'chat:message_status',
+          JSON.stringify({
+            conversation_id: conversationId,
+            user_id: userId,
+            status: 'READ',
+            message_ids: messageIds,
+          }),
+        )
+        .catch((err) => console.error('Redis status publish failed:', err));
+
+      return {
+        last_read_at: targetMessage.created_at,
+        marked_count: messageIds.length,
+      };
+    });
+  }
+
+  static async markMessagesAsDelivered(userId: string) {
+    const pendingReceipts = await prisma.receipt.findMany({
+      where: {
+        user_id: userId,
+        status: 'SENT',
+      },
+      select: {
+        message_id: true,
+        message: {
+          select: {
+            conversation_id: true,
+          },
+        },
+      },
+    });
+
+    if (pendingReceipts.length === 0) return;
+
+    const messageIds = pendingReceipts.map((r) => r.message_id);
+
+    const convGroups = new Map<string, string[]>();
+    for (const r of pendingReceipts) {
+      const convId = r.message.conversation_id;
+      const list = convGroups.get(convId) || [];
+      list.push(r.message_id);
+      convGroups.set(convId, list);
+    }
+
+    await prisma.receipt.updateMany({
+      where: {
+        user_id: userId,
+        message_id: { in: messageIds },
+      },
+      data: {
+        status: 'DELIVERED',
+        at: new Date(),
+      },
+    });
+
+    for (const [conversationId, msgIds] of convGroups.entries()) {
+      await redisPublisher
+        .publish(
+          'chat:message_status',
+          JSON.stringify({
+            conversation_id: conversationId,
+            user_id: userId,
+            status: 'DELIVERED',
+            message_ids: msgIds,
+          }),
+        )
+        .catch((err) => console.error('Redis status publish failed:', err));
+    }
+  }
+
+  static async getLatestMessageBefore(
+    conversationId: string,
+    beforeDate: Date,
+    excludeSenderId: string,
+  ) {
+    return prisma.message.findFirst({
+      where: {
+        conversation_id: conversationId,
+        created_at: { lte: beforeDate },
+        sender_id: { not: excludeSenderId },
+      },
+      orderBy: { created_at: 'desc' },
+      select: { id: true },
+    });
+  }
+
   static formatMessage(m: any) {
     if (!m) return null;
-    const { sender, attachments, reply_to } = m;
+    const { sender, attachments, reply_to, receipts, ...rest } = m;
+
+    let status: 'SENT' | 'DELIVERED' | 'READ' = 'SENT';
+    if (receipts && receipts.length > 0) {
+      const statuses = receipts.map((r: any) => r.status);
+      if (statuses.includes('READ')) {
+        status = 'READ';
+      } else if (statuses.includes('DELIVERED')) {
+        status = 'DELIVERED';
+      }
+    }
+
     return {
-      ...m,
+      ...rest,
+      status,
       reply_to: reply_to
         ? {
             ...reply_to,

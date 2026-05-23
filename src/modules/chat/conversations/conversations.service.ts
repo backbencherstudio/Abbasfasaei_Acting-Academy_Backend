@@ -388,79 +388,23 @@ export class ConversationsService {
       throw new BadRequestException('Up to message id is required');
     }
 
-    const now = new Date();
+    const membership = await ChatRepository.getMembership(
+      conversation_id,
+      user_id,
+    );
+    if (!membership) {
+      throw new ForbiddenException('Not a member of this conversation');
+    }
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const membership = await tx.membership.findFirst({
-        where: {
-          conversation_id,
-          user_id,
-        },
-        select: {
-          id: true,
-          last_read_at: true,
-        },
-      });
+    const result = await ChatRepository.markAsRead(
+      conversation_id,
+      user_id,
+      up_to_message_id,
+    );
 
-      if (!membership) {
-        throw new ForbiddenException('Not a member of this conversation');
-      }
-
-      const targetMessage = await tx.message.findFirst({
-        where: {
-          id: up_to_message_id,
-          conversation_id,
-        },
-        select: {
-          id: true,
-          created_at: true,
-        },
-      });
-
-      if (!targetMessage) {
-        throw new BadRequestException('Message not found in this conversation');
-      }
-
-      await tx.membership.updateMany({
-        where: {
-          id: membership.id,
-          OR: [
-            { last_read_at: null },
-            { last_read_at: { lt: targetMessage.created_at } },
-          ],
-        },
-        data: {
-          last_read_at: targetMessage.created_at,
-        },
-      });
-
-      const updatedReceipts = await tx.receipt.updateMany({
-        where: {
-          user_id,
-          status: {
-            not: 'READ',
-          },
-          message: {
-            conversation_id,
-            sender_id: {
-              not: user_id,
-            },
-            created_at: {
-              lte: targetMessage.created_at,
-            },
-          },
-        },
-        data: {
-          status: 'READ',
-          at: now,
-        },
-      });
-
-      return {
-        last_read_at: targetMessage.created_at,
-        marked_count: updatedReceipts.count,
-      };
-    });
+    if (!result) {
+      throw new BadRequestException('Message not found in this conversation');
+    }
 
     return {
       success: true,

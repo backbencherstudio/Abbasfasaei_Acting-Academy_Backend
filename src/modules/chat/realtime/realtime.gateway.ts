@@ -75,19 +75,28 @@ export class RealtimeGateway
     };
 
     this.redisSub = new Redis(redisOpts);
-    this.redisSub.subscribe('chat:messages');
+    this.redisSub.subscribe('chat:messages', 'chat:message_status');
     this.redisSub.on('message', (channel: string, message: string) => {
-      if (channel === 'chat:messages' && message) {
-        try {
-          const data = JSON.parse(message);
+      if (!message) return;
+      try {
+        const data = JSON.parse(message);
+
+        if (channel === 'chat:messages') {
           this.io
             .to(`conv:${data.conversation_id}`)
             .emit('message:new', data.msg);
-        } catch (err) {
-          this.dbg('redis_sub_message_parse_failed', {
-            error: (err as Error).message,
+        } else if (channel === 'chat:message_status') {
+          this.io.to(`conv:${data.conversation_id}`).emit('message:status', {
+            conversation_id: data.conversation_id,
+            user_id: data.user_id,
+            status: data.status,
+            message_ids: data.message_ids,
           });
         }
+      } catch (err) {
+        this.dbg('redis_sub_message_parse_failed', {
+          error: (err as Error).message,
+        });
       }
     });
   }
@@ -132,8 +141,9 @@ export class RealtimeGateway
       const wasOffline = this.addUserSocket(userId, socket.id);
 
       if (wasOffline) {
+        ChatRepository.onlineUsers.add(userId);
         await ChatRepository.updateLastActive(userId, null);
-
+        await ChatRepository.markMessagesAsDelivered(userId);
         await this.notifyPresenceToRelatedUsers(userId, true);
       }
 
@@ -176,6 +186,8 @@ export class RealtimeGateway
 
       return;
     }
+
+    ChatRepository.onlineUsers.delete(userId);
 
     try {
       await ChatRepository.updateLastActive(userId, new Date());
@@ -322,8 +334,15 @@ export class RealtimeGateway
     try {
       await ChatRepository.ensureMember(conversationId, userId);
 
-      // TODO: update markAsRead call according to conversationsService new signature
-      // await this.conversationsService.markAsRead(conversationId, userId, { up_to_message_id: 'some-id' });
+      const lastMessage = await ChatRepository.getLatestMessageBefore(
+        conversationId,
+        readAt,
+        userId,
+      );
+
+      if (lastMessage) {
+        await ChatRepository.markAsRead(conversationId, userId, lastMessage.id);
+      }
 
       this.io.to(`conv:${conversationId}`).emit('message:read', {
         conversation_id: conversationId,

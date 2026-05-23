@@ -90,6 +90,12 @@ export class MessagesService {
         sender: {
           select: { id: true, name: true, avatar: true },
         },
+        receipts: {
+          select: {
+            status: true,
+            user_id: true,
+          },
+        },
       },
       orderBy: { created_at: 'desc' },
       take: limit,
