@@ -126,6 +126,14 @@ export class ConversationsController {
     return this.service.removeMember(conversation_id, user_id, member_id);
   }
 
+  @Delete(':conversation_id')
+  deleteConversation(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+  ) {
+    return this.service.deleteConversation(conversation_id, user_id);
+  }
+
   // updated
   @Patch(':conversation_id/clear')
   clearForMe(

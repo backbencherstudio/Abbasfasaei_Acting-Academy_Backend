@@ -148,6 +148,11 @@ ul { list-style: none; }
   font-weight: 700; font-size: 0.9rem; color: #fff;
   flex-shrink: 0;
 }
+.conv-item img.conv-avatar,
+.search-item img.conv-avatar,
+.member-row img.conv-avatar {
+  object-fit: cover;
+}
 .conv-meta { flex: 1; min-width: 0; }
 .conv-name { font-size: 0.88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .conv-preview { font-size: 0.75rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; margin-top: 2px; }
@@ -198,6 +203,24 @@ ul { list-style: none; }
   transition: background .2s;
 }
 .chat-header-actions button:hover { background: rgba(255,255,255,0.08); }
+.chat-avatar-btn {
+  width: 38px !important;
+  height: 38px !important;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.chat-avatar-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 999px;
+}
+.chat-avatar-btn .conv-avatar {
+  width: 100%;
+  height: 100%;
+  font-size: 0.85rem;
+}
 
 /* Messages */
 .messages {
@@ -232,10 +255,12 @@ ul { list-style: none; }
 .msg-sender { font-size: 0.7rem; font-weight: 600; color: #6c63ff; margin-bottom: 2px; }
 .msg-text { margin: 0; }
 .msg-attachment img { max-width: 220px; border-radius: 10px; margin-top: 4px; }
+.msg-attachment video { max-width: 220px; border-radius: 10px; margin-top: 4px; display: block; }
 .msg-attachment a { color: #6c63ff; text-decoration: underline; }
 .msg-time { font-size: 0.65rem; color: rgba(255,255,255,0.35); margin-top: 3px; display: block; }
 .msg.me .msg-time { text-align: right; }
 .msg-status { font-size: 0.62rem; color: rgba(255,255,255,0.3); }
+.msg-status.read { color: #60a5fa; }
 .msg-reply {
   padding: 0.35rem 0.6rem;
   margin-bottom: 4px;
@@ -382,6 +407,113 @@ ul { list-style: none; }
   padding-right: 8px;
 }
 .modal-result-item:hover { background: rgba(108,99,255,0.1); }
+.modal-section { margin-bottom: 1rem; }
+.modal-section:last-child { margin-bottom: 0; }
+.modal-section-title {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8b90a7;
+  margin-bottom: 0.6rem;
+}
+.modal-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+.modal-action-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #e4e6eb;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  text-align: left;
+  font-size: 0.82rem;
+}
+.modal-action-btn:hover { background: rgba(108,99,255,0.14); }
+.modal-action-btn.danger {
+  border-color: rgba(239,68,68,0.22);
+  color: #fda4af;
+}
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+.profile-head .conv-avatar,
+.profile-head img {
+  width: 54px;
+  height: 54px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.profile-head img { object-fit: cover; }
+.profile-head h4 { font-size: 1rem; margin-bottom: 0.18rem; }
+.profile-head p { font-size: 0.78rem; color: #8b90a7; }
+.attachments-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+.attachment-card {
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: 78px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.attachment-card img,
+.attachment-card video {
+  width: 100%;
+  height: 78px;
+  object-fit: cover;
+  display: block;
+}
+.attachment-card a,
+.attachment-card span {
+  display: block;
+  padding: 0.55rem;
+  font-size: 0.74rem;
+  color: #d1d5db;
+  word-break: break-word;
+}
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+}
+.member-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+.member-row-meta {
+  min-width: 0;
+}
+.member-row-meta .name {
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.member-row-meta .sub {
+  font-size: 0.72rem;
+  color: #8b90a7;
+}
+.member-row-action {
+  font-size: 0.72rem;
+  color: #fda4af;
+  background: rgba(239,68,68,0.12);
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+}
+.empty-state {
+  font-size: 0.78rem;
+  color: #8b90a7;
+  padding: 0.35rem 0;
+}
 .modal-footer {
   display: flex; justify-content: flex-end; gap: 8px;
   padding: 0.8rem 1.2rem;

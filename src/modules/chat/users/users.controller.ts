@@ -30,13 +30,18 @@ export class UsersController {
   //   return this.users.suggestUsers(me.userId, q, takeNumber);
   // }
 
-  // @Post(':id/block')
-  // block(@GetUser() me: any, @Param('id') id: string) {
-  //   return this.users.block(me.userId, id);
-  // }
+  @Get(':id/block-status')
+  getBlockStatus(@GetUser('userId') userId: string, @Param('id') id: string) {
+    return this.users.getBlockStatus(userId, id);
+  }
 
-  // @Delete(':id/block')
-  // unblock(@GetUser() me: any, @Param('id') id: string) {
-  //   return this.users.unblock(me.userId, id);
-  // }
+  @Post(':id/block')
+  block(@GetUser('userId') userId: string, @Param('id') id: string) {
+    return this.users.block(userId, id);
+  }
+
+  @Delete(':id/block')
+  unblock(@GetUser('userId') userId: string, @Param('id') id: string) {
+    return this.users.unblock(userId, id);
+  }
 }

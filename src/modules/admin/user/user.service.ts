@@ -223,10 +223,11 @@ export class UserService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    await this.prisma.user.update({
+
+    await this.prisma.user.delete({
       where: { id: user_id },
-      data: { deleted_at: new Date() },
     });
+
     return {
       success: true,
       message: 'User deleted successfully',

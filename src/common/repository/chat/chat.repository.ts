@@ -395,6 +395,7 @@ export class ChatRepository {
         return {
           last_read_at: targetMessage.created_at,
           marked_count: 0,
+          message_ids: [],
         };
       }
 
@@ -428,6 +429,7 @@ export class ChatRepository {
       return {
         last_read_at: targetMessage.created_at,
         marked_count: messageIds.length,
+        message_ids: messageIds,
       };
     });
   }

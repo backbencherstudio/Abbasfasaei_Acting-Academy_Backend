@@ -341,7 +341,20 @@ export class RealtimeGateway
       );
 
       if (lastMessage) {
-        await ChatRepository.markAsRead(conversationId, userId, lastMessage.id);
+        const result = await ChatRepository.markAsRead(
+          conversationId,
+          userId,
+          lastMessage.id,
+        );
+
+        if (result?.message_ids?.length) {
+          this.io.to(`conv:${conversationId}`).emit('message:status', {
+            conversation_id: conversationId,
+            user_id: userId,
+            status: 'READ',
+            message_ids: result.message_ids,
+          });
+        }
       }
 
       this.io.to(`conv:${conversationId}`).emit('message:read', {

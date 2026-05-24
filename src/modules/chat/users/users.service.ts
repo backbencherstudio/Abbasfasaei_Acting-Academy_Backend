@@ -1,6 +1,4 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
-import appConfig from 'src/config/app.config';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
@@ -55,34 +53,67 @@ export class UsersService {
   //   return { items };
   // }
 
-  // async block(blockerId: string, targetUserId: string) {
-  //   if (blockerId === targetUserId)
-  //     throw new ForbiddenException('Cannot block yourself');
-  //   await this.prisma.block.upsert({
-  //     where: { blockerId_blockedId: { blockerId, blockedId: targetUserId } },
-  //     update: {},
-  //     create: { blockerId, blockedId: targetUserId },
-  //   });
-  //   return { ok: true };
-  // }
+  async block(blockerId: string, targetUserId: string) {
+    if (blockerId === targetUserId) {
+      throw new ForbiddenException('Cannot block yourself');
+    }
 
-  // async unblock(blockerId: string, targetUserId: string) {
-  //   await this.prisma.block.deleteMany({
-  //     where: { blockerId, blockedId: targetUserId },
-  //   });
-  //   return { ok: true };
-  // }
+    await this.prisma.block.upsert({
+      where: {
+        blocker_id_blocked_id: {
+          blocker_id: blockerId,
+          blocked_id: targetUserId,
+        },
+      },
+      update: {},
+      create: {
+        blocker_id: blockerId,
+        blocked_id: targetUserId,
+      },
+    });
 
-  // async isBlocked(a: string, b: string) {
-  //   // either direction
-  //   const cnt = await this.prisma.block.count({
-  //     where: {
-  //       OR: [
-  //         { blockerId: a, blockedId: b },
-  //         { blockerId: b, blockedId: a },
-  //       ],
-  //     },
-  //   });
-  //   return cnt > 0;
-  // }
+    return {
+      success: true,
+      message: 'User blocked successfully',
+    };
+  }
+
+  async unblock(blockerId: string, targetUserId: string) {
+    await this.prisma.block.deleteMany({
+      where: {
+        blocker_id: blockerId,
+        blocked_id: targetUserId,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'User unblocked successfully',
+    };
+  }
+
+  async getBlockStatus(currentUserId: string, targetUserId: string) {
+    const [blockedByMe, blockedMe] = await Promise.all([
+      this.prisma.block.count({
+        where: {
+          blocker_id: currentUserId,
+          blocked_id: targetUserId,
+        },
+      }),
+      this.prisma.block.count({
+        where: {
+          blocker_id: targetUserId,
+          blocked_id: currentUserId,
+        },
+      }),
+    ]);
+
+    return {
+      success: true,
+      data: {
+        blocked_by_me: blockedByMe > 0,
+        blocked_me: blockedMe > 0,
+      },
+    };
+  }
 }

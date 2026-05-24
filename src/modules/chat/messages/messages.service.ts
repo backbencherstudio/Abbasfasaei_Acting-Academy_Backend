@@ -38,7 +38,7 @@ export class MessagesService {
         AND: [
           { conversation_id },
           { deleted_at: null },
-          { created_at: { gt: membership.cleared_at } },
+          ...(membership.cleared_at ? [{ created_at: { gt: membership.cleared_at } }] : []),
           {
             OR: [
               {

@@ -543,6 +543,50 @@ export class ConversationsService {
     };
   }
 
+  async deleteConversation(conversation_id: string, user_id: string) {
+    if (!user_id) throw new UnauthorizedException('Please login first!');
+
+    const membership = await this.prisma.membership.findFirst({
+      where: {
+        conversation_id,
+        user_id,
+        left_at: null,
+      },
+      select: {
+        id: true,
+        role: true,
+        conversation: {
+          select: {
+            id: true,
+            type: true,
+          },
+        },
+      },
+    });
+
+    if (!membership?.conversation) {
+      throw new ForbiddenException('Not a member of this conversation');
+    }
+
+    if (
+      membership.conversation.type === ConversationType.GROUP &&
+      membership.role !== MemberRole.ADMIN
+    ) {
+      throw new ForbiddenException('Only admin can delete this conversation');
+    }
+
+    await this.prisma.conversation.delete({
+      where: {
+        id: conversation_id,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Conversation deleted successfully',
+    };
+  }
+
   async updateMemberRole(
     conversation_id: string,
     user_id: string,
@@ -755,13 +799,31 @@ export class ConversationsService {
       );
     }
 
+    const lowerSearch = normalizedSearch?.toLowerCase() ?? null;
+
     const similarityExpression = normalizedSearch
       ? Prisma.sql`
-          FLOOR(
-            GREATEST(
-              similarity(COALESCE(u.name, ''), ${normalizedSearch}),
-              similarity(COALESCE(u.username, ''), ${normalizedSearch})
-            ) * 1000000
+          (
+            CASE
+              WHEN LOWER(COALESCE(u.username, '')) = ${lowerSearch} THEN 5000000
+              WHEN LOWER(COALESCE(u.name, ''))     = ${lowerSearch} THEN 4500000
+              WHEN LOWER(COALESCE(u.email, ''))     = ${lowerSearch} THEN 4500000
+              WHEN COALESCE(u.phone_number, '')      = ${normalizedSearch} THEN 4500000
+              WHEN COALESCE(u.username, '') ILIKE ${`${normalizedSearch}%`} THEN 3500000
+              WHEN COALESCE(u.name, '')     ILIKE ${`${normalizedSearch}%`} THEN 3200000
+              WHEN COALESCE(u.email, '')    ILIKE ${`${normalizedSearch}%`} THEN 3200000
+              WHEN COALESCE(u.phone_number, '') LIKE ${`${normalizedSearch}%`} THEN 3200000
+              ELSE 0
+            END
+            +
+            FLOOR(
+              GREATEST(
+                similarity(COALESCE(u.name, ''), ${normalizedSearch}),
+                similarity(COALESCE(u.username, ''), ${normalizedSearch}),
+                similarity(COALESCE(u.email, ''), ${normalizedSearch}),
+                similarity(COALESCE(u.phone_number, ''), ${normalizedSearch})
+              ) * 1000000
+            )::integer
           )::integer
         `
       : Prisma.sql`0::integer`;
@@ -780,9 +842,31 @@ export class ConversationsService {
 
     const typeFilter =
       type === 'admin'
-        ? Prisma.sql`AND LOWER(COALESCE(u.type, '')) = 'admin'`
+        ? Prisma.sql`
+            AND (
+              LOWER(COALESCE(u.type, '')) = 'admin'
+              OR EXISTS (
+                SELECT 1
+                FROM role_users ru
+                INNER JOIN roles r ON r.id = ru.role_id
+                WHERE ru.user_id = u.id
+                  AND LOWER(COALESCE(r.name, '')) = 'admin'
+              )
+            )
+          `
         : type === 'teacher'
-          ? Prisma.sql`AND LOWER(COALESCE(u.type, '')) = 'teacher'`
+          ? Prisma.sql`
+              AND (
+                LOWER(COALESCE(u.type, '')) = 'teacher'
+                OR EXISTS (
+                  SELECT 1
+                  FROM role_users ru
+                  INNER JOIN roles r ON r.id = ru.role_id
+                  WHERE ru.user_id = u.id
+                    AND LOWER(COALESCE(r.name, '')) = 'teacher'
+                )
+              )
+            `
           : Prisma.empty;
 
     const cursorFilter = decodedCursor
@@ -855,9 +939,17 @@ export class ConversationsService {
 
     const rows = await this.prisma.$queryRaw<DiscoverUsersRow[]>(Prisma.sql`
       WITH req_user AS (
-        SELECT LOWER(COALESCE(type, '')) AS normalized_type
-        FROM users
-        WHERE id = ${user_id}
+        SELECT
+          LOWER(COALESCE(u.type, '')) AS normalized_type,
+          EXISTS (
+            SELECT 1
+            FROM role_users ru
+            INNER JOIN roles r ON r.id = ru.role_id
+            WHERE ru.user_id = u.id
+              AND LOWER(COALESCE(r.name, '')) = 'admin'
+          ) AS has_admin_role
+        FROM users u
+        WHERE u.id = ${user_id}
       ),
       ranked_users AS (
         SELECT
@@ -868,7 +960,6 @@ export class ConversationsService {
           u.phone_number,
           u.avatar,
           u.type,
-          LOWER(COALESCE(u.type, '')) AS normalized_type,
           u.created_at,
           CASE
             WHEN EXISTS (
@@ -922,10 +1013,29 @@ export class ConversationsService {
           AND u.deleted_at IS NULL
           AND u.status = ${UserStatus.ACTIVE}
           AND (
-            LOWER(COALESCE(u.type, '')) IN ('student', 'teacher', 'admin')
+            LOWER(COALESCE(u.type, '')) IN ('user', 'student', 'teacher', 'admin')
+            OR EXISTS (
+              SELECT 1
+              FROM role_users ru
+              INNER JOIN roles r ON r.id = ru.role_id
+              WHERE ru.user_id = u.id
+                AND LOWER(COALESCE(r.name, '')) IN ('user', 'student', 'teacher', 'admin')
+            )
             OR (
-              LOWER(COALESCE(u.type, '')) = 'su_admin'
-              AND cu.normalized_type = 'admin'
+              (
+                LOWER(COALESCE(u.type, '')) = 'su_admin'
+                OR EXISTS (
+                  SELECT 1
+                  FROM role_users ru
+                  INNER JOIN roles r ON r.id = ru.role_id
+                  WHERE ru.user_id = u.id
+                    AND LOWER(COALESCE(r.name, '')) = 'su_admin'
+                )
+              )
+              AND (
+                cu.normalized_type = 'admin'
+                OR cu.has_admin_role = true
+              )
             )
           )
           ${typeFilter}
