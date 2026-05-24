@@ -24,21 +24,21 @@ type JwtPayload = {
 const conversationIdSchema = z
   .string()
   .trim()
-  .min(1, 'conversationId is required')
-  .max(100, 'conversationId is too long')
-  .regex(/^[a-zA-Z0-9_-]+$/, 'conversationId is invalid');
+  .min(1, 'conversation_id is required')
+  .max(100, 'conversation_id is too long')
+  .regex(/^[a-zA-Z0-9_-]+$/, 'conversation_id is invalid');
 
 const joinSchema = z.object({
-  conversationId: conversationIdSchema,
+  conversation_id: conversationIdSchema,
 });
 
 const typingSchema = z.object({
-  conversationId: conversationIdSchema,
+  conversation_id: conversationIdSchema,
   on: z.boolean().default(true),
 });
 
 const readMessageSchema = z.object({
-  conversationId: conversationIdSchema,
+  conversation_id: conversationIdSchema,
   at: z.string().datetime().optional(),
 });
 
@@ -82,16 +82,31 @@ export class RealtimeGateway
         const data = JSON.parse(message);
 
         if (channel === 'chat:messages') {
-          this.io
-            .to(`conv:${data.conversation_id}`)
-            .emit('message:new', data.msg);
+          const targetUserIds = Array.isArray(data.target_user_ids)
+            ? data.target_user_ids
+            : [];
+
+          if (targetUserIds.length > 0) {
+            this.emitToUsers(targetUserIds, 'message:new', data.msg);
+          } else {
+            this.io.to(`conv:${data.conversation_id}`).emit('message:new', data.msg);
+          }
         } else if (channel === 'chat:message_status') {
-          this.io.to(`conv:${data.conversation_id}`).emit('message:status', {
+          const payload = {
             conversation_id: data.conversation_id,
             user_id: data.user_id,
             status: data.status,
             message_ids: data.message_ids,
-          });
+          };
+          const targetUserIds = Array.isArray(data.target_user_ids)
+            ? data.target_user_ids
+            : [];
+
+          if (targetUserIds.length > 0) {
+            this.emitToUsers(targetUserIds, 'message:status', payload);
+          } else {
+            this.io.to(`conv:${data.conversation_id}`).emit('message:status', payload);
+          }
         }
       } catch (err) {
         this.dbg('redis_sub_message_parse_failed', {
@@ -226,13 +241,13 @@ export class RealtimeGateway
     if (!parsed.success) {
       socket.emit('error:conversation', {
         code: 'BAD_REQUEST',
-        message: 'conversationId required',
+        message: 'conversation_id required',
       });
 
       return;
     }
 
-    const { conversationId } = parsed.data;
+    const { conversation_id: conversationId } = parsed.data;
 
     try {
       await ChatRepository.ensureMember(conversationId, userId);
@@ -278,7 +293,7 @@ export class RealtimeGateway
       return;
     }
 
-    const { conversationId, on } = parsed.data;
+    const { conversation_id: conversationId, on } = parsed.data;
 
     const key = `${userId}:${conversationId}`;
     const now = Date.now();
@@ -328,7 +343,7 @@ export class RealtimeGateway
       return;
     }
 
-    const { conversationId, at } = parsed.data;
+    const { conversation_id: conversationId, at } = parsed.data;
     const readAt = at ? new Date(at) : new Date();
 
     try {
@@ -348,20 +363,28 @@ export class RealtimeGateway
         );
 
         if (result?.message_ids?.length) {
-          this.io.to(`conv:${conversationId}`).emit('message:status', {
+          const payload = {
             conversation_id: conversationId,
             user_id: userId,
             status: 'READ',
             message_ids: result.message_ids,
+          };
+
+          if (result.target_user_ids?.length) {
+            this.emitToUsers(result.target_user_ids, 'message:status', payload);
+          } else {
+            this.io.to(`conv:${conversationId}`).emit('message:status', payload);
+          }
+        }
+
+        if (result?.target_user_ids?.length) {
+          this.emitToUsers(result.target_user_ids, 'message:read', {
+            conversation_id: conversationId,
+            user_id: userId,
+            at: readAt.toISOString(),
           });
         }
       }
-
-      this.io.to(`conv:${conversationId}`).emit('message:read', {
-        conversation_id: conversationId,
-        user_id: userId,
-        at: readAt.toISOString(),
-      });
     } catch (err) {
       this.dbg('message_read_failed', {
         userId,
@@ -468,6 +491,22 @@ export class RealtimeGateway
       user_id: userId,
       online,
     });
+  }
+
+  private emitToUsers(userIds: string[], event: string, payload: unknown) {
+    const rooms = Array.from(
+      new Set(
+        userIds
+          .filter((userId) => typeof userId === 'string' && userId.trim())
+          .map((userId) => `user:${userId}`),
+      ),
+    );
+
+    if (rooms.length === 0) {
+      return;
+    }
+
+    this.io.to(rooms).emit(event, payload);
   }
 
   private async getUserName(userId: string): Promise<string | null> {

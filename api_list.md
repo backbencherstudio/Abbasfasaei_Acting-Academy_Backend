@@ -1,12 +1,13 @@
 # API Curl List
 
 - Base URL: `http://localhost:7777`
-- Skipped modules: `chat/users`, `chat/rtc` (active route nai)
+- Skipped modules: `chat/rtc` (controller ache, active HTTP route nai)
 - Note: `transaction` module include kora hoyeche, karon eta alada module
 
 ---
 
-## App Module
+<details>
+<summary>App Module</summary>
 
 ### Root Health Check
 
@@ -35,7 +36,10 @@ curl -X POST "http://localhost:7777/test-file-upload" \
 
 ---
 
-## Auth Module
+</details>
+
+<details>
+<summary>Auth Module</summary>
 
 ### Get Current User
 
@@ -225,7 +229,10 @@ curl -X POST "http://localhost:7777/auth/disable-2fa"
 
 ---
 
-## Application Profile Module
+</details>
+
+<details>
+<summary>Application Profile Module</summary>
 
 ### Get Profile
 
@@ -284,7 +291,10 @@ curl -X POST "http://localhost:7777/profile/logout"
 
 ---
 
-## Application Overview Module
+</details>
+
+<details>
+<summary>Application Overview Module</summary>
 
 ### Get Student Overview
 
@@ -294,7 +304,10 @@ curl -X GET "http://localhost:7777/overview"
 
 ---
 
-## Application Contact Module
+</details>
+
+<details>
+<summary>Application Contact Module</summary>
 
 ### Create Contact
 
@@ -312,7 +325,10 @@ curl -X POST "http://localhost:7777/contact" \
 
 ---
 
-## Application FAQ Module
+</details>
+
+<details>
+<summary>Application FAQ Module</summary>
 
 ### Get All FAQ
 
@@ -328,7 +344,10 @@ curl -X GET "http://localhost:7777/faq/:id"
 
 ---
 
-## Application Event Module
+</details>
+
+<details>
+<summary>Application Event Module</summary>
 
 ### Get All Events
 
@@ -344,7 +363,10 @@ curl -X GET "http://localhost:7777/events/:event_id"
 
 ---
 
-## Application Course Module
+</details>
+
+<details>
+<summary>Application Course Module</summary>
 
 ### Get All Courses
 
@@ -473,7 +495,10 @@ curl -X POST "http://localhost:7777/courses/attendance/scan-qr" \
 
 ---
 
-## Application Community Module
+</details>
+
+<details>
+<summary>Application Community Module</summary>
 
 ### Create Post
 
@@ -601,7 +626,10 @@ curl -X POST "http://localhost:7777/community/report/:reported_user_id" \
 
 ---
 
-## Admin Overview Module
+</details>
+
+<details>
+<summary>Admin Overview Module</summary>
 
 ### Get Admin Overview
 
@@ -611,7 +639,10 @@ curl -X GET "http://localhost:7777/admin/overview"
 
 ---
 
-## Admin User Module
+</details>
+
+<details>
+<summary>Admin User Module</summary>
 
 ### Create User
 
@@ -682,7 +713,10 @@ curl -X DELETE "http://localhost:7777/admin/users/:user_id"
 
 ---
 
-## Admin Settings Module
+</details>
+
+<details>
+<summary>Admin Settings Module</summary>
 
 ### Get General Settings
 
@@ -726,7 +760,10 @@ curl -X POST "http://localhost:7777/admin/settings/update-profile" \
 
 ---
 
-## Admin Website Info Module
+</details>
+
+<details>
+<summary>Admin Website Info Module</summary>
 
 ### Update Website Info
 
@@ -750,7 +787,10 @@ curl -X GET "http://localhost:7777/admin/website-info"
 
 ---
 
-## Admin Contact Module
+</details>
+
+<details>
+<summary>Admin Contact Module</summary>
 
 ### Create Contact
 
@@ -796,7 +836,10 @@ curl -X DELETE "http://localhost:7777/admin/contact/:id"
 
 ---
 
-## Admin FAQ Module
+</details>
+
+<details>
+<summary>Admin FAQ Module</summary>
 
 ### Create FAQ
 
@@ -857,7 +900,10 @@ curl -X DELETE "http://localhost:7777/admin/faq/:id"
 
 ---
 
-## Admin Event Module
+</details>
+
+<details>
+<summary>Admin Event Module</summary>
 
 ### Get All Events
 
@@ -906,7 +952,10 @@ curl -X PATCH "http://localhost:7777/admin/events/:event_id" \
 
 ---
 
-## Admin Course Module
+</details>
+
+<details>
+<summary>Admin Course Module</summary>
 
 Controller source: `src/modules/admin/course/courses.controller.ts`
 
@@ -1235,7 +1284,10 @@ curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/assets/:asse
 
 ---
 
-## Admin Community Module
+</details>
+
+<details>
+<summary>Admin Community Module</summary>
 
 ### Create Admin Post
 
@@ -1286,7 +1338,10 @@ curl -X DELETE "http://localhost:7777/admin/community/post/:post_id"
 
 ---
 
-## Admin Transaction Module
+</details>
+
+<details>
+<summary>Admin Transaction Module</summary>
 
 ### Register Finance User
 
@@ -1354,7 +1409,10 @@ curl -X GET "http://localhost:7777/finance-and-payments"
 
 ---
 
-## Notification Module
+</details>
+
+<details>
+<summary>Notification Module</summary>
 
 ### Get Notifications
 
@@ -1388,18 +1446,12 @@ curl -X DELETE "http://localhost:7777/notification"
 
 ---
 
-## Chat Uploads Module
+</details>
 
-### Upload Chat File
+<details>
+<summary>Chat Conversations Module</summary>
 
-```bash
-curl -X POST "http://localhost:7777/uploads" \
-  -F "file=@/path/to/file.pdf"
-```
-
----
-
-## Chat Conversations Module
+Controller source: `src/modules/chat/conversations/conversations.controller.ts`
 
 ### Create DM Conversation
 
@@ -1418,15 +1470,15 @@ curl -X POST "http://localhost:7777/conversations" \
 curl -X POST "http://localhost:7777/conversations" \
   -F "type=GROUP" \
   -F "title=Acting Batch Group" \
-  -F "participant_ids=user_1" \
-  -F "participant_ids=user_2" \
+  -F "participant_ids=USER_ID_1" \
+  -F "participant_ids=USER_ID_2" \
   -F "avatar=@/path/to/group-avatar.jpg"
 ```
 
 ### Get My Conversations
 
 ```bash
-curl -X GET "http://localhost:7777/conversations?type=DM&limit=10&cursor=CONVERSATION_ID"
+curl -X GET "http://localhost:7777/conversations?type=DM&limit=10&cursor=CURSOR_VALUE"
 ```
 
 ### Mark Conversation As Read
@@ -1471,13 +1523,25 @@ curl -X PATCH "http://localhost:7777/conversations/:conversation_id/members/:mem
 curl -X DELETE "http://localhost:7777/conversations/:conversation_id/members/:member_id"
 ```
 
+### Leave Group Conversation
+
+```bash
+curl -X DELETE "http://localhost:7777/conversations/:conversation_id/leave"
+```
+
+### Delete Conversation
+
+```bash
+curl -X DELETE "http://localhost:7777/conversations/:conversation_id"
+```
+
 ### Clear Conversation For Me
 
 ```bash
 curl -X PATCH "http://localhost:7777/conversations/:conversation_id/clear"
 ```
 
-### Update Conversation Silent
+### Update Conversation Silent Until
 
 ```bash
 curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
@@ -1511,13 +1575,7 @@ curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
 ### Get Conversation Attachments
 
 ```bash
-curl -X GET "http://localhost:7777/conversations/:conversation_id/attachments?type=media&limit=10&cursor=ATTACHMENT_ID"
-```
-
-### Discover Users For Conversation
-
-```bash
-curl -X GET "http://localhost:7777/conversations/discover_users?search=ab&type=teacher&limit=10&cursor=CURSOR_VALUE"
+curl -X GET "http://localhost:7777/conversations/:conversation_id/attachments?type=media&limit=10&cursor=CURSOR_VALUE"
 ```
 
 ### Report User From Chat
@@ -1532,12 +1590,17 @@ curl -X POST "http://localhost:7777/conversations/report/:reported_user_id" \
 
 ---
 
-## Chat Messages Module
+</details>
+
+<details>
+<summary>Chat Messages Module</summary>
+
+Controller source: `src/modules/chat/messages/messages.controller.ts`
 
 ### Get Conversation Messages
 
 ```bash
-curl -X GET "http://localhost:7777/conversations/:conversation_id/messages?limit=20&cursor=MESSAGE_ID"
+curl -X GET "http://localhost:7777/conversations/:conversation_id/messages?limit=20&cursor=CURSOR_VALUE"
 ```
 
 ### Send Text Message
@@ -1550,6 +1613,20 @@ curl -X POST "http://localhost:7777/conversations/:conversation_id/messages" \
     "content": {
       "text": "Hello"
     }
+  }'
+```
+
+### Send Reply Message
+
+```bash
+curl -X POST "http://localhost:7777/conversations/:conversation_id/messages" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "kind": "TEXT",
+    "content": {
+      "text": "Replying to your message"
+    },
+    "reply_to_id": "MESSAGE_ID"
   }'
 ```
 
@@ -1571,7 +1648,54 @@ curl -X DELETE "http://localhost:7777/conversations/messages/:message_id"
 
 ---
 
-## Payment Module
+</details>
+
+<details>
+<summary>Chat Users Module</summary>
+
+Controller source: `src/modules/chat/users/users.controller.ts`
+
+### Discover Users
+
+```bash
+curl -X GET "http://localhost:7777/users/discover?search=Moses%20Simmons&type=teacher&limit=10&cursor=CURSOR_VALUE"
+```
+
+### Get Block Status
+
+```bash
+curl -X GET "http://localhost:7777/users/:id/block-status"
+```
+
+### Block User
+
+```bash
+curl -X POST "http://localhost:7777/users/:id/block"
+```
+
+### Unblock User
+
+```bash
+curl -X DELETE "http://localhost:7777/users/:id/block"
+```
+
+---
+
+</details>
+
+<details>
+<summary>Chat RTC Module</summary>
+
+Controller source: `src/modules/chat/rtc/rtc.controller.ts`
+
+No active HTTP route right now. Controller ache, but shob route commented out.
+
+---
+
+</details>
+
+<details>
+<summary>Payment Module</summary>
 
 ### Create Checkout Session (Course)
 
@@ -1614,3 +1738,5 @@ curl -X POST "http://localhost:7777/payment/stripe/webhook" \
     }
   }'
 ```
+
+</details>

@@ -421,7 +421,7 @@ async function selectConversation(convId) {
   renderConversationList();
 
   if (socket) {
-    socket.emit('conversation:join', { conversationId: convId });
+    socket.emit('conversation:join', { conversation_id: convId });
     log('socket', `EMIT conversation:join — ${convId.slice(0, 8)}`);
   }
 
@@ -456,7 +456,7 @@ async function markAsRead(convId, messageId, at) {
 
     if (socket?.connected) {
       socket.emit('message:read', {
-        conversationId: convId,
+        conversation_id: convId,
         at: at ? new Date(at).toISOString() : new Date().toISOString(),
       });
       log('socket', `EMIT message:read — conv=${convId.slice(0, 8)}`);
@@ -490,7 +490,7 @@ function connectSocket() {
   socket.on('connect', () => {
     log('socket', `Connected (${socket.id})`);
     if (activeConvId) {
-      socket.emit('conversation:join', { conversationId: activeConvId });
+      socket.emit('conversation:join', { conversation_id: activeConvId });
     }
   });
 
@@ -608,7 +608,7 @@ msgInput.addEventListener('keydown', (e) => {
 
 msgInput.addEventListener('input', () => {
   if (!socket || !activeConvId) return;
-  socket.emit('typing', { conversationId: activeConvId, on: true });
+  socket.emit('typing', { conversation_id: activeConvId, on: true });
 });
 
 async function sendMessage() {
@@ -645,7 +645,7 @@ async function sendMessage() {
       updateConversationFromMessage(json.data);
     }
     if (socket) {
-      socket.emit('typing', { conversationId: activeConvId, on: false });
+      socket.emit('typing', { conversation_id: activeConvId, on: false });
     }
   } catch (error) {
     log('error', `sendMessage: ${error.message}`);

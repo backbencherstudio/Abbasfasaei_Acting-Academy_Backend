@@ -348,6 +348,9 @@ export class ChatRepository {
         JSON.stringify({
           conversation_id: conversationId,
           msg: formattedMessage,
+          target_user_ids: Array.from(
+            new Set([senderId, ...sentMembers.map((member: any) => member.user_id)]),
+          ),
         }),
       )
       .catch((err) => console.error('Redis chat publish failed:', err));
@@ -401,6 +404,11 @@ export class ChatRepository {
         },
         select: {
           message_id: true,
+          message: {
+            select: {
+              sender_id: true,
+            },
+          },
         },
       });
 
@@ -413,6 +421,13 @@ export class ChatRepository {
       }
 
       const messageIds = pendingReceipts.map((r) => r.message_id);
+      const targetUserIds = Array.from(
+        new Set(
+          pendingReceipts
+            .map((r) => r.message.sender_id)
+            .filter((senderId) => senderId && senderId !== userId),
+        ),
+      );
 
       // 3. Update receipts status to READ
       await tx.receipt.updateMany({
@@ -435,6 +450,7 @@ export class ChatRepository {
             user_id: userId,
             status: 'READ',
             message_ids: messageIds,
+            target_user_ids: targetUserIds,
           }),
         )
         .catch((err) => console.error('Redis status publish failed:', err));
@@ -443,6 +459,7 @@ export class ChatRepository {
         last_read_at: targetMessage.created_at,
         marked_count: messageIds.length,
         message_ids: messageIds,
+        target_user_ids: targetUserIds,
       };
     });
   }
@@ -458,6 +475,7 @@ export class ChatRepository {
         message: {
           select: {
             conversation_id: true,
+            sender_id: true,
           },
         },
       },
@@ -467,12 +485,21 @@ export class ChatRepository {
 
     const messageIds = pendingReceipts.map((r) => r.message_id);
 
-    const convGroups = new Map<string, string[]>();
+    const convGroups = new Map<
+      string,
+      { message_ids: string[]; target_user_ids: Set<string> }
+    >();
     for (const r of pendingReceipts) {
       const convId = r.message.conversation_id;
-      const list = convGroups.get(convId) || [];
-      list.push(r.message_id);
-      convGroups.set(convId, list);
+      const group = convGroups.get(convId) || {
+        message_ids: [],
+        target_user_ids: new Set<string>(),
+      };
+      group.message_ids.push(r.message_id);
+      if (r.message.sender_id && r.message.sender_id !== userId) {
+        group.target_user_ids.add(r.message.sender_id);
+      }
+      convGroups.set(convId, group);
     }
 
     await prisma.receipt.updateMany({
@@ -486,7 +513,7 @@ export class ChatRepository {
       },
     });
 
-    for (const [conversationId, msgIds] of convGroups.entries()) {
+    for (const [conversationId, group] of convGroups.entries()) {
       await redisPublisher
         .publish(
           'chat:message_status',
@@ -494,7 +521,8 @@ export class ChatRepository {
             conversation_id: conversationId,
             user_id: userId,
             status: 'DELIVERED',
-            message_ids: msgIds,
+            message_ids: group.message_ids,
+            target_user_ids: Array.from(group.target_user_ids),
           }),
         )
         .catch((err) => console.error('Redis status publish failed:', err));
