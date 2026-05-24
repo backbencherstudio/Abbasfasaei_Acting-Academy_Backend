@@ -155,7 +155,7 @@ function showMessageBox(message, type = 'success') {
 
 function showIncomingCallBanner(call) {
   pendingIncomingCall = call;
-  incomingCallText.textContent = `${call.kind || 'VIDEO'} call from ${call.fromUserId}`;
+  incomingCallText.textContent = `${call.kind || 'VIDEO'} call from ${call.caller?.name || call.started_by || 'Unknown'}`;
   incomingCallBanner.classList.remove('hidden');
 }
 
@@ -530,16 +530,16 @@ function connectSocket() {
   });
 
   socket.on('call:incoming', (payload) => {
-    if (!payload || payload.fromUserId === userId) return;
+    if (!payload || payload.started_by === userId) return;
     showIncomingCallBanner(payload);
   });
 
   socket.on('call:ended', (payload) => {
     if (!payload) return;
-    if (pendingIncomingCall?.conversationId === payload.conversationId) {
+    if (pendingIncomingCall?.conversation_id === payload.conversation_id) {
       hideIncomingCallBanner();
     }
-    if (lkRoom && currentConversationId === payload.conversationId) {
+    if (lkRoom && currentConversationId === payload.conversation_id) {
       cleanupCallUI();
       showMessageBox('Call ended by other participant', 'success');
     }
@@ -1388,9 +1388,9 @@ async function startCallFlow(kind = 'VIDEO') {
     const { success, data } = await tokenResp.json();
     if (!success) throw new Error('Token API returned error');
 
-    const { token, url, roomName } = data;
-    callStatusEl.textContent = `Connecting to ${roomName}`;
-    await connectLiveKit(url, token, kind);
+    const livekit = data.livekit || data;
+    callStatusEl.textContent = `Connecting to ${livekit.room_name}`;
+    await connectLiveKit(livekit.url, livekit.token, kind);
   } catch (error) {
     console.error('Call start error:', error);
     showMessageBox(getFriendlyCallError(error, 'Failed to start call'), 'error');
@@ -1400,7 +1400,7 @@ async function startCallFlow(kind = 'VIDEO') {
 
 async function joinIncomingCall(call) {
   const kind = call.kind || 'VIDEO';
-  const convId = call.conversationId;
+  const convId = call.conversation_id;
   if (!convId) return;
 
   try {
@@ -1430,7 +1430,8 @@ async function joinIncomingCall(call) {
     const { success, data } = await tokenResp.json();
     if (!success) throw new Error('Token API returned error');
 
-    await connectLiveKit(data.url, data.token, kind);
+    const livekit = data.livekit || data;
+    await connectLiveKit(livekit.url, livekit.token, kind);
   } catch (error) {
     console.error('joinIncomingCall failed:', error);
     showMessageBox(getFriendlyCallError(error, 'Failed to join incoming call'), 'error');
@@ -1668,7 +1669,14 @@ window.addEventListener('resize', () => {
 });
 
 incomingCallRejectBtn.addEventListener('click', () => {
+  const call = pendingIncomingCall;
   hideIncomingCallBanner();
+  if (!call?.conversation_id) return;
+
+  fetch(`${API_BASE}/rtc/conversations/${call.conversation_id}/decline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+  }).catch((error) => console.warn('Decline call warning:', error));
 });
 
 incomingCallAcceptBtn.addEventListener('click', async () => {

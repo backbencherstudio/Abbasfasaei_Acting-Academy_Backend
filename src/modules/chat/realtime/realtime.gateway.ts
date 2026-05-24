@@ -399,34 +399,31 @@ export class RealtimeGateway
     }
   }
 
-  emitCallIncoming(
-    conversationId: string,
-    fromUserId: string,
-    kind: 'AUDIO' | 'VIDEO',
-    toUserIds: string[],
-  ) {
-    const payload = {
-      conversation_id: conversationId,
-      from_user_id: fromUserId,
-      kind,
-      at: new Date().toISOString(),
-    };
-
-    for (const userId of toUserIds) {
-      this.io.to(`user:${userId}`).emit('call:incoming', payload);
-    }
+  emitCallIncoming(toUserIds: string[], payload: Record<string, unknown>) {
+    this.emitToUsers(toUserIds, 'call:incoming', payload);
   }
 
-  emitCallEnded(conversationId: string, byUserId: string, toUserIds: string[]) {
-    const payload = {
-      conversation_id: conversationId,
-      by_user_id: byUserId,
-      at: new Date().toISOString(),
-    };
+  emitCallJoined(toUserIds: string[], payload: Record<string, unknown>) {
+    this.emitToUsers(toUserIds, 'call:participant_joined', payload);
+  }
 
-    for (const userId of toUserIds) {
-      this.io.to(`user:${userId}`).emit('call:ended', payload);
-    }
+  emitCallLeft(toUserIds: string[], payload: Record<string, unknown>) {
+    this.emitToUsers(toUserIds, 'call:participant_left', payload);
+  }
+
+  emitCallParticipantUpdated(
+    toUserIds: string[],
+    payload: Record<string, unknown>,
+  ) {
+    this.emitToUsers(toUserIds, 'call:participant_updated', payload);
+  }
+
+  emitCallDeclined(toUserIds: string[], payload: Record<string, unknown>) {
+    this.emitToUsers(toUserIds, 'call:declined', payload);
+  }
+
+  emitCallEnded(toUserIds: string[], payload: Record<string, unknown>) {
+    this.emitToUsers(toUserIds, 'call:ended', payload);
   }
 
   private getToken(socket: Socket): string | undefined {

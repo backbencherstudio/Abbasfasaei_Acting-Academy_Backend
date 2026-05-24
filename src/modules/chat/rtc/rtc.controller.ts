@@ -1,94 +1,103 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { RtcService } from './rtc.service';
-import { CallKind } from '@prisma/client';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
-import { RealtimeGateway } from '../realtime/realtime.gateway';
-
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+import { RtcService } from './rtc.service';
+import {
+  ConversationIdParamDto,
+  StartCallDto,
+  UpdateParticipantMediaDto,
+} from './dto/rtc.dto';
 
+@UseGuards(JwtAuthGuard)
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 @Controller('rtc')
 @DisAllowDeactivated()
 export class RtcController {
-  constructor(
-    private readonly rtcService: RtcService,
-    private readonly realtimeGateway: RealtimeGateway,
-  ) {}
+  constructor(private readonly rtcService: RtcService) {}
 
-  // // Start a call explicitly (group or dm)
-  // @Post('conversations/:id/start')
-  // @UseGuards(JwtAuthGuard)
-  // async startCall(
-  //   @GetUser() user: any,
-  //   @Param('id') conversationId: string,
-  //   @Body() body: { kind?: CallKind },
-  // ) {
-  //   const kind = body.kind || 'VIDEO';
-  //   const resp = await this.rtcService.startCall(
-  //     conversationId,
-  //     user.userId,
-  //     kind,
-  //   );
+  @Get('health')
+  health() {
+    return this.rtcService.health();
+  }
 
-  //   const memberIds =
-  //     await this.rtcService.getConversationMemberIds(conversationId);
-  //   const recipients = memberIds.filter((id) => id !== user.userId);
-  //   this.realtimeGateway.emitCallIncoming(
-  //     conversationId,
-  //     user.userId,
-  //     kind,
-  //     recipients,
-  //   );
+  @Get('conversations/:conversation_id/state')
+  getCallState(
+    @GetUser('userId') user_id: string,
+    @Param() params: ConversationIdParamDto,
+  ) {
+    return this.rtcService.getCallState(params.conversation_id, user_id);
+  }
 
-  //   return resp;
-  // }
+  @Post('conversations/:conversation_id/start')
+  startCall(
+    @GetUser('userId') user_id: string,
+    @Param() params: ConversationIdParamDto,
+    @Body() body: StartCallDto,
+  ) {
+    return this.rtcService.startCall(params.conversation_id, user_id, body.kind);
+  }
 
-  // // Join existing call (fails if none active)
-  // @Post('conversations/:id/join')
-  // @UseGuards(JwtAuthGuard)
-  // async joinCall(@GetUser() user: any, @Param('id') conversationId: string) {
-  //   const resp = await this.rtcService.joinCall(conversationId, user.userId);
-  //   return resp;
-  // }
+  @Post('conversations/:conversation_id/join')
+  joinCall(
+    @GetUser('userId') user_id: string,
+    @Param() params: ConversationIdParamDto,
+  ) {
+    return this.rtcService.joinCall(params.conversation_id, user_id);
+  }
 
-  // // Leave call (any member for now from group call only)
-  // @Post('conversations/:id/leave')
-  // @UseGuards(JwtAuthGuard)
-  // async leaveCall(@GetUser() user: any, @Param('id') conversationId: string) {
-  //   const resp = await this.rtcService.leaveCall(conversationId, user.userId);
-  //   return resp;
-  // }
+  @Post('conversations/:conversation_id/token')
+  issueCallToken(
+    @GetUser('userId') user_id: string,
+    @Param() params: ConversationIdParamDto,
+  ) {
+    return this.rtcService.issueCallToken(params.conversation_id, user_id);
+  }
 
-  // // End call (any member for now)
-  // @Post('conversations/:id/end')
-  // @UseGuards(JwtAuthGuard)
-  // async endCall(@GetUser() user: any, @Param('id') conversationId: string) {
-  //   const resp = await this.rtcService.endCall(conversationId, user.userId);
+  @Post('conversations/:conversation_id/decline')
+  declineCall(
+    @GetUser('userId') user_id: string,
+    @Param() params: ConversationIdParamDto,
+  ) {
+    return this.rtcService.declineCall(params.conversation_id, user_id);
+  }
 
-  //   const memberIds =
-  //     await this.rtcService.getConversationMemberIds(conversationId);
-  //   const recipients = memberIds.filter((id) => id !== user.userId);
-  //   this.realtimeGateway.emitCallEnded(conversationId, user.userId, recipients);
+  @Post('conversations/:conversation_id/leave')
+  leaveCall(
+    @GetUser('userId') user_id: string,
+    @Param() params: ConversationIdParamDto,
+  ) {
+    return this.rtcService.leaveCall(params.conversation_id, user_id);
+  }
 
-  //   return resp;
-  // }
+  @Post('conversations/:conversation_id/end')
+  endCall(
+    @GetUser('userId') user_id: string,
+    @Param() params: ConversationIdParamDto,
+  ) {
+    return this.rtcService.endCall(params.conversation_id, user_id);
+  }
 
-  // // Convenience: issue token bound to conversation call (auto-start if not active)
-  // @Post('conversations/:id/token')
-  // @UseGuards(JwtAuthGuard)
-  // async issueConversationToken(
-  //   @GetUser() user: any,
-  //   @Param('id') conversationId: string,
-  // ) {
-  //   const data = await this.rtcService.issueCallToken(
-  //     conversationId,
-  //     user.userId,
-  //   );
-  //   return { success: true, data };
-  // }
-
-  // @Get('health')
-  // health() {
-  //   return this.rtcService.health();
-  // }
+  @Patch('conversations/:conversation_id/participants/me')
+  updateMyParticipantState(
+    @GetUser('userId') user_id: string,
+    @Param() params: ConversationIdParamDto,
+    @Body() body: UpdateParticipantMediaDto,
+  ) {
+    return this.rtcService.updateMyParticipantState(
+      params.conversation_id,
+      user_id,
+      body,
+    );
+  }
 }

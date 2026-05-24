@@ -1,7 +1,7 @@
 # API Curl List
 
 - Base URL: `http://localhost:7777`
-- Skipped modules: `chat/rtc` (controller ache, active HTTP route nai)
+- Skipped modules: none
 - Note: `transaction` module include kora hoyeche, karon eta alada module
 
 ---
@@ -1688,7 +1688,79 @@ curl -X DELETE "http://localhost:7777/users/:id/block"
 
 Controller source: `src/modules/chat/rtc/rtc.controller.ts`
 
-No active HTTP route right now. Controller ache, but shob route commented out.
+### RTC Health
+
+```bash
+curl -X GET "http://localhost:7777/rtc/health"
+```
+
+### Get Active Call State
+
+```bash
+curl -X GET "http://localhost:7777/rtc/conversations/:conversation_id/state"
+```
+
+### Start Video Call
+
+```bash
+curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/start" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "kind": "VIDEO"
+  }'
+```
+
+### Start Audio Call
+
+```bash
+curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/start" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "kind": "AUDIO"
+  }'
+```
+
+### Join Active Call
+
+```bash
+curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/join"
+```
+
+### Issue Call Token
+
+```bash
+curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/token"
+```
+
+### Decline Incoming Call
+
+```bash
+curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/decline"
+```
+
+### Leave Call
+
+```bash
+curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/leave"
+```
+
+### End Call For Everyone
+
+```bash
+curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/end"
+```
+
+### Update My Participant Media State
+
+```bash
+curl -X PATCH "http://localhost:7777/rtc/conversations/:conversation_id/participants/me" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "camera": true,
+    "microphone": true,
+    "is_screen_sharing": false
+  }'
+```
 
 ---
 

@@ -283,7 +283,18 @@ Practical delivery rule:
 ```json
 {
   "conversation_id": "CONVERSATION_ID",
-  "from_user_id": "USER_ID",
+  "call_session_id": "CALL_SESSION_ID",
+  "started_by": "USER_ID",
+  "started_at": "2026-05-24T10:00:00.000Z",
+  "room_name": "group-call-abc12345-def67890",
+  "conversation_type": "GROUP",
+  "conversation_title": "Group Chat",
+  "caller": {
+    "id": "USER_ID",
+    "name": "Caller Name",
+    "username": "caller_username",
+    "avatar": "https://example.com/avatar.png"
+  },
   "kind": "AUDIO",
   "at": "2026-05-24T10:00:00.000Z"
 }
@@ -301,7 +312,70 @@ Practical delivery rule:
 
 ### Note
 
-RTC controller route এখন inactive, but gateway-level notification events ready আছে।
+RTC controller + signaling API এখন active, আর gateway-level realtime notification events-ও ready আছে।
+
+### `call:participant_joined`
+
+```json
+{
+  "conversation_id": "CONVERSATION_ID",
+  "call_session_id": "CALL_SESSION_ID",
+  "participant_count": 3,
+  "joined_at": "2026-05-24T10:00:00.000Z",
+  "user": {
+    "id": "USER_ID",
+    "name": "Maria Smith",
+    "username": "maria",
+    "avatar": "https://example.com/avatar.png"
+  },
+  "participant": {
+    "id": "CALL_PARTICIPANT_ID",
+    "user_id": "USER_ID",
+    "camera": true,
+    "microphone": true,
+    "is_screen_sharing": false
+  }
+}
+```
+
+### `call:participant_left`
+
+```json
+{
+  "conversation_id": "CONVERSATION_ID",
+  "call_session_id": "CALL_SESSION_ID",
+  "user_id": "USER_ID",
+  "participant_count": 2,
+  "left_at": "2026-05-24T10:00:00.000Z"
+}
+```
+
+### `call:participant_updated`
+
+```json
+{
+  "conversation_id": "CONVERSATION_ID",
+  "call_session_id": "CALL_SESSION_ID",
+  "participant": {
+    "id": "CALL_PARTICIPANT_ID",
+    "user_id": "USER_ID",
+    "camera": false,
+    "microphone": true,
+    "is_screen_sharing": false
+  }
+}
+```
+
+### `call:declined`
+
+```json
+{
+  "conversation_id": "CONVERSATION_ID",
+  "call_session_id": "CALL_SESSION_ID",
+  "user_id": "USER_ID",
+  "at": "2026-05-24T10:00:00.000Z"
+}
+```
 
 ## Outgoing Client Events
 
