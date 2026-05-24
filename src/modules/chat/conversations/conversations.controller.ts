@@ -31,7 +31,6 @@ import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.
 import {
   AttachmentsQueryDto,
   ConversationQueryDto,
-  QueryDiscoverUsersDto,
   QueryGroupMembersDto,
 } from './dto/query-conversation.dto';
 
@@ -172,14 +171,6 @@ export class ConversationsController {
     @Query() query: AttachmentsQueryDto,
   ) {
     return this.service.getAttachments(conversation_id, user_id, query);
-  }
-
-  @Get('discover_users')
-  discoverUsers(
-    @GetUser('userId') user_id: string,
-    @Query() query: QueryDiscoverUsersDto,
-  ) {
-    return this.service.discoverUsers(user_id, query);
   }
 
   @Post('report/:reported_user_id')

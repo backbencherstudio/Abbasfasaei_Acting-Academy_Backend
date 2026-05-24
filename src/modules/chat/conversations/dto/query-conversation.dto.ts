@@ -64,30 +64,3 @@ export class AttachmentsQueryDto {
   type?: ATTACHMENT_TYPE;
 }
 
-enum userType {
-  ALL = 'all',
-  ADMIN = 'admin',
-  TEACHER = 'teacher',
-}
-
-export class QueryDiscoverUsersDto {
-  @IsOptional()
-  @IsString()
-  cursor?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  limit?: number = 10;
-
-  @IsOptional()
-  @IsString()
-  search?: string;
-
-  @IsOptional()
-  @Transform(({ value }) =>
-    userType[value.toUpperCase()] ? userType[value.toUpperCase()] : 'all',
-  )
-  @IsEnum(userType)
-  type?: userType;
-}

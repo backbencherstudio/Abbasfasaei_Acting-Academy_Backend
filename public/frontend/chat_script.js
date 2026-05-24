@@ -708,7 +708,7 @@ attachPreview.addEventListener('click', (e) => {
 
 async function discoverUsers(query = '') {
   const qs = query ? `?search=${encodeURIComponent(query)}` : '';
-  const res = await fetch(`${API}/conversations/discover_users${qs}`, {
+  const res = await fetch(`${API}/users/discover${qs}`, {
     headers: authHeadersNoJson(),
   });
   if (!res.ok) {
@@ -749,7 +749,7 @@ function renderSearchResults(users) {
 async function openDiscoverResults(query = '') {
   const requestId = ++searchRequestToken;
   try {
-    log('api', `GET /conversations/discover_users${query ? `?search=${query}` : ''}`);
+    log('api', `GET /users/discover${query ? `?search=${query}` : ''}`);
     const users = await discoverUsers(query);
     if (requestId !== searchRequestToken) return;
     renderSearchResults(users.filter((u) => u.id !== userId));
