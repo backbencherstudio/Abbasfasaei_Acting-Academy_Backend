@@ -110,6 +110,42 @@ function normalizeConversationSilentState(mutedUntil: Date | null) {
 export class ConversationsService {
   constructor(private prisma: PrismaService) {}
 
+  private async promoteNextGroupAdmin(
+    tx: Prisma.TransactionClient,
+    conversation_id: string,
+    excludedUserIds: string[],
+  ) {
+    const nextAdmin = await tx.membership.findFirst({
+      where: {
+        conversation_id,
+        left_at: null,
+        user_id: {
+          notIn: excludedUserIds,
+        },
+      },
+      orderBy: {
+        joined_at: 'asc',
+      },
+      select: {
+        id: true,
+        user_id: true,
+      },
+    });
+
+    if (!nextAdmin) return null;
+
+    await tx.membership.update({
+      where: {
+        id: nextAdmin.id,
+      },
+      data: {
+        role: MemberRole.ADMIN,
+      },
+    });
+
+    return nextAdmin;
+  }
+
   async createConversation(
     user_id: string,
     createConversationDto: CreateConversationDto,
@@ -416,10 +452,14 @@ export class ConversationsService {
       throw new UnauthorizedException('Please login first!');
     }
 
-    const { member_ids } = addMemberDto;
+    const member_ids = [...new Set(addMemberDto.member_ids || [])];
 
     if (!member_ids || member_ids.length < 1) {
       throw new BadRequestException('Member ids is required');
+    }
+
+    if (member_ids.includes(user_id)) {
+      throw new BadRequestException('You are already in this conversation');
     }
 
     const count = await this.prisma.user.count({
@@ -443,16 +483,62 @@ export class ConversationsService {
       throw new ForbiddenException('You are not admin of this conversation');
     }
 
-    const newMembers = await this.prisma.membership.createMany({
-      data: member_ids.map((member_id) => ({
+    const existingMemberships = await this.prisma.membership.findMany({
+      where: {
         conversation_id,
-        user_id: member_id,
-        role: MemberRole.MEMBER,
-      })),
-      skipDuplicates: true,
+        user_id: {
+          in: member_ids,
+        },
+      },
+      select: {
+        id: true,
+        user_id: true,
+        left_at: true,
+      },
     });
 
-    if (newMembers?.count === 0) {
+    const existingUserIds = new Set(
+      existingMemberships.map((existing) => existing.user_id),
+    );
+    const returningMembershipIds = existingMemberships
+      .filter((existing) => existing.left_at)
+      .map((existing) => existing.id);
+    const newUserIds = member_ids.filter((member_id) => !existingUserIds.has(member_id));
+
+    const now = new Date();
+
+    if (returningMembershipIds.length > 0) {
+      await this.prisma.membership.updateMany({
+        where: {
+          id: {
+            in: returningMembershipIds,
+          },
+        },
+        data: {
+          left_at: null,
+          archived_at: null,
+          joined_at: now,
+          cleared_at: null,
+          last_read_at: null,
+          role: MemberRole.MEMBER,
+        },
+      });
+    }
+
+    let createdCount = 0;
+    if (newUserIds.length > 0) {
+      const newMembers = await this.prisma.membership.createMany({
+        data: newUserIds.map((member_id) => ({
+          conversation_id,
+          user_id: member_id,
+          role: MemberRole.MEMBER,
+        })),
+        skipDuplicates: true,
+      });
+      createdCount = newMembers.count;
+    }
+
+    if (createdCount === 0 && returningMembershipIds.length === 0) {
       throw new BadRequestException('Failed to add members');
     }
 
@@ -472,6 +558,7 @@ export class ConversationsService {
     const members = await this.prisma.membership.findMany({
       where: {
         conversation_id,
+        left_at: null,
         ...(query.role ? { role: query.role } : {}),
       },
       select: {
@@ -487,6 +574,7 @@ export class ConversationsService {
     const total = await this.prisma.membership.count({
       where: {
         conversation_id,
+        left_at: null,
       },
     });
 
@@ -528,18 +616,157 @@ export class ConversationsService {
       where: {
         id: member_id,
         conversation_id,
+        left_at: null,
+      },
+      select: {
+        id: true,
+        user_id: true,
+        role: true,
       },
     });
 
     if (!member) throw new ForbiddenException('Member not found');
 
-    await this.prisma.membership.delete({
-      where: { conversation_id, id: member_id },
+    if (member.user_id === user_id) {
+      throw new BadRequestException(
+        'Use leave conversation to remove yourself from the group',
+      );
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.membership.update({
+        where: {
+          id: member.id,
+        },
+        data: {
+          left_at: now,
+        },
+      });
+
+      if (member.role === MemberRole.ADMIN) {
+        const otherAdminsCount = await tx.membership.count({
+          where: {
+            conversation_id,
+            left_at: null,
+            role: MemberRole.ADMIN,
+            user_id: {
+              notIn: [user_id, member.user_id],
+            },
+          },
+        });
+
+        if (otherAdminsCount === 0) {
+          await this.promoteNextGroupAdmin(tx, conversation_id, [
+            user_id,
+            member.user_id,
+          ]);
+        }
+      }
     });
 
     return {
       success: true,
       message: 'Member removed successfully',
+    };
+  }
+
+  async leaveConversation(conversation_id: string, user_id: string) {
+    if (!user_id) throw new UnauthorizedException('Please login first!');
+
+    const membership = await this.prisma.membership.findFirst({
+      where: {
+        conversation_id,
+        user_id,
+        left_at: null,
+      },
+      select: {
+        id: true,
+        role: true,
+        conversation: {
+          select: {
+            id: true,
+            type: true,
+          },
+        },
+      },
+    });
+
+    if (!membership?.conversation) {
+      throw new ForbiddenException('Not a member of this conversation');
+    }
+
+    if (membership.conversation.type !== ConversationType.GROUP) {
+      throw new BadRequestException('Only group conversations can be left');
+    }
+
+    const now = new Date();
+    const result = await this.prisma.$transaction(async (tx) => {
+      const activeMembers = await tx.membership.findMany({
+        where: {
+          conversation_id,
+          left_at: null,
+        },
+        orderBy: {
+          joined_at: 'asc',
+        },
+        select: {
+          id: true,
+          user_id: true,
+          role: true,
+        },
+      });
+
+      if (activeMembers.length <= 1) {
+        await tx.conversation.delete({
+          where: {
+            id: conversation_id,
+          },
+        });
+
+        return {
+          deleted: true,
+          new_admin_user_id: null,
+        };
+      }
+
+      let newAdminUserId: string | null = null;
+
+      if (membership.role === MemberRole.ADMIN) {
+        const otherAdmins = activeMembers.filter(
+          (member) =>
+            member.user_id !== user_id && member.role === MemberRole.ADMIN,
+        );
+
+        if (otherAdmins.length === 0) {
+          const nextAdmin = await this.promoteNextGroupAdmin(tx, conversation_id, [
+            user_id,
+          ]);
+          newAdminUserId = nextAdmin?.user_id ?? null;
+        }
+      }
+
+      await tx.membership.update({
+        where: {
+          id: membership.id,
+        },
+        data: {
+          left_at: now,
+        },
+      });
+
+      return {
+        deleted: false,
+        new_admin_user_id: newAdminUserId,
+      };
+    });
+
+    return {
+      success: true,
+      message: result.deleted
+        ? 'Group deleted because no active members remained'
+        : 'You left the conversation successfully',
+      data: result,
     };
   }
 

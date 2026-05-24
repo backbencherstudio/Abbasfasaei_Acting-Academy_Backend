@@ -131,6 +131,7 @@ export class ChatRepository {
       select: {
         id: true,
         cleared_at: true,
+        left_at: true,
         role: true,
         conversation: { select: { type: true } },
       },
@@ -145,6 +146,7 @@ export class ChatRepository {
       where: {
         conversation_id: conversationId,
         user_id: { not: currentUserId },
+        left_at: null,
       },
       select: { user_id: true },
     });
@@ -201,6 +203,10 @@ export class ChatRepository {
     );
     if (!membership) {
       throw new ForbiddenException('Conversation not found');
+    }
+
+    if (membership.left_at) {
+      throw new ForbiddenException('You are no longer a member of this conversation');
     }
 
     if (membership.conversation?.type === 'DM') {
@@ -277,6 +283,13 @@ export class ChatRepository {
               content: true,
               kind: true,
               sender_id: true,
+              sender: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatar: true,
+                },
+              },
               attachments: {
                 select: {
                   type: true,
@@ -524,6 +537,14 @@ export class ChatRepository {
       reply_to: reply_to
         ? {
             ...reply_to,
+            sender: reply_to.sender
+              ? {
+                  ...reply_to.sender,
+                  avatar: reply_to.sender?.avatar
+                    ? NajimStorage.url(reply_to.sender.avatar)
+                    : null,
+                }
+              : null,
             attachments: reply_to.attachments.map((att: any) => ({
               ...att,
               file_path: att?.file_path

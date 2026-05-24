@@ -75,6 +75,13 @@ export class MessagesService {
             content: true,
             kind: true,
             sender_id: true,
+            sender: {
+              select: {
+                id: true,
+                name: true,
+                avatar: true,
+              },
+            },
             attachments: {
               select: {
                 type: true,
