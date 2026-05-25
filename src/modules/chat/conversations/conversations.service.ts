@@ -448,7 +448,9 @@ export class ConversationsService {
     const returningMembershipIds = existingMemberships
       .filter((existing) => existing.left_at)
       .map((existing) => existing.id);
-    const newUserIds = member_ids.filter((member_id) => !existingUserIds.has(member_id));
+    const newUserIds = member_ids.filter(
+      (member_id) => !existingUserIds.has(member_id),
+    );
 
     const now = new Date();
 
@@ -684,9 +686,11 @@ export class ConversationsService {
         );
 
         if (otherAdmins.length === 0) {
-          const nextAdmin = await this.promoteNextGroupAdmin(tx, conversation_id, [
-            user_id,
-          ]);
+          const nextAdmin = await this.promoteNextGroupAdmin(
+            tx,
+            conversation_id,
+            [user_id],
+          );
           newAdminUserId = nextAdmin?.user_id ?? null;
         }
       }

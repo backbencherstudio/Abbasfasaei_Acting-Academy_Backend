@@ -38,6 +38,31 @@ const msgInput = $('msg-input');
 const fileInput = $('file-input');
 const attachPreview = $('attach-preview');
 const btnMembers = $('btn-members');
+const btnAudioCall = $('btn-audio-call');
+const btnVideoCall = $('btn-video-call');
+const callChip = $('call-chip');
+const incomingCallBanner = $('incoming-call-banner');
+const incomingCallTitle = $('incoming-call-title');
+const incomingCallSubtitle = $('incoming-call-subtitle');
+const btnDeclineCall = $('btn-decline-call');
+const btnAcceptCall = $('btn-accept-call');
+const callOverlay = $('call-overlay');
+const callModeLabel = $('call-mode-label');
+const callPeerTitle = $('call-peer-title');
+const callRuntime = $('call-runtime');
+const callEmptyState = $('call-empty-state');
+const callStageStatus = $('call-stage-status');
+const remoteGrid = $('remote-grid');
+const localPreviewCard = $('local-preview-card');
+const localVideo = $('local-video');
+const callParticipantCount = $('call-participant-count');
+const callConnectionState = $('call-connection-state');
+const btnCloseCallPanel = $('btn-close-call-panel');
+const btnToggleMic = $('btn-toggle-mic');
+const btnToggleCam = $('btn-toggle-cam');
+const btnToggleScreen = $('btn-toggle-screen');
+const btnLeaveCall = $('btn-leave-call');
+const btnEndCall = $('btn-end-call');
 
 const logEntries = $('log-entries');
 const modal = $('modal');
@@ -66,6 +91,15 @@ const profileState = {
   files: [],
   dmParticipant: null,
   blockStatus: null,
+};
+const rtcState = {
+  pendingIncomingCall: null,
+  activeCall: null,
+  room: null,
+  overlayVisible: false,
+  timerId: null,
+  remoteTracks: new Map(),
+  currentScreenShareEnabled: false,
 };
 
 function log(type, text) {
@@ -143,7 +177,9 @@ function formatTime(value) {
 function getConversationTitle(conv) {
   if (!conv) return 'Chat';
   if (conv.type === 'GROUP') return conv.title || 'Group';
-  return conv.participant?.name || conv.participant?.username || 'Direct Message';
+  return (
+    conv.participant?.name || conv.participant?.username || 'Direct Message'
+  );
 }
 
 function getConversationSubtitle(conv) {
@@ -160,7 +196,8 @@ function getConversationAvatar(conv) {
 function getMessagePreview(msg) {
   if (!msg) return '(no messages)';
   if (msg.content?.text) return msg.content.text;
-  if (msg.attachments?.length) return `Attachment${msg.attachments.length > 1 ? 's' : ''}`;
+  if (msg.attachments?.length)
+    return `Attachment${msg.attachments.length > 1 ? 's' : ''}`;
   return '(no messages)';
 }
 
@@ -179,8 +216,12 @@ function scheduleConversationsRefresh(delay = 250) {
 
 function renderConversationList() {
   const list = Array.from(conversations.values()).sort((a, b) => {
-    const aTime = new Date(a.updated_at || a.last_message?.created_at || 0).getTime();
-    const bTime = new Date(b.updated_at || b.last_message?.created_at || 0).getTime();
+    const aTime = new Date(
+      a.updated_at || a.last_message?.created_at || 0,
+    ).getTime();
+    const bTime = new Date(
+      b.updated_at || b.last_message?.created_at || 0,
+    ).getTime();
     return bTime - aTime;
   });
 
@@ -225,6 +266,8 @@ function renderChatHeader() {
   chatTitle.textContent = title;
   chatStatus.textContent = subtitle;
   btnMembers.classList.toggle('hidden', conv.type !== 'GROUP');
+  btnAudioCall.classList.remove('hidden');
+  btnVideoCall.classList.remove('hidden');
 
   if (avatar) {
     chatAvatarImg.src = avatar;
@@ -236,6 +279,8 @@ function renderChatHeader() {
     chatAvatarFallback.textContent = initial(title);
     chatAvatarFallback.classList.remove('hidden');
   }
+
+  updateCallHeaderState();
 }
 
 async function loadConversations() {
@@ -426,6 +471,7 @@ async function selectConversation(convId) {
   }
 
   await loadMessages(convId);
+  await refreshCallState(convId);
 
   const current = conversations.get(convId);
   if (current) {
@@ -446,7 +492,10 @@ async function markAsRead(convId, messageId, at) {
   readState.set(convId, messageId);
 
   try {
-    log('api', `PATCH /conversations/${convId.slice(0, 8)}/read — up_to=${messageId.slice(0, 8)}`);
+    log(
+      'api',
+      `PATCH /conversations/${convId.slice(0, 8)}/read — up_to=${messageId.slice(0, 8)}`,
+    );
     const res = await fetch(`${API}/conversations/${convId}/read`, {
       method: 'PATCH',
       headers: authHeaders(),
@@ -512,7 +561,10 @@ function connectSocket() {
   });
 
   socket.on('message:new', async (msg) => {
-    log('socket', `message:new — conv=${msg.conversation_id}, from=${msg.sender?.id?.slice(0, 8)}`);
+    log(
+      'socket',
+      `message:new — conv=${msg.conversation_id}, from=${msg.sender?.id?.slice(0, 8)}`,
+    );
     updateConversationFromMessage(msg);
 
     if (msg.conversation_id === activeConvId) {
@@ -524,11 +576,17 @@ function connectSocket() {
   });
 
   socket.on('message:status', (d) => {
-    log('socket', `message:status — status=${d.status}, count=${d.message_ids?.length || 0}`);
+    log(
+      'socket',
+      `message:status — status=${d.status}, count=${d.message_ids?.length || 0}`,
+    );
     updateOwnedMessageStatuses(d.message_ids || [], d.status);
     if (d.conversation_id && conversations.has(d.conversation_id)) {
       const conv = conversations.get(d.conversation_id);
-      if (conv?.last_message?.is_me && d.message_ids?.includes(conv.last_message.id)) {
+      if (
+        conv?.last_message?.is_me &&
+        d.message_ids?.includes(conv.last_message.id)
+      ) {
         conv.last_message.status = d.status;
         conversations.set(conv.id, conv);
         renderConversationList();
@@ -537,7 +595,10 @@ function connectSocket() {
   });
 
   socket.on('message:read', (d) => {
-    log('socket', `message:read — user=${d.user_id?.slice(0, 8)}, conv=${d.conversation_id?.slice(0, 8)}`);
+    log(
+      'socket',
+      `message:read — user=${d.user_id?.slice(0, 8)}, conv=${d.conversation_id?.slice(0, 8)}`,
+    );
     if (d.conversation_id === activeConvId) {
       scheduleConversationsRefresh(100);
     }
@@ -554,11 +615,61 @@ function connectSocket() {
   });
 
   socket.on('presence:update', (d) => {
-    log('socket', `presence — ${d.user_id?.slice(0, 8)} ${d.online ? 'online' : 'offline'}`);
+    log(
+      'socket',
+      `presence — ${d.user_id?.slice(0, 8)} ${d.online ? 'online' : 'offline'}`,
+    );
   });
 
-  socket.on('call:incoming', (d) => log('socket', `call:incoming — from ${d.from_user_id}`));
-  socket.on('call:ended', (d) => log('socket', `call:ended — by ${d.by_user_id}`));
+  socket.on('call:incoming', (d) => {
+    log(
+      'socket',
+      `call:incoming — conv=${d.conversation_id?.slice(0, 8)}, by=${d.started_by?.slice(0, 8)}`,
+    );
+    handleIncomingCall(d);
+  });
+
+  socket.on('call:participant_joined', (d) => {
+    log(
+      'socket',
+      `call:participant_joined — conv=${d.conversation_id?.slice(0, 8)}, user=${d.user?.id?.slice(0, 8)}`,
+    );
+    handleParticipantJoined(d);
+  });
+
+  socket.on('call:participant_left', (d) => {
+    log(
+      'socket',
+      `call:participant_left — conv=${d.conversation_id?.slice(0, 8)}, user=${d.user_id?.slice(0, 8)}`,
+    );
+    handleParticipantLeft(d);
+  });
+
+  socket.on('call:participant_updated', (d) => {
+    log(
+      'socket',
+      `call:participant_updated — conv=${d.conversation_id?.slice(0, 8)}, user=${d.participant?.user_id?.slice(0, 8)}`,
+    );
+    handleParticipantUpdated(d);
+  });
+
+  socket.on('call:declined', (d) => {
+    log(
+      'socket',
+      `call:declined — conv=${d.conversation_id?.slice(0, 8)}, user=${d.user_id?.slice(0, 8)}`,
+    );
+    if (activeConvId === d.conversation_id && rtcState.activeCall) {
+      callStageStatus.textContent = 'A participant declined the call.';
+    }
+  });
+
+  socket.on('call:ended', (d) => {
+    log(
+      'socket',
+      `call:ended — conv=${d.conversation_id?.slice(0, 8)}, by=${d.by_user_id?.slice(0, 8)}`,
+    );
+    handleCallEnded(d);
+  });
 }
 
 connectBtn.onclick = () => {
@@ -579,6 +690,7 @@ connectBtn.onclick = () => {
 };
 
 $('btn-logout').onclick = () => {
+  disconnectLivekitRoom(false);
   if (socket) socket.disconnect();
   localStorage.removeItem('chat_token');
   userId = null;
@@ -623,7 +735,10 @@ async function sendMessage() {
   if (text) {
     formData.append('content', JSON.stringify({ text }));
   }
-  formData.append('kind', pendingFiles.length ? inferKind(pendingFiles[0]) : 'TEXT');
+  formData.append(
+    'kind',
+    pendingFiles.length ? inferKind(pendingFiles[0]) : 'TEXT',
+  );
   pendingFiles.forEach((file) => formData.append('attachments', file));
 
   msgInput.value = '';
@@ -720,7 +835,8 @@ async function discoverUsers(query = '') {
 
 function renderSearchResults(users) {
   if (!users.length) {
-    searchResults.innerHTML = '<div class="search-item" style="color:#888;cursor:default;">No users found</div>';
+    searchResults.innerHTML =
+      '<div class="search-item" style="color:#888;cursor:default;">No users found</div>';
     searchResults.classList.remove('hidden');
     return;
   }
@@ -756,7 +872,8 @@ async function openDiscoverResults(query = '') {
   } catch (error) {
     if (requestId !== searchRequestToken) return;
     log('error', `discover: ${error.message}`);
-    searchResults.innerHTML = '<div class="search-item" style="color:#f87171;cursor:default;">Error fetching users</div>';
+    searchResults.innerHTML =
+      '<div class="search-item" style="color:#f87171;cursor:default;">Error fetching users</div>';
     searchResults.classList.remove('hidden');
   }
 }
@@ -882,7 +999,8 @@ async function openGroupUserPicker(mode, existingIds = []) {
         );
 
         if (!filtered.length) {
-          groupResults.innerHTML = '<div class="empty-state">No users found.</div>';
+          groupResults.innerHTML =
+            '<div class="empty-state">No users found.</div>';
           return;
         }
 
@@ -996,9 +1114,12 @@ $('btn-new-group').onclick = async () => {
 
 async function fetchConversationAttachments(convId, type) {
   const suffix = type ? `?type=${encodeURIComponent(type)}` : '';
-  const res = await fetch(`${API}/conversations/${convId}/attachments${suffix}`, {
-    headers: authHeadersNoJson(),
-  });
+  const res = await fetch(
+    `${API}/conversations/${convId}/attachments${suffix}`,
+    {
+      headers: authHeadersNoJson(),
+    },
+  );
   if (!res.ok) throw new Error(await apiError(res));
   const json = await res.json();
   return json.data || [];
@@ -1030,7 +1151,9 @@ function renderProfileModal() {
   const subtitle = getConversationSubtitle(conv);
   const avatar = getConversationAvatar(conv);
   const participant = profileState.dmParticipant;
-  const blockLabel = profileState.blockStatus?.blocked_by_me ? 'Unblock User' : 'Block User';
+  const blockLabel = profileState.blockStatus?.blocked_by_me
+    ? 'Unblock User'
+    : 'Block User';
 
   let bodyHtml = `
     <div class="profile-head">
@@ -1160,7 +1283,10 @@ async function openConversationProfile() {
   profileState.dmParticipant = activeConversation.participant || null;
   profileState.blockStatus = null;
 
-  showCloseOnlyModal('Conversation Details', '<div class="empty-state">Loading conversation details...</div>');
+  showCloseOnlyModal(
+    'Conversation Details',
+    '<div class="empty-state">Loading conversation details...</div>',
+  );
 
   try {
     const requests = [
@@ -1186,7 +1312,10 @@ async function openConversationProfile() {
 
     renderProfileModal();
   } catch (error) {
-    showCloseOnlyModal('Conversation Details', `<div class="empty-state">${escapeHtml(error.message || 'Failed to load details')}</div>`);
+    showCloseOnlyModal(
+      'Conversation Details',
+      `<div class="empty-state">${escapeHtml(error.message || 'Failed to load details')}</div>`,
+    );
   }
 }
 
@@ -1238,7 +1367,8 @@ modalBody.addEventListener('click', async (event) => {
     if (action === 'report-user') {
       const targetUserId = profileState.dmParticipant?.id;
       if (!targetUserId) return;
-      const reason = window.prompt('Write a report reason (optional):', '') || '';
+      const reason =
+        window.prompt('Write a report reason (optional):', '') || '';
       const res = await fetch(`${API}/conversations/report/${targetUserId}`, {
         method: 'POST',
         headers: authHeaders(),
@@ -1283,10 +1413,13 @@ modalBody.addEventListener('click', async (event) => {
       const memberId = btn.dataset.memberId;
       if (!memberId) return;
       if (!confirm('Remove this member from the group?')) return;
-      const res = await fetch(`${API}/conversations/${conv.id}/members/${memberId}`, {
-        method: 'DELETE',
-        headers: authHeadersNoJson(),
-      });
+      const res = await fetch(
+        `${API}/conversations/${conv.id}/members/${memberId}`,
+        {
+          method: 'DELETE',
+          headers: authHeadersNoJson(),
+        },
+      );
       if (!res.ok) throw new Error(await apiError(res));
       await loadConversations();
       await openConversationProfile();
@@ -1296,10 +1429,690 @@ modalBody.addEventListener('click', async (event) => {
   }
 });
 
+function getLivekitSdk() {
+  return (
+    window.livekitClient ||
+    window.LivekitClient ||
+    window.LiveKitClient ||
+    window.livekit ||
+    null
+  );
+}
+
+function getCallTitle(call) {
+  if (call?.conversation?.title) return call.conversation.title;
+  if (activeConversation?.type === 'DM') {
+    return (
+      activeConversation?.participant?.name ||
+      activeConversation?.participant?.username ||
+      'Direct Call'
+    );
+  }
+  return getConversationTitle(activeConversation) || 'Call';
+}
+
+function formatDuration(ms) {
+  const totalSeconds = Math.max(Math.floor(ms / 1000), 0);
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  return `${minutes}:${seconds}`;
+}
+
+function stopCallTimer() {
+  if (rtcState.timerId) {
+    clearInterval(rtcState.timerId);
+    rtcState.timerId = null;
+  }
+}
+
+function startCallTimer(startAt) {
+  stopCallTimer();
+  if (!startAt) {
+    callRuntime.textContent = '00:00';
+    return;
+  }
+  const started = new Date(startAt).getTime();
+  const update = () => {
+    callRuntime.textContent = formatDuration(Date.now() - started);
+  };
+  update();
+  rtcState.timerId = setInterval(update, 1000);
+}
+
+function setCallConnectionLabel(text) {
+  callConnectionState.textContent = text;
+}
+
+function updateCallHeaderState() {
+  const currentCall =
+    rtcState.activeCall && rtcState.activeCall.conversation_id === activeConvId
+      ? rtcState.activeCall
+      : null;
+
+  if (!activeConversation) {
+    callChip.classList.add('hidden');
+    btnAudioCall.classList.add('hidden');
+    btnVideoCall.classList.add('hidden');
+    return;
+  }
+
+  btnAudioCall.classList.remove('hidden');
+  btnVideoCall.classList.remove('hidden');
+
+  if (!currentCall) {
+    callChip.classList.add('hidden');
+    btnAudioCall.title = 'Start audio call';
+    btnVideoCall.title = 'Start video call';
+    return;
+  }
+
+  callChip.classList.remove('hidden');
+  const label = rtcState.room
+    ? `In ${currentCall.kind.toLowerCase()} call`
+    : `Active ${currentCall.kind.toLowerCase()} call`;
+  callChip.textContent = `${label} • ${currentCall.participant_count || 0}`;
+  btnAudioCall.title = 'Join active call';
+  btnVideoCall.title = 'Join active call';
+}
+
+function showIncomingCall(call) {
+  rtcState.pendingIncomingCall = call;
+  incomingCallTitle.textContent =
+    call.caller?.name || call.conversation_title || 'Incoming call';
+  incomingCallSubtitle.textContent = `${(call.kind || 'VIDEO').toLowerCase()} call`;
+  incomingCallBanner.classList.remove('hidden');
+}
+
+function hideIncomingCall() {
+  rtcState.pendingIncomingCall = null;
+  incomingCallBanner.classList.add('hidden');
+}
+
+function resetCallOverlayUi() {
+  callEmptyState.classList.remove('hidden');
+  remoteGrid.classList.add('hidden');
+  remoteGrid.innerHTML = '';
+  localPreviewCard.classList.add('hidden');
+  if (localVideo) {
+    try {
+      localVideo.srcObject = null;
+    } catch {}
+  }
+  callStageStatus.textContent = 'Waiting for participants...';
+  callParticipantCount.textContent = '0 participants';
+  setCallConnectionLabel('Not connected');
+  btnToggleMic.textContent = 'Mute';
+  btnToggleCam.textContent = 'Camera Off';
+  btnToggleScreen.textContent = 'Share Screen';
+  btnToggleMic.classList.remove('active');
+  btnToggleCam.classList.remove('active');
+  btnToggleScreen.classList.remove('active');
+}
+
+function renderParticipantTiles() {
+  const participants = rtcState.activeCall?.participants || [];
+  const others = participants.filter((p) => p.user_id !== userId);
+
+  remoteGrid.innerHTML = '';
+
+  if (!others.length) {
+    remoteGrid.classList.add('hidden');
+    callEmptyState.classList.remove('hidden');
+    callStageStatus.textContent = 'Waiting for other participants to join...';
+  } else {
+    callEmptyState.classList.add('hidden');
+    remoteGrid.classList.remove('hidden');
+  }
+
+  others.forEach((participant) => {
+    const name =
+      participant.user?.name || participant.user?.username || 'Participant';
+    const tile = document.createElement('div');
+    tile.className = 'participant-tile';
+    tile.dataset.userId = participant.user_id;
+    tile.innerHTML = `
+      <div class="participant-fallback">
+        <div class="participant-avatar">${escapeHtml(initial(name))}</div>
+        <div class="participant-name">${escapeHtml(name)}</div>
+      </div>
+      <div class="participant-meta">
+        <span class="participant-name">${escapeHtml(name)}</span>
+        <div class="participant-flags">
+          <span class="participant-flag">${participant.microphone ? 'Mic On' : 'Mic Off'}</span>
+          <span class="participant-flag">${participant.camera ? 'Cam On' : 'Cam Off'}</span>
+          ${
+            participant.is_screen_sharing
+              ? '<span class="participant-flag">Sharing</span>'
+              : ''
+          }
+        </div>
+      </div>
+    `;
+    remoteGrid.appendChild(tile);
+  });
+
+  callParticipantCount.textContent = `${participants.length} participant${participants.length === 1 ? '' : 's'}`;
+}
+
+function openCallOverlay() {
+  rtcState.overlayVisible = true;
+  callOverlay.classList.remove('hidden');
+}
+
+function closeCallOverlay() {
+  rtcState.overlayVisible = false;
+  callOverlay.classList.add('hidden');
+}
+
+function setActiveCall(call, { openOverlay = false } = {}) {
+  rtcState.activeCall = call || null;
+  rtcState.remoteTracks.clear();
+
+  if (!call) {
+    stopCallTimer();
+    resetCallOverlayUi();
+    closeCallOverlay();
+    updateCallHeaderState();
+    return;
+  }
+
+  callModeLabel.textContent = `${call.kind || 'VIDEO'} Call`;
+  callPeerTitle.textContent = getCallTitle(call);
+  startCallTimer(call.started_at);
+  renderParticipantTiles();
+  updateCallButtonsFromSelfParticipant();
+  updateCallHeaderState();
+
+  if (openOverlay) {
+    openCallOverlay();
+  }
+}
+
+function updateCallButtonsFromSelfParticipant() {
+  const participant = rtcState.activeCall?.self_participant;
+  if (!participant) return;
+
+  btnToggleMic.textContent = participant.microphone ? 'Mute' : 'Unmute';
+  btnToggleCam.textContent = participant.camera ? 'Camera Off' : 'Camera On';
+  btnToggleScreen.textContent = participant.is_screen_sharing
+    ? 'Stop Share'
+    : 'Share Screen';
+  btnToggleMic.classList.toggle('active', !participant.microphone);
+  btnToggleCam.classList.toggle('active', !participant.camera);
+  btnToggleScreen.classList.toggle('active', participant.is_screen_sharing);
+}
+
+async function fetchCallState(convId) {
+  const res = await fetch(`${API}/rtc/conversations/${convId}/state`, {
+    headers: authHeadersNoJson(),
+  });
+  if (!res.ok)
+    throw new Error(await apiError(res, 'Failed to load call state'));
+  const json = await res.json();
+  return json.data || null;
+}
+
+async function refreshCallState(
+  convId = activeConvId,
+  { openOverlay = false } = {},
+) {
+  if (!convId) return;
+  try {
+    const call = await fetchCallState(convId);
+    if (!call) {
+      if (rtcState.activeCall?.conversation_id === convId) {
+        setActiveCall(null);
+      } else {
+        updateCallHeaderState();
+      }
+      return;
+    }
+    setActiveCall(call, { openOverlay });
+  } catch (error) {
+    log('error', `rtc/state: ${error.message}`);
+  }
+}
+
+async function requestRtc(path, options = {}) {
+  const res = await fetch(`${API}${path}`, {
+    method: options.method || 'POST',
+    headers:
+      options.body instanceof FormData
+        ? authHeadersNoJson()
+        : options.body
+          ? authHeaders()
+          : authHeadersNoJson(),
+    body:
+      options.body instanceof FormData
+        ? options.body
+        : options.body
+          ? JSON.stringify(options.body)
+          : undefined,
+  });
+  if (!res.ok) throw new Error(await apiError(res));
+  return res.status === 204 ? null : res.json();
+}
+
+async function startCallFlow(kind) {
+  if (!activeConvId) {
+    log('error', 'Select a conversation first');
+    return;
+  }
+
+  try {
+    log('api', `POST /rtc/conversations/${activeConvId.slice(0, 8)}/start`);
+    const json = await requestRtc(`/rtc/conversations/${activeConvId}/start`, {
+      body: { kind },
+    });
+    const data = json?.data;
+    if (!data?.livekit)
+      throw new Error('LiveKit token missing from start response');
+    setActiveCall(data, { openOverlay: true });
+    await connectToLivekit(data);
+  } catch (error) {
+    log('error', `startCall: ${error.message}`);
+    alert(error.message || 'Failed to start call');
+  }
+}
+
+async function joinActiveCall(conversationId, { openOverlay = true } = {}) {
+  try {
+    log('api', `POST /rtc/conversations/${conversationId.slice(0, 8)}/join`);
+    const json = await requestRtc(`/rtc/conversations/${conversationId}/join`);
+    const data = json?.data;
+    if (!data?.livekit)
+      throw new Error('LiveKit token missing from join response');
+    setActiveCall(data, { openOverlay });
+    await connectToLivekit(data);
+  } catch (error) {
+    log('error', `joinCall: ${error.message}`);
+    alert(error.message || 'Failed to join call');
+  }
+}
+
+async function handleAcceptIncomingCall() {
+  const incoming = rtcState.pendingIncomingCall;
+  if (!incoming?.conversation_id) return;
+  hideIncomingCall();
+  if (!conversations.has(incoming.conversation_id)) {
+    await loadConversations();
+  }
+  await selectConversation(incoming.conversation_id);
+  await joinActiveCall(incoming.conversation_id, { openOverlay: true });
+}
+
+async function handleDeclineIncomingCall() {
+  const incoming = rtcState.pendingIncomingCall;
+  hideIncomingCall();
+  if (!incoming?.conversation_id) return;
+  try {
+    await requestRtc(`/rtc/conversations/${incoming.conversation_id}/decline`);
+  } catch (error) {
+    log('error', `declineCall: ${error.message}`);
+  }
+}
+
+function disconnectLivekitRoom(hideOverlay = true) {
+  stopCallTimer();
+  if (rtcState.room) {
+    try {
+      rtcState.room.disconnect();
+    } catch {}
+  }
+  rtcState.room = null;
+  rtcState.currentScreenShareEnabled = false;
+  rtcState.remoteTracks.clear();
+  if (hideOverlay) {
+    closeCallOverlay();
+  }
+  resetCallOverlayUi();
+  updateCallHeaderState();
+}
+
+async function connectToLivekit(callData) {
+  const sdk = getLivekitSdk();
+  if (!sdk?.Room) throw new Error('LiveKit browser SDK not loaded');
+
+  if (rtcState.room) {
+    disconnectLivekitRoom(false);
+  }
+
+  const room = new sdk.Room();
+  rtcState.room = room;
+  setCallConnectionLabel('Connecting...');
+  openCallOverlay();
+
+  const bindTrack = (track, participantIdentity) => {
+    const tile = remoteGrid.querySelector(
+      `[data-user-id="${participantIdentity}"]`,
+    );
+    if (!tile) return;
+
+    if (track.kind === 'video') {
+      let video = tile.querySelector('video');
+      if (!video) {
+        video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+        tile.prepend(video);
+      }
+      track.attach(video);
+    }
+
+    if (track.kind === 'audio') {
+      const attached = track.attach();
+      attached.autoplay = true;
+      attached.style.display = 'none';
+      tile.appendChild(attached);
+    }
+  };
+
+  room.on('participantConnected', (participant) => {
+    setCallConnectionLabel(`${participant.identity} joined`);
+  });
+  room.on('participantDisconnected', (participant) => {
+    const tile = remoteGrid.querySelector(
+      `[data-user-id="${participant.identity}"]`,
+    );
+    tile?.querySelectorAll('video,audio').forEach((el) => el.remove());
+    setCallConnectionLabel(`${participant.identity} left`);
+  });
+  room.on('trackSubscribed', (track, _pub, participant) => {
+    bindTrack(track, participant.identity);
+  });
+  room.on('trackUnsubscribed', (_track, _pub, participant) => {
+    const tile = remoteGrid.querySelector(
+      `[data-user-id="${participant.identity}"]`,
+    );
+    tile?.querySelectorAll('video,audio').forEach((el) => el.remove());
+  });
+  room.on('disconnected', () => {
+    setCallConnectionLabel('Disconnected');
+  });
+
+  await room.connect(callData.livekit.url, callData.livekit.token);
+
+  const local = room.localParticipant;
+  setCallConnectionLabel('Connected');
+  callModeLabel.textContent = `${callData.kind} Call`;
+
+  try {
+    await local.setMicrophoneEnabled(true);
+  } catch (error) {
+    log('error', `mic: ${error.message}`);
+  }
+
+  if (callData.kind === 'VIDEO') {
+    try {
+      await local.setCameraEnabled(true);
+      const videoPub = Array.from(local.videoTrackPublications.values())[0];
+      if (videoPub?.track) {
+        videoPub.track.attach(localVideo);
+        localPreviewCard.classList.remove('hidden');
+      }
+    } catch (error) {
+      log('error', `camera: ${error.message}`);
+    }
+  } else {
+    localPreviewCard.classList.add('hidden');
+  }
+
+  updateCallButtonsFromSelfParticipant();
+}
+
+async function toggleParticipantState(patch) {
+  if (!rtcState.activeCall?.conversation_id) return;
+
+  const current = rtcState.activeCall.self_participant || {};
+  const next = {
+    camera: patch.camera !== undefined ? patch.camera : current.camera,
+    microphone:
+      patch.microphone !== undefined ? patch.microphone : current.microphone,
+    is_screen_sharing:
+      patch.is_screen_sharing !== undefined
+        ? patch.is_screen_sharing
+        : current.is_screen_sharing,
+  };
+
+  try {
+    const json = await requestRtc(
+      `/rtc/conversations/${rtcState.activeCall.conversation_id}/participants/me`,
+      {
+        method: 'PATCH',
+        body: next,
+      },
+    );
+    rtcState.activeCall.self_participant = json?.data?.participant || {
+      ...current,
+      ...next,
+    };
+    rtcState.activeCall.participants = (
+      rtcState.activeCall.participants || []
+    ).map((participant) =>
+      participant.user_id === userId
+        ? { ...participant, ...rtcState.activeCall.self_participant }
+        : participant,
+    );
+    updateCallButtonsFromSelfParticipant();
+    renderParticipantTiles();
+  } catch (error) {
+    alert(error.message || 'Failed to update participant state');
+  }
+}
+
+async function leaveCurrentCall({ endForEveryone = false } = {}) {
+  const conversationId = rtcState.activeCall?.conversation_id;
+  if (!conversationId) return;
+
+  try {
+    await requestRtc(
+      `/rtc/conversations/${conversationId}/${endForEveryone ? 'end' : 'leave'}`,
+    );
+  } catch (error) {
+    log('error', `leaveCall: ${error.message}`);
+  } finally {
+    disconnectLivekitRoom(true);
+    setActiveCall(null);
+    await refreshCallState(conversationId);
+  }
+}
+
+function handleIncomingCall(payload) {
+  if (!payload || payload.started_by === userId) return;
+  showIncomingCall(payload);
+  if (payload.conversation_id === activeConvId) {
+    refreshCallState(payload.conversation_id);
+  }
+}
+
+function handleParticipantJoined(payload) {
+  if (!payload?.conversation_id) return;
+  if (
+    !rtcState.activeCall ||
+    rtcState.activeCall.conversation_id !== payload.conversation_id
+  ) {
+    if (payload.conversation_id === activeConvId)
+      refreshCallState(payload.conversation_id);
+    return;
+  }
+
+  const list = rtcState.activeCall.participants || [];
+  const existing = list.find(
+    (item) => item.user_id === payload.participant?.user_id,
+  );
+  if (!existing && payload.participant) {
+    list.push(payload.participant);
+  }
+  rtcState.activeCall.participants = list;
+  rtcState.activeCall.participant_count =
+    payload.participant_count || list.length;
+  renderParticipantTiles();
+  updateCallHeaderState();
+}
+
+function handleParticipantLeft(payload) {
+  if (!payload?.conversation_id) return;
+  if (
+    !rtcState.activeCall ||
+    rtcState.activeCall.conversation_id !== payload.conversation_id
+  ) {
+    if (payload.conversation_id === activeConvId)
+      refreshCallState(payload.conversation_id);
+    return;
+  }
+
+  rtcState.activeCall.participants = (
+    rtcState.activeCall.participants || []
+  ).filter((participant) => participant.user_id !== payload.user_id);
+  rtcState.activeCall.participant_count =
+    payload.participant_count || rtcState.activeCall.participants.length;
+  renderParticipantTiles();
+  updateCallHeaderState();
+}
+
+function handleParticipantUpdated(payload) {
+  if (!payload?.conversation_id || !payload?.participant) return;
+  if (
+    !rtcState.activeCall ||
+    rtcState.activeCall.conversation_id !== payload.conversation_id
+  ) {
+    if (payload.conversation_id === activeConvId)
+      refreshCallState(payload.conversation_id);
+    return;
+  }
+
+  rtcState.activeCall.participants = (
+    rtcState.activeCall.participants || []
+  ).map((participant) =>
+    participant.user_id === payload.participant.user_id
+      ? { ...participant, ...payload.participant }
+      : participant,
+  );
+
+  if (payload.participant.user_id === userId) {
+    rtcState.activeCall.self_participant = {
+      ...rtcState.activeCall.self_participant,
+      ...payload.participant,
+    };
+    updateCallButtonsFromSelfParticipant();
+  }
+
+  renderParticipantTiles();
+}
+
+function handleCallEnded(payload) {
+  if (payload?.conversation_id === rtcState.activeCall?.conversation_id) {
+    disconnectLivekitRoom(true);
+    setActiveCall(null);
+  }
+  if (payload?.conversation_id === activeConvId) {
+    updateCallHeaderState();
+  }
+  if (
+    rtcState.pendingIncomingCall?.conversation_id === payload?.conversation_id
+  ) {
+    hideIncomingCall();
+  }
+}
+
+btnAudioCall.onclick = async () => {
+  if (rtcState.activeCall?.conversation_id === activeConvId && !rtcState.room) {
+    await joinActiveCall(activeConvId, { openOverlay: true });
+    return;
+  }
+  if (rtcState.activeCall?.conversation_id === activeConvId && rtcState.room) {
+    openCallOverlay();
+    return;
+  }
+  await startCallFlow('AUDIO');
+};
+
+btnVideoCall.onclick = async () => {
+  if (rtcState.activeCall?.conversation_id === activeConvId && !rtcState.room) {
+    await joinActiveCall(activeConvId, { openOverlay: true });
+    return;
+  }
+  if (rtcState.activeCall?.conversation_id === activeConvId && rtcState.room) {
+    openCallOverlay();
+    return;
+  }
+  await startCallFlow('VIDEO');
+};
+
+callChip.onclick = async () => {
+  if (!activeConvId) return;
+  if (rtcState.activeCall?.conversation_id === activeConvId && rtcState.room) {
+    openCallOverlay();
+    return;
+  }
+  if (rtcState.activeCall?.conversation_id === activeConvId) {
+    await joinActiveCall(activeConvId, { openOverlay: true });
+  }
+};
+
+btnAcceptCall.onclick = () => handleAcceptIncomingCall();
+btnDeclineCall.onclick = () => handleDeclineIncomingCall();
+btnCloseCallPanel.onclick = () => closeCallOverlay();
+btnLeaveCall.onclick = () => leaveCurrentCall({ endForEveryone: false });
+btnEndCall.onclick = () => leaveCurrentCall({ endForEveryone: true });
+btnToggleMic.onclick = async () => {
+  const current = rtcState.activeCall?.self_participant;
+  if (!current) return;
+  try {
+    await rtcState.room?.localParticipant?.setMicrophoneEnabled(
+      !current.microphone,
+    );
+  } catch {}
+  await toggleParticipantState({ microphone: !current.microphone });
+};
+btnToggleCam.onclick = async () => {
+  const current = rtcState.activeCall?.self_participant;
+  if (!current) return;
+  try {
+    await rtcState.room?.localParticipant?.setCameraEnabled(!current.camera);
+    if (!current.camera) {
+      const videoPub = Array.from(
+        rtcState.room?.localParticipant?.videoTrackPublications?.values?.() ||
+          [],
+      )[0];
+      if (videoPub?.track) {
+        videoPub.track.attach(localVideo);
+        localPreviewCard.classList.remove('hidden');
+      }
+    } else {
+      localPreviewCard.classList.add('hidden');
+    }
+  } catch {}
+  await toggleParticipantState({ camera: !current.camera });
+};
+btnToggleScreen.onclick = async () => {
+  const current = rtcState.activeCall?.self_participant;
+  if (!current || !rtcState.room?.localParticipant?.setScreenShareEnabled)
+    return;
+  try {
+    await rtcState.room.localParticipant.setScreenShareEnabled(
+      !current.is_screen_sharing,
+    );
+    rtcState.currentScreenShareEnabled = !current.is_screen_sharing;
+  } catch (error) {
+    alert(error.message || 'Screen share failed');
+    return;
+  }
+  await toggleParticipantState({
+    is_screen_sharing: !current.is_screen_sharing,
+  });
+};
+
 $('btn-back').onclick = () => {
   sidebar.classList.remove('hidden-mobile');
   chatActive.classList.add('hidden');
   chatEmpty.classList.remove('hidden');
+  activeConvId = null;
+  activeConvType = null;
+  activeConversation = null;
+  btnAudioCall.classList.add('hidden');
+  btnVideoCall.classList.add('hidden');
+  callChip.classList.add('hidden');
 };
 
 window.onload = () => {

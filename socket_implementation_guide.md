@@ -801,5 +801,5 @@ socket.emit('message:read', {
 
 - gateway: `src/modules/chat/realtime/realtime.gateway.ts`
 - message status source: `src/common/repository/chat/chat.repository.ts`
-- sample web implementation: `public/frontend/chat_script.js`
+- sample web implementation: `public/frontend/chat/chat_script.js`
 

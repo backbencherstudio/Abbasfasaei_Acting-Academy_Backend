@@ -63,4 +63,3 @@ export class AttachmentsQueryDto {
   @IsEnum(ATTACHMENT_TYPE)
   type?: ATTACHMENT_TYPE;
 }
-

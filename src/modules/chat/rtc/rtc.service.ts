@@ -73,7 +73,10 @@ export class RtcService {
   }
 
   async getCallState(conversation_id: string, user_id: string) {
-    const conversation = await this.getConversationContext(conversation_id, user_id);
+    const conversation = await this.getConversationContext(
+      conversation_id,
+      user_id,
+    );
     const activeSession = await this.getActiveSession(conversation_id);
 
     return {
@@ -94,7 +97,10 @@ export class RtcService {
   ) {
     this.assertLivekitReady();
 
-    const conversation = await this.getConversationContext(conversation_id, user_id);
+    const conversation = await this.getConversationContext(
+      conversation_id,
+      user_id,
+    );
     await this.ensureDmCallingAllowed(conversation, user_id);
 
     let session = await this.getActiveSession(conversation_id);
@@ -139,8 +145,9 @@ export class RtcService {
         conversation_type: conversation.type,
         conversation_title: conversation.title,
         caller: this.serializeUser(
-          conversation.memberships.find((membership) => membership.user_id === user_id)
-            ?.user ?? null,
+          conversation.memberships.find(
+            (membership) => membership.user_id === user_id,
+          )?.user ?? null,
         ),
       });
     }
@@ -161,10 +168,17 @@ export class RtcService {
   async joinCall(conversation_id: string, user_id: string) {
     this.assertLivekitReady();
 
-    const conversation = await this.getConversationContext(conversation_id, user_id);
+    const conversation = await this.getConversationContext(
+      conversation_id,
+      user_id,
+    );
     const session = await this.getRequiredActiveSession(conversation_id);
 
-    const upserted = await this.upsertParticipant(session.id, user_id, session.kind);
+    const upserted = await this.upsertParticipant(
+      session.id,
+      user_id,
+      session.kind,
+    );
     const refreshed = await this.getCallSessionById(session.id);
     const tokenData = await this.createLivekitToken(
       refreshed,
@@ -181,11 +195,14 @@ export class RtcService {
         conversation_id,
         call_session_id: refreshed.id,
         user: this.serializeUser(
-          refreshed.participants.find((participant) => participant.user_id === user_id)
-            ?.user ?? null,
+          refreshed.participants.find(
+            (participant) => participant.user_id === user_id,
+          )?.user ?? null,
         ),
         participant: this.serializeParticipant(
-          refreshed.participants.find((participant) => participant.user_id === user_id)!,
+          refreshed.participants.find(
+            (participant) => participant.user_id === user_id,
+          )!,
         ),
         participant_count: refreshed.participants.length,
         joined_at: upserted.joined_at.toISOString(),
@@ -207,7 +224,10 @@ export class RtcService {
   async issueCallToken(conversation_id: string, user_id: string) {
     this.assertLivekitReady();
 
-    const conversation = await this.getConversationContext(conversation_id, user_id);
+    const conversation = await this.getConversationContext(
+      conversation_id,
+      user_id,
+    );
     const session = await this.getRequiredActiveSession(conversation_id);
     await this.upsertParticipant(session.id, user_id, session.kind);
     const refreshed = await this.getCallSessionById(session.id);
@@ -228,12 +248,15 @@ export class RtcService {
   }
 
   async declineCall(conversation_id: string, user_id: string) {
-    const conversation = await this.getConversationContext(conversation_id, user_id);
+    const conversation = await this.getConversationContext(
+      conversation_id,
+      user_id,
+    );
     const session = await this.getRequiredActiveSession(conversation_id);
 
-    const recipient_ids = this.getActiveConversationUserIds(conversation).filter(
-      (memberId) => memberId !== user_id,
-    );
+    const recipient_ids = this.getActiveConversationUserIds(
+      conversation,
+    ).filter((memberId) => memberId !== user_id);
 
     this.realtimeGateway.emitCallDeclined(recipient_ids, {
       conversation_id,
@@ -249,10 +272,16 @@ export class RtcService {
   }
 
   async leaveCall(conversation_id: string, user_id: string) {
-    const conversation = await this.getConversationContext(conversation_id, user_id);
+    const conversation = await this.getConversationContext(
+      conversation_id,
+      user_id,
+    );
     const session = await this.getRequiredActiveSession(conversation_id);
 
-    const left_participant = await this.markParticipantLeft(session.id, user_id);
+    const left_participant = await this.markParticipantLeft(
+      session.id,
+      user_id,
+    );
     const remaining_participants = await this.prisma.callParticipant.findMany({
       where: {
         call_id: session.id,
@@ -262,7 +291,8 @@ export class RtcService {
     });
 
     const should_end_for_everyone =
-      conversation.type === ConversationType.DM || remaining_participants.length === 0;
+      conversation.type === ConversationType.DM ||
+      remaining_participants.length === 0;
 
     if (should_end_for_everyone) {
       await this.finishCallSession(session.id);
@@ -272,7 +302,8 @@ export class RtcService {
         conversation_id,
         call_session_id: session.id,
         by_user_id: user_id,
-        reason: conversation.type === ConversationType.DM ? 'hangup' : 'empty_room',
+        reason:
+          conversation.type === ConversationType.DM ? 'hangup' : 'empty_room',
         at: new Date().toISOString(),
       });
 
@@ -290,7 +321,8 @@ export class RtcService {
         conversation_id,
         call_session_id: session.id,
         user_id,
-        left_at: left_participant.left_at?.toISOString() || new Date().toISOString(),
+        left_at:
+          left_participant.left_at?.toISOString() || new Date().toISOString(),
         participant_count: remaining_participants.length,
       },
     );
@@ -302,7 +334,10 @@ export class RtcService {
   }
 
   async endCall(conversation_id: string, user_id: string) {
-    const conversation = await this.getConversationContext(conversation_id, user_id);
+    const conversation = await this.getConversationContext(
+      conversation_id,
+      user_id,
+    );
     const session = await this.getRequiredActiveSession(conversation_id);
 
     const requester = conversation.memberships.find(
@@ -315,18 +350,23 @@ export class RtcService {
       requester?.role === MemberRole.ADMIN;
 
     if (!can_end_for_everyone) {
-      throw new ForbiddenException('Only the starter or an admin can end this group call');
+      throw new ForbiddenException(
+        'Only the starter or an admin can end this group call',
+      );
     }
 
     await this.finishCallSession(session.id);
 
-    this.realtimeGateway.emitCallEnded(this.getActiveConversationUserIds(conversation), {
-      conversation_id,
-      call_session_id: session.id,
-      by_user_id: user_id,
-      reason: 'ended',
-      at: new Date().toISOString(),
-    });
+    this.realtimeGateway.emitCallEnded(
+      this.getActiveConversationUserIds(conversation),
+      {
+        conversation_id,
+        call_session_id: session.id,
+        by_user_id: user_id,
+        reason: 'ended',
+        at: new Date().toISOString(),
+      },
+    );
 
     return {
       success: true,
@@ -343,7 +383,10 @@ export class RtcService {
       is_screen_sharing?: boolean;
     },
   ) {
-    const conversation = await this.getConversationContext(conversation_id, user_id);
+    const conversation = await this.getConversationContext(
+      conversation_id,
+      user_id,
+    );
     const session = await this.getRequiredActiveSession(conversation_id);
 
     const participant = await this.prisma.callParticipant.findFirst({
@@ -364,14 +407,18 @@ export class RtcService {
       body.microphone === undefined &&
       body.is_screen_sharing === undefined
     ) {
-      throw new BadRequestException('At least one participant field is required');
+      throw new BadRequestException(
+        'At least one participant field is required',
+      );
     }
 
     const updated = await this.prisma.callParticipant.update({
       where: { id: participant.id },
       data: {
         ...(body.camera !== undefined ? { camera: body.camera } : {}),
-        ...(body.microphone !== undefined ? { microphone: body.microphone } : {}),
+        ...(body.microphone !== undefined
+          ? { microphone: body.microphone }
+          : {}),
         ...(body.is_screen_sharing !== undefined
           ? { is_screen_sharing: body.is_screen_sharing }
           : {}),
@@ -493,14 +540,22 @@ export class RtcService {
       return;
     }
 
-    const other = conversation.memberships.find((member) => member.user_id !== user_id);
+    const other = conversation.memberships.find(
+      (member) => member.user_id !== user_id,
+    );
 
     if (!other) {
       throw new BadRequestException('DM participant not found');
     }
 
-    const blocked_by_me = await ChatRepository.checkBlockStatus(user_id, other.user_id);
-    const blocked_me = await ChatRepository.checkBlockStatus(other.user_id, user_id);
+    const blocked_by_me = await ChatRepository.checkBlockStatus(
+      user_id,
+      other.user_id,
+    );
+    const blocked_me = await ChatRepository.checkBlockStatus(
+      other.user_id,
+      user_id,
+    );
 
     if (blocked_by_me || blocked_me) {
       throw new ForbiddenException('Calling is not allowed for blocked users');
@@ -649,7 +704,10 @@ export class RtcService {
     });
   }
 
-  private buildRoomName(conversation: ConversationContext, session: CallSession) {
+  private buildRoomName(
+    conversation: ConversationContext,
+    session: CallSession,
+  ) {
     const base =
       conversation.type === ConversationType.GROUP
         ? conversation.title?.trim() || 'group-call'
@@ -727,14 +785,18 @@ export class RtcService {
         id: conversation.id,
         type: conversation.type,
         title: conversation.title,
-        avatar: conversation.avatar ? NajimStorage.url(conversation.avatar) : null,
+        avatar: conversation.avatar
+          ? NajimStorage.url(conversation.avatar)
+          : null,
       },
       participants: session.participants.map((participant) =>
         this.serializeParticipant(participant),
       ),
       participant_count: session.participants.length,
       self_participant: this.serializeParticipant(
-        session.participants.find((participant) => participant.user_id === user_id) || null,
+        session.participants.find(
+          (participant) => participant.user_id === user_id,
+        ) || null,
       ),
     };
   }
@@ -768,14 +830,12 @@ export class RtcService {
   }
 
   private serializeUser(
-    user:
-      | {
-          id: string;
-          name: string | null;
-          username: string | null;
-          avatar: string | null;
-        }
-      | null,
+    user: {
+      id: string;
+      name: string | null;
+      username: string | null;
+      avatar: string | null;
+    } | null,
   ) {
     if (!user) {
       return null;
@@ -790,6 +850,8 @@ export class RtcService {
   }
 
   private getActiveConversationUserIds(conversation: ConversationContext) {
-    return Array.from(new Set(conversation.memberships.map((membership) => membership.user_id)));
+    return Array.from(
+      new Set(conversation.memberships.map((membership) => membership.user_id)),
+    );
   }
 }

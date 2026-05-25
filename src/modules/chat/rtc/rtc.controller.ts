@@ -45,7 +45,11 @@ export class RtcController {
     @Param() params: ConversationIdParamDto,
     @Body() body: StartCallDto,
   ) {
-    return this.rtcService.startCall(params.conversation_id, user_id, body.kind);
+    return this.rtcService.startCall(
+      params.conversation_id,
+      user_id,
+      body.kind,
+    );
   }
 
   @Post('conversations/:conversation_id/join')

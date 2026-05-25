@@ -89,7 +89,9 @@ export class RealtimeGateway
           if (targetUserIds.length > 0) {
             this.emitToUsers(targetUserIds, 'message:new', data.msg);
           } else {
-            this.io.to(`conv:${data.conversation_id}`).emit('message:new', data.msg);
+            this.io
+              .to(`conv:${data.conversation_id}`)
+              .emit('message:new', data.msg);
           }
         } else if (channel === 'chat:message_status') {
           const payload = {
@@ -105,7 +107,9 @@ export class RealtimeGateway
           if (targetUserIds.length > 0) {
             this.emitToUsers(targetUserIds, 'message:status', payload);
           } else {
-            this.io.to(`conv:${data.conversation_id}`).emit('message:status', payload);
+            this.io
+              .to(`conv:${data.conversation_id}`)
+              .emit('message:status', payload);
           }
         }
       } catch (err) {
@@ -373,7 +377,9 @@ export class RealtimeGateway
           if (result.target_user_ids?.length) {
             this.emitToUsers(result.target_user_ids, 'message:status', payload);
           } else {
-            this.io.to(`conv:${conversationId}`).emit('message:status', payload);
+            this.io
+              .to(`conv:${conversationId}`)
+              .emit('message:status', payload);
           }
         }
 

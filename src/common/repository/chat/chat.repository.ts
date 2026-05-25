@@ -206,7 +206,9 @@ export class ChatRepository {
     }
 
     if (membership.left_at) {
-      throw new ForbiddenException('You are no longer a member of this conversation');
+      throw new ForbiddenException(
+        'You are no longer a member of this conversation',
+      );
     }
 
     if (membership.conversation?.type === 'DM') {
@@ -327,7 +329,9 @@ export class ChatRepository {
           data: members.map((m) => ({
             message_id: createdMessage.id,
             user_id: m.user_id,
-            status: ChatRepository.onlineUsers.has(m.user_id) ? 'DELIVERED' : 'SENT',
+            status: ChatRepository.onlineUsers.has(m.user_id)
+              ? 'DELIVERED'
+              : 'SENT',
           })),
         });
       }
@@ -335,7 +339,9 @@ export class ChatRepository {
 
     if (createdMessage) {
       createdMessage.receipts = sentMembers.map((m: any) => ({
-        status: ChatRepository.onlineUsers.has(m.user_id) ? 'DELIVERED' : 'SENT',
+        status: ChatRepository.onlineUsers.has(m.user_id)
+          ? 'DELIVERED'
+          : 'SENT',
         user_id: m.user_id,
       }));
     }
@@ -349,7 +355,10 @@ export class ChatRepository {
           conversation_id: conversationId,
           msg: formattedMessage,
           target_user_ids: Array.from(
-            new Set([senderId, ...sentMembers.map((member: any) => member.user_id)]),
+            new Set([
+              senderId,
+              ...sentMembers.map((member: any) => member.user_id),
+            ]),
           ),
         }),
       )
