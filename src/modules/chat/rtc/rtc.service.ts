@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import {
   CallKind,
@@ -10,12 +11,19 @@ import {
   CallStatus,
   ConversationType,
   MemberRole,
+  MessageKind,
 } from '@prisma/client';
 import { AccessToken } from 'livekit-server-sdk';
+import Redis from 'ioredis';
+import appConfig from 'src/config/app.config';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ChatRepository } from 'src/common/repository/chat/chat.repository';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+
+// ---------------------------------------------------------------------------
+// Local types
+// ---------------------------------------------------------------------------
 
 type ConversationContext = {
   id: string;
@@ -47,19 +55,61 @@ type CallSessionWithParticipants = CallSession & {
   >;
 };
 
+/** Content stored inside a CALL-kind message. */
+type CallMessageContent = {
+  call_kind: 'AUDIO' | 'VIDEO';
+  /** ONGOING — call in progress. ENDED — completed with duration. MISSED — no one joined / declined. */
+  status: 'ONGOING' | 'ENDED' | 'MISSED';
+  duration_seconds: number | null;
+  reason: string | null;
+};
+
+type CallEndReason = 'ended' | 'declined' | 'empty_room';
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
+
 @Injectable()
-export class RtcService {
+export class RtcService implements OnModuleDestroy {
   private readonly apiKey = process.env.LIVEKIT_API_KEY;
   private readonly apiSecret = process.env.LIVEKIT_API_SECRET;
   private readonly url = process.env.LIVEKIT_URL;
   private readonly publicUrl = process.env.LIVEKIT_PUBLIC_URL || this.url;
-  private readonly roomRegex = /^[a-z0-9][a-z0-9_-]{1,62}[a-z0-9]$/;
   private readonly tokenTtlSeconds = 60 * 10;
+
+  /**
+   * Dedicated Redis publisher for broadcasting call messages.
+   * Mirrors the pattern used in ChatRepository.
+   */
+  private readonly redisPublisher: Redis;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtimeGateway: RealtimeGateway,
-  ) {}
+  ) {
+    const cfg = appConfig().redis;
+    // Bug C fix: safe fallbacks so undefined env vars never break ioredis.
+    this.redisPublisher = new Redis({
+      host: cfg.host ?? '127.0.0.1',
+      port: Number(cfg.port ?? 6379),
+      password: cfg.password || undefined,
+      lazyConnect: false,
+    });
+
+    this.redisPublisher.on('error', (err) =>
+      console.error('[RtcService] Redis publisher error:', err),
+    );
+  }
+
+  // Bug B fix: clean up the Redis publisher when the NestJS module shuts down.
+  async onModuleDestroy() {
+    await this.redisPublisher.quit();
+  }
+
+  // -------------------------------------------------------------------------
+  // Public API
+  // -------------------------------------------------------------------------
 
   health() {
     const envError = this.validateEnv();
@@ -107,12 +157,15 @@ export class RtcService {
     let alreadyActive = false;
 
     if (!session) {
+      const tempRoomName = this.generateRoomName(conversation_id);
+
       session = await this.prisma.callSession.create({
         data: {
           conversation_id,
           kind,
           started_by: user_id,
           status: CallStatus.ONGOING,
+          room_name: tempRoomName,
         },
         include: this.callSessionInclude(),
       });
@@ -131,8 +184,8 @@ export class RtcService {
 
     if (!alreadyActive) {
       const recipient_ids = conversation.memberships
-        .map((membership) => membership.user_id)
-        .filter((memberId) => memberId !== user_id);
+        .map((m) => m.user_id)
+        .filter((id) => id !== user_id);
 
       this.realtimeGateway.emitCallIncoming(recipient_ids, {
         conversation_id,
@@ -145,11 +198,13 @@ export class RtcService {
         conversation_type: conversation.type,
         conversation_title: conversation.title,
         caller: this.serializeUser(
-          conversation.memberships.find(
-            (membership) => membership.user_id === user_id,
-          )?.user ?? null,
+          conversation.memberships.find((m) => m.user_id === user_id)?.user ??
+            null,
         ),
       });
+
+      // Create a CALL-kind message so the conversation timeline shows the call.
+      await this.createCallMessage(session, conversation, user_id);
     }
 
     return {
@@ -187,22 +242,19 @@ export class RtcService {
     );
 
     const recipient_ids = conversation.memberships
-      .map((membership) => membership.user_id)
-      .filter((memberId) => memberId !== user_id);
+      .map((m) => m.user_id)
+      .filter((id) => id !== user_id);
 
     if (!upserted.already_joined) {
       this.realtimeGateway.emitCallJoined(recipient_ids, {
         conversation_id,
         call_session_id: refreshed.id,
         user: this.serializeUser(
-          refreshed.participants.find(
-            (participant) => participant.user_id === user_id,
-          )?.user ?? null,
+          refreshed.participants.find((p) => p.user_id === user_id)?.user ??
+            null,
         ),
         participant: this.serializeParticipant(
-          refreshed.participants.find(
-            (participant) => participant.user_id === user_id,
-          )!,
+          refreshed.participants.find((p) => p.user_id === user_id)!,
         ),
         participant_count: refreshed.participants.length,
         joined_at: upserted.joined_at.toISOString(),
@@ -229,13 +281,37 @@ export class RtcService {
       user_id,
     );
     const session = await this.getRequiredActiveSession(conversation_id);
-    await this.upsertParticipant(session.id, user_id, session.kind);
+    const upserted = await this.upsertParticipant(
+      session.id,
+      user_id,
+      session.kind,
+    );
     const refreshed = await this.getCallSessionById(session.id);
     const tokenData = await this.createLivekitToken(
       refreshed,
       conversation,
       user_id,
     );
+
+    if (!upserted.already_joined) {
+      const recipient_ids = conversation.memberships
+        .map((m) => m.user_id)
+        .filter((id) => id !== user_id);
+
+      this.realtimeGateway.emitCallJoined(recipient_ids, {
+        conversation_id,
+        call_session_id: refreshed.id,
+        user: this.serializeUser(
+          refreshed.participants.find((p) => p.user_id === user_id)?.user ??
+            null,
+        ),
+        participant: this.serializeParticipant(
+          refreshed.participants.find((p) => p.user_id === user_id)!,
+        ),
+        participant_count: refreshed.participants.length,
+        joined_at: upserted.joined_at.toISOString(),
+      });
+    }
 
     return {
       success: true,
@@ -256,14 +332,31 @@ export class RtcService {
 
     const recipient_ids = this.getActiveConversationUserIds(
       conversation,
-    ).filter((memberId) => memberId !== user_id);
+    ).filter((id) => id !== user_id);
 
-    this.realtimeGateway.emitCallDeclined(recipient_ids, {
-      conversation_id,
-      call_session_id: session.id,
-      user_id,
-      at: new Date().toISOString(),
-    });
+    if (conversation.type === ConversationType.DM) {
+      // DM: end the session immediately and mark the call message as MISSED.
+      await this.finishCallSession(session.id, 'declined');
+
+      this.realtimeGateway.emitCallEnded(
+        this.getActiveConversationUserIds(conversation),
+        {
+          conversation_id,
+          call_session_id: session.id,
+          by_user_id: user_id,
+          reason: 'declined',
+          at: new Date().toISOString(),
+        },
+      );
+    } else {
+      // GROUP: keep session alive, just notify others.
+      this.realtimeGateway.emitCallDeclined(recipient_ids, {
+        conversation_id,
+        call_session_id: session.id,
+        user_id,
+        at: new Date().toISOString(),
+      });
+    }
 
     return {
       success: true,
@@ -283,27 +376,21 @@ export class RtcService {
       user_id,
     );
     const remaining_participants = await this.prisma.callParticipant.findMany({
-      where: {
-        call_id: session.id,
-        left_at: null,
-      },
+      where: { call_id: session.id, left_at: null },
       select: { user_id: true },
     });
 
-    const should_end_for_everyone =
-      conversation.type === ConversationType.DM ||
-      remaining_participants.length === 0;
+    const should_end_for_everyone = remaining_participants.length === 0;
 
     if (should_end_for_everyone) {
-      await this.finishCallSession(session.id);
+      await this.finishCallSession(session.id, 'empty_room');
 
       const recipients = this.getActiveConversationUserIds(conversation);
       this.realtimeGateway.emitCallEnded(recipients, {
         conversation_id,
         call_session_id: session.id,
         by_user_id: user_id,
-        reason:
-          conversation.type === ConversationType.DM ? 'hangup' : 'empty_room',
+        reason: 'empty_room',
         at: new Date().toISOString(),
       });
 
@@ -315,7 +402,7 @@ export class RtcService {
 
     this.realtimeGateway.emitCallLeft(
       this.getActiveConversationUserIds(conversation).filter(
-        (memberId) => memberId !== user_id,
+        (id) => id !== user_id,
       ),
       {
         conversation_id,
@@ -341,7 +428,7 @@ export class RtcService {
     const session = await this.getRequiredActiveSession(conversation_id);
 
     const requester = conversation.memberships.find(
-      (membership) => membership.user_id === user_id,
+      (m) => m.user_id === user_id,
     );
 
     const can_end_for_everyone =
@@ -355,7 +442,7 @@ export class RtcService {
       );
     }
 
-    await this.finishCallSession(session.id);
+    await this.finishCallSession(session.id, 'ended');
 
     this.realtimeGateway.emitCallEnded(
       this.getActiveConversationUserIds(conversation),
@@ -390,11 +477,7 @@ export class RtcService {
     const session = await this.getRequiredActiveSession(conversation_id);
 
     const participant = await this.prisma.callParticipant.findFirst({
-      where: {
-        call_id: session.id,
-        user_id,
-        left_at: null,
-      },
+      where: { call_id: session.id, user_id, left_at: null },
       orderBy: { joined_at: 'desc' },
     });
 
@@ -424,20 +507,13 @@ export class RtcService {
           : {}),
       },
       include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            avatar: true,
-          },
-        },
+        user: { select: { id: true, name: true, username: true, avatar: true } },
       },
     });
 
     this.realtimeGateway.emitCallParticipantUpdated(
       this.getActiveConversationUserIds(conversation).filter(
-        (memberId) => memberId !== user_id,
+        (id) => id !== user_id,
       ),
       {
         conversation_id,
@@ -449,25 +525,185 @@ export class RtcService {
     return {
       success: true,
       message: 'Participant media state updated successfully',
+      data: { participant: this.serializeParticipant(updated) },
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Call Message helpers
+  // -------------------------------------------------------------------------
+
+  /**
+   * Creates a `MessageKind.CALL` record so the call appears in the chat timeline.
+   * Content status is `ONGOING`; it will be updated to ENDED/MISSED when the call finishes.
+   * Published to the `chat:messages` Redis channel so the RealtimeGateway fans it out.
+   */
+  private async createCallMessage(
+    session: CallSession,
+    conversation: ConversationContext,
+    sender_id: string,
+  ) {
+    const content: CallMessageContent = {
+      call_kind: session.kind === CallKind.VIDEO ? 'VIDEO' : 'AUDIO',
+      status: 'ONGOING',
+      duration_seconds: null,
+      reason: null,
+    };
+
+    const member_ids = this.getActiveConversationUserIds(conversation);
+
+    const message = await this.prisma.message.create({
       data: {
-        participant: this.serializeParticipant(updated),
+        conversation_id: session.conversation_id,
+        sender_id,
+        kind: MessageKind.CALL,
+        content,
+        call_session_id: session.id,
+      },
+      select: {
+        id: true,
+        conversation_id: true,
+        kind: true,
+        content: true,
+        created_at: true,
+        deleted_at: true,
+        call_session_id: true,
+        sender: { select: { id: true, name: true, avatar: true } },
+      },
+    });
+
+    const formatted = this.formatCallMessage(message);
+
+    // Publish via Redis so the existing RealtimeGateway picks it up as `message:new`.
+    this.redisPublisher
+      .publish(
+        'chat:messages',
+        JSON.stringify({
+          conversation_id: session.conversation_id,
+          msg: formatted,
+          target_user_ids: member_ids,
+        }),
+      )
+      .catch((err) =>
+        console.error('[RtcService] Redis call message publish failed:', err),
+      );
+  }
+
+  /**
+   * Updates the call message when the session ends:
+   * - Calculates duration.
+   * - Marks the message as ENDED or MISSED.
+   * - Emits `call:message_updated` so clients can refresh the call card.
+   */
+  private async finalizeCallMessage(
+    call_session_id: string,
+    conversation_id: string,
+    started_at: Date,
+    ended_at: Date,
+    reason: CallEndReason,
+    member_ids: string[],
+  ) {
+    // Count every participant that ever joined (including those who left).
+    const total_participants = await this.prisma.callParticipant.count({
+      where: { call_id: call_session_id },
+    });
+
+    // MISSED: only the caller was ever in the room, or the call was explicitly declined.
+    const final_status: CallMessageContent['status'] =
+      reason === 'declined' || total_participants <= 1 ? 'MISSED' : 'ENDED';
+
+    const duration_seconds =
+      final_status === 'ENDED'
+        ? Math.round((ended_at.getTime() - started_at.getTime()) / 1000)
+        : null;
+
+    // Bug A fix: updateMany cannot safely merge JSON fields — the `call_kind` from the
+    // original content would be lost. Instead: fetch first, build merged content, then update.
+    const existing = await this.prisma.message.findFirst({
+      where: { call_session_id, kind: MessageKind.CALL },
+      select: {
+        id: true,
+        conversation_id: true,
+        kind: true,
+        content: true,
+        created_at: true,
+        deleted_at: true,
+        call_session_id: true,
+        sender: { select: { id: true, name: true, avatar: true } },
+      },
+    });
+
+    if (!existing) return; // no call message found — startCall must have failed silently
+
+    // Preserve call_kind from the original content; override lifecycle fields.
+    const originalContent = existing.content as Record<string, unknown> | null;
+    const mergedContent: CallMessageContent = {
+      call_kind: (originalContent?.['call_kind'] as 'AUDIO' | 'VIDEO') ?? 'VIDEO',
+      status: final_status,
+      duration_seconds,
+      reason,
+    };
+
+    await this.prisma.message.update({
+      where: { id: existing.id },
+      data: { content: mergedContent },
+    });
+
+    const formatted = this.formatCallMessage({ ...existing, content: mergedContent });
+
+    // Notify clients — they should upsert by message id.
+    this.realtimeGateway.emitCallMessageUpdated(member_ids, {
+      message: formatted,
+      conversation_id,
+    });
+  }
+
+  /** Formats a raw call message record to match the standard message shape. */
+  private formatCallMessage(message: {
+    id: string;
+    conversation_id: string;
+    kind: string;
+    content: unknown;
+    created_at: Date;
+    deleted_at?: Date | null;
+    call_session_id?: string | null;
+    sender: { id: string; name: string | null; avatar: string | null };
+  }) {
+    return {
+      id: message.id,
+      conversation_id: message.conversation_id,
+      kind: message.kind,
+      content: message.content,
+      call_session_id: message.call_session_id ?? null,
+      created_at: message.created_at,
+      deleted_at: message.deleted_at ?? null,
+      status: 'SENT',
+      attachments: [],
+      reply_to: null,
+      sender: {
+        id: message.sender.id,
+        name: message.sender.name,
+        avatar: message.sender.avatar
+          ? NajimStorage.url(message.sender.avatar)
+          : null,
       },
     };
   }
+
+  // -------------------------------------------------------------------------
+  // Private helpers
+  // -------------------------------------------------------------------------
 
   private validateEnv(): string | null {
     if (!this.apiKey || !this.apiSecret || !this.publicUrl) {
       return 'LiveKit env vars missing (LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL or LIVEKIT_PUBLIC_URL)';
     }
-
     return null;
   }
 
   private assertLivekitReady() {
     const envError = this.validateEnv();
-    if (envError) {
-      throw new BadRequestException(envError);
-    }
+    if (envError) throw new BadRequestException(envError);
   }
 
   private callSessionInclude() {
@@ -477,12 +713,7 @@ export class RtcService {
         orderBy: { joined_at: 'asc' as const },
         include: {
           user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              avatar: true,
-            },
+            select: { id: true, name: true, username: true, avatar: true },
           },
         },
       },
@@ -513,22 +744,14 @@ export class RtcService {
             user_id: true,
             role: true,
             user: {
-              select: {
-                id: true,
-                name: true,
-                username: true,
-                avatar: true,
-              },
+              select: { id: true, name: true, username: true, avatar: true },
             },
           },
         },
       },
     });
 
-    if (!conversation) {
-      throw new BadRequestException('Conversation not found');
-    }
-
+    if (!conversation) throw new BadRequestException('Conversation not found');
     return conversation;
   }
 
@@ -536,17 +759,10 @@ export class RtcService {
     conversation: ConversationContext,
     user_id: string,
   ) {
-    if (conversation.type !== ConversationType.DM) {
-      return;
-    }
+    if (conversation.type !== ConversationType.DM) return;
 
-    const other = conversation.memberships.find(
-      (member) => member.user_id !== user_id,
-    );
-
-    if (!other) {
-      throw new BadRequestException('DM participant not found');
-    }
+    const other = conversation.memberships.find((m) => m.user_id !== user_id);
+    if (!other) throw new BadRequestException('DM participant not found');
 
     const blocked_by_me = await ChatRepository.checkBlockStatus(
       user_id,
@@ -578,9 +794,7 @@ export class RtcService {
 
   private async getRequiredActiveSession(conversation_id: string) {
     const session = await this.getActiveSession(conversation_id);
-    if (!session) {
-      throw new BadRequestException('No active call found');
-    }
+    if (!session) throw new BadRequestException('No active call found');
     return session;
   }
 
@@ -589,11 +803,7 @@ export class RtcService {
       where: { id: call_session_id },
       include: this.callSessionInclude(),
     });
-
-    if (!session) {
-      throw new BadRequestException('Call session not found');
-    }
-
+    if (!session) throw new BadRequestException('Call session not found');
     return session;
   }
 
@@ -603,26 +813,14 @@ export class RtcService {
     kind: CallKind,
   ) {
     const active = await this.prisma.callParticipant.findFirst({
-      where: {
-        call_id: call_session_id,
-        user_id,
-        left_at: null,
-      },
+      where: { call_id: call_session_id, user_id, left_at: null },
       orderBy: { joined_at: 'desc' },
     });
 
-    if (active) {
-      return {
-        already_joined: true,
-        joined_at: active.joined_at,
-      };
-    }
+    if (active) return { already_joined: true, joined_at: active.joined_at };
 
     const previous = await this.prisma.callParticipant.findFirst({
-      where: {
-        call_id: call_session_id,
-        user_id,
-      },
+      where: { call_id: call_session_id, user_id },
       orderBy: { joined_at: 'desc' },
     });
 
@@ -652,19 +850,12 @@ export class RtcService {
       });
     }
 
-    return {
-      already_joined: false,
-      joined_at,
-    };
+    return { already_joined: false, joined_at };
   }
 
   private async markParticipantLeft(call_session_id: string, user_id: string) {
     const participant = await this.prisma.callParticipant.findFirst({
-      where: {
-        call_id: call_session_id,
-        user_id,
-        left_at: null,
-      },
+      where: { call_id: call_session_id, user_id, left_at: null },
       orderBy: { joined_at: 'desc' },
     });
 
@@ -674,60 +865,63 @@ export class RtcService {
 
     return this.prisma.callParticipant.update({
       where: { id: participant.id },
-      data: {
-        left_at: new Date(),
-        is_screen_sharing: false,
-      },
+      data: { left_at: new Date(), is_screen_sharing: false },
     });
   }
 
-  private async finishCallSession(call_session_id: string) {
-    await this.prisma.$transaction(async (tx) => {
-      await tx.callParticipant.updateMany({
-        where: {
-          call_id: call_session_id,
-          left_at: null,
-        },
-        data: {
-          left_at: new Date(),
-          is_screen_sharing: false,
-        },
-      });
-
-      await tx.callSession.update({
-        where: { id: call_session_id },
-        data: {
-          status: CallStatus.ENDED,
-          ended_at: new Date(),
-        },
-      });
-    });
-  }
-
-  private buildRoomName(
-    conversation: ConversationContext,
-    session: CallSession,
+  /**
+   * Marks the session as ENDED in DB and updates the call message with duration/status.
+   */
+  private async finishCallSession(
+    call_session_id: string,
+    reason: CallEndReason,
   ) {
-    const base =
-      conversation.type === ConversationType.GROUP
-        ? conversation.title?.trim() || 'group-call'
-        : 'dm-call';
+    const ended_at = new Date();
 
-    const slug =
-      base
-        .toLowerCase()
-        .replace(/[^a-z0-9_-]+/g, '-')
-        .replace(/-{2,}/g, '-')
-        .replace(/^[-_]+|[-_]+$/g, '')
-        .slice(0, 24) || 'call';
+    const session = await this.prisma.$transaction(async (tx) => {
+      await tx.callParticipant.updateMany({
+        where: { call_id: call_session_id, left_at: null },
+        data: { left_at: ended_at, is_screen_sharing: false },
+      });
 
-    const room_name = `${slug}-${conversation.id.slice(0, 8)}-${session.id.slice(0, 8)}`;
+      return tx.callSession.update({
+        where: { id: call_session_id },
+        data: { status: CallStatus.ENDED, ended_at },
+      });
+    });
 
-    if (!this.roomRegex.test(room_name)) {
-      return `call-${conversation.id.slice(0, 8)}-${session.id.slice(0, 8)}`;
+    // Get all members of the conversation to notify about the updated message.
+    const memberIds = await this.prisma.membership
+      .findMany({
+        where: { conversation_id: session.conversation_id, left_at: null },
+        select: { user_id: true },
+      })
+      .then((rows) => rows.map((r) => r.user_id));
+
+    // Update the call message with final status and duration.
+    await this.finalizeCallMessage(
+      call_session_id,
+      session.conversation_id,
+      session.started_at,
+      ended_at,
+      reason,
+      memberIds,
+    );
+  }
+
+  private generateRoomName(conversation_id: string): string {
+    const suffix = Math.random().toString(36).slice(2, 10);
+    const candidate = `call-${conversation_id.slice(0, 8)}-${suffix}`;
+
+    if (/^[a-z0-9][a-z0-9_-]{1,62}[a-z0-9]$/.test(candidate)) {
+      return candidate;
     }
 
-    return room_name;
+    return `call-${Date.now()}`;
+  }
+
+  private getRoomName(session: CallSession, conversation_id: string): string {
+    return session.room_name ?? this.generateRoomName(conversation_id);
   }
 
   private async createLivekitToken(
@@ -735,15 +929,10 @@ export class RtcService {
     conversation: ConversationContext,
     user_id: string,
   ) {
-    const caller = conversation.memberships.find(
-      (membership) => membership.user_id === user_id,
-    );
+    const caller = conversation.memberships.find((m) => m.user_id === user_id);
+    if (!caller) throw new ForbiddenException('Caller not found in conversation');
 
-    if (!caller) {
-      throw new ForbiddenException('Caller not found in conversation');
-    }
-
-    const room_name = this.buildRoomName(conversation, session);
+    const room_name = this.getRoomName(session, conversation.id);
 
     const token = new AccessToken(this.apiKey!, this.apiSecret!, {
       identity: user_id,
@@ -780,7 +969,7 @@ export class RtcService {
       started_by: session.started_by,
       started_at: session.started_at,
       ended_at: session.ended_at,
-      room_name: this.buildRoomName(conversation, session),
+      room_name: this.getRoomName(session, conversation.id),
       conversation: {
         id: conversation.id,
         type: conversation.type,
@@ -789,14 +978,10 @@ export class RtcService {
           ? NajimStorage.url(conversation.avatar)
           : null,
       },
-      participants: session.participants.map((participant) =>
-        this.serializeParticipant(participant),
-      ),
+      participants: session.participants.map((p) => this.serializeParticipant(p)),
       participant_count: session.participants.length,
       self_participant: this.serializeParticipant(
-        session.participants.find(
-          (participant) => participant.user_id === user_id,
-        ) || null,
+        session.participants.find((p) => p.user_id === user_id) || null,
       ),
     };
   }
@@ -813,9 +998,7 @@ export class RtcService {
         })
       | null,
   ) {
-    if (!participant) {
-      return null;
-    }
+    if (!participant) return null;
 
     return {
       id: participant.id,
@@ -837,9 +1020,7 @@ export class RtcService {
       avatar: string | null;
     } | null,
   ) {
-    if (!user) {
-      return null;
-    }
+    if (!user) return null;
 
     return {
       id: user.id,
@@ -851,7 +1032,7 @@ export class RtcService {
 
   private getActiveConversationUserIds(conversation: ConversationContext) {
     return Array.from(
-      new Set(conversation.memberships.map((membership) => membership.user_id)),
+      new Set(conversation.memberships.map((m) => m.user_id)),
     );
   }
 }

@@ -908,6 +908,8 @@ model CallSession {
   started_by      String
   started_at      DateTime   @default(now())
   ended_at        DateTime?
+  /// Persisted at call creation. Stable even if conversation title changes later.
+  room_name       String?
 
   participants CallParticipant[]
   messages     Message[]

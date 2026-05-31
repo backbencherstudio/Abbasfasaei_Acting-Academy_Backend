@@ -432,6 +432,14 @@ export class RealtimeGateway
     this.emitToUsers(toUserIds, 'call:ended', payload);
   }
 
+  /**
+   * Notify clients that a CALL-kind message has been updated.
+   * Clients should upsert the message in their local store by message id.
+   */
+  emitCallMessageUpdated(toUserIds: string[], payload: Record<string, unknown>) {
+    this.emitToUsers(toUserIds, 'call:message_updated', payload);
+  }
+
   private getToken(socket: Socket): string | undefined {
     const authToken = socket.handshake.auth?.token;
 
