@@ -3,6 +3,7 @@
 - Base URL: `http://localhost:7777`
 - Skipped modules: none
 - Note: `transaction` module include kora hoyeche, karon eta alada module
+- Sync status: `2026-05-31` e `src/app.controller.ts` ebong `src/modules/**/**.controller.ts` er route-gular shathe verify kora hoyeche; ei snapshot-e kono endpoint missing paoa jayni
 
 ---
 
