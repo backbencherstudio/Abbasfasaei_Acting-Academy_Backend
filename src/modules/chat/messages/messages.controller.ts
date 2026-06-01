@@ -18,10 +18,10 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
-import { SendMessageDto } from '../conversations/dto/create-conversation.dto';
 import { CursorPaginationDto } from './dto/query-message.dto';
 
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+import { SendMessageDto } from './dto/create-message.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller()

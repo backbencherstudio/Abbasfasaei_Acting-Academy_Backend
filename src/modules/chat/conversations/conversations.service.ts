@@ -207,7 +207,7 @@ export class ConversationsService {
   }
 
   async getMyConversations(user_id: string, query: ConversationQueryDto) {
-    const { cursor, limit, type } = query;
+    const { cursor, limit, type, search } = query;
 
     const where: Prisma.ConversationWhereInput = {
       memberships: {
@@ -218,6 +218,20 @@ export class ConversationsService {
       },
     };
     if (type) where.type = type;
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search } },
+        { memberships: { some: { user: { name: { contains: search } } } } },
+        { memberships: { some: { user: { username: { contains: search } } } } },
+        { memberships: { some: { user: { email: { contains: search } } } } },
+        {
+          memberships: {
+            some: { user: { phone_number: { contains: search } } },
+          },
+        },
+      ];
+    }
 
     const conversations = await this.prisma.conversation.findMany({
       where,

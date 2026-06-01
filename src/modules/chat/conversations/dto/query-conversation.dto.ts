@@ -20,6 +20,10 @@ export class ConversationQueryDto {
 
   @IsOptional()
   @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
   cursor?: string;
 
   @IsOptional()

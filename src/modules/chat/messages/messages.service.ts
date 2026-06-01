@@ -10,8 +10,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
 import { CursorPaginationDto } from './dto/query-message.dto';
-import { SendMessageDto } from '../conversations/dto/create-conversation.dto';
 import { ChatRepository } from 'src/common/repository/chat/chat.repository';
+import { SendMessageDto } from './dto/create-message.dto';
 
 @Injectable()
 export class MessagesService {

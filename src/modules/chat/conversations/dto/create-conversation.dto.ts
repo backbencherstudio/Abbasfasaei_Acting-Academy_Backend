@@ -36,32 +36,6 @@ export class CreateConversationDto {
   participant_ids?: string[];
 }
 
-export class SendMessageDto {
-  @IsEnum(MessageKind)
-  @IsOptional()
-  kind?: MessageKind = MessageKind.TEXT;
-
-  @IsObject()
-  @IsOptional()
-  @Transform(({ value }) => {
-    if (value === undefined || value === null || value === '') return undefined;
-    if (typeof value === 'object') return value;
-    if (typeof value === 'string') {
-      try {
-        return JSON.parse(value);
-      } catch {
-        return value;
-      }
-    }
-    return value;
-  })
-  content?: Record<string, any>;
-
-  @IsString()
-  @IsOptional()
-  reply_to_id?: string;
-}
-
 export class MarkAsReadDto {
   @IsString()
   @IsNotEmpty()
