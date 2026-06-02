@@ -2,12 +2,19 @@ import { ApiProperty, OmitType, PartialType } from '@nestjs/swagger';
 import {
   CreateCourseDto,
   CreateAssignmentDto,
-  CreateAttendenceDto,
+  CreateAttendanceDto,
   CreateClassDto,
   CreateModuleDto,
 } from './create-course.dto';
-import { IsString, IsOptional, IsEnum } from 'class-validator';
-import { CourseStatus } from '@prisma/client';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsNotEmpty,
+  IsDate,
+} from 'class-validator';
+import { AttendanceStatus, CourseStatus } from '@prisma/client';
+import { Type } from 'class-transformer';
 
 export class UpdateCourseDto extends PartialType(
   OmitType(CreateCourseDto, ['status']),
@@ -20,10 +27,23 @@ export class UpdateCourseDto extends PartialType(
 
 export class UpdateAssignmentDto extends PartialType(CreateAssignmentDto) {}
 
-export class UpdateAttendenceDto extends CreateAttendenceDto {
-  @ApiProperty({ description: 'Attendance status', example: 'PRESENT/ABSENT' })
+export class UpdateAttendanceDto extends CreateAttendanceDto {
   @IsString()
-  status: string;
+  @IsNotEmpty()
+  class_id: string;
+
+  @IsString()
+  @IsNotEmpty()
+  student_id: string;
+
+  @IsEnum(AttendanceStatus)
+  @IsOptional()
+  status?: AttendanceStatus;
+
+  @IsDate()
+  @Type(() => Date)
+  @IsOptional()
+  attended_at?: Date;
 }
 
 export class UpdateClassDto extends PartialType(CreateClassDto) {}

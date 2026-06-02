@@ -16,7 +16,7 @@ import {
 } from '@nestjs/common';
 import { CoursesService } from './courses.service';
 import { CreateCourseDto } from './dto/create-course.dto';
-import { UpdateCourseDto } from './dto/update-course.dto';
+import { UpdateAttendanceDto, UpdateCourseDto } from './dto/update-course.dto';
 import { ApiOperation } from '@nestjs/swagger/dist/decorators/api-operation.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
 import { ApiTags } from '@nestjs/swagger/dist/decorators/api-use-tags.decorator';
@@ -86,16 +86,10 @@ export class CoursesController {
   @Roles(Role.ADMIN, Role.TEACHER)
   @Post('attendance/manual')
   async markManualAttendance(
-    @GetUser() user: any,
-    @Body()
-    body: {
-      classId?: string;
-      studentId?: string;
-      status?: string;
-      attendedAt?: string;
-    },
+    @GetUser('userId') user_id: string,
+    @Body() body: UpdateAttendanceDto,
   ) {
-    return this.coursesService.markManualAttendance(body, user?.userId);
+    return this.coursesService.markManualAttendance(body, user_id);
   }
 
   // updated

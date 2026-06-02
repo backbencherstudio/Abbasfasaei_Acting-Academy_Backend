@@ -9,7 +9,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { CreateCourseDto } from './dto/create-course.dto';
-import { UpdateCourseDto } from './dto/update-course.dto';
+import { UpdateAttendanceDto, UpdateCourseDto } from './dto/update-course.dto';
 import {
   CreateModuleDto,
   CreateClassDto,
@@ -20,24 +20,19 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateModuleDto, UpdateClassDto } from './dto/update-course.dto';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
-import { AttendanceService } from './attendance.helper';
 import { Role } from 'src/common/guard/role/role.enum';
 import {
   AttendanceQueryDto,
   GetAllAssignmentQueryDto,
   GetAllCourseQueryDto,
 } from './dto/query-course.dto';
-import { AttachmentType, CourseStatus, Prisma } from '@prisma/client';
+import { AttachmentType, AttendanceStatus, Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
 import * as QRCode from 'qrcode';
 
 @Injectable()
 export class CoursesService {
-  private readonly attendanceService: AttendanceService;
-
-  constructor(private prisma: PrismaService) {
-    this.attendanceService = new AttendanceService(prisma);
-  }
+  constructor(private prisma: PrismaService) {}
 
   async generateClassQR(classId: string, teacherId: string) {
     if (!classId) {
@@ -322,8 +317,63 @@ export class CoursesService {
     };
   }
 
-  markManualAttendance(body: any, userId: string) {
-    return this.attendanceService.markManualAttendance(body, userId);
+  async markManualAttendance(body: UpdateAttendanceDto, user_id: string) {
+    const { class_id, student_id, status, attended_at } = body;
+
+    if (!class_id) {
+      throw new BadRequestException('Class ID is required');
+    }
+
+    if (!student_id) {
+      throw new BadRequestException('Student ID is required');
+    }
+
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const classData = await this.prisma.moduleClass.findUnique({
+      where: { id: class_id },
+    });
+
+    if (!classData) {
+      throw new NotFoundException('Class not found');
+    }
+
+    const student = await this.prisma.user.findUnique({
+      where: { id: student_id },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const attendance = await this.prisma.attendance.upsert({
+      where: { id: student_id },
+      update: {
+        status,
+        attended_at: status === AttendanceStatus.PRESENT ? attended_at : null,
+      },
+      create: {
+        class_id,
+        student_id,
+        status,
+        attended_at: status === AttendanceStatus.PRESENT ? attended_at : null,
+      },
+    });
+
+    return {
+      message: 'Attendance marked successfully',
+      success: true,
+    };
   }
 
   async createCourse(user_id: string, createCourseDto: CreateCourseDto) {

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { CourseStatus } from '@prisma/client';
+import { AttendanceStatus, CourseStatus } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsNotEmpty,
@@ -141,7 +141,7 @@ export class GradeAssignmentDto {
   grade_number?: number;
 }
 
-export class CreateAttendenceDto {}
+export class CreateAttendanceDto {}
 
 export class CreateClassDto {
   @ApiProperty()

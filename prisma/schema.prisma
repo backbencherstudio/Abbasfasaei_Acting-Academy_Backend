@@ -343,6 +343,13 @@ model Assignment {
   @@map("assignments")
 }
 
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  LEAVE
+}
+
 model Attendance {
   id            String           @id @default(cuid())
   created_at    DateTime         @default(now())
@@ -1087,13 +1094,6 @@ model UserSetting {
   user       User?     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("user_settings")
-}
-
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-  LATE
-  LEAVE
 }
 
 // -------------------------------------------------------------------
