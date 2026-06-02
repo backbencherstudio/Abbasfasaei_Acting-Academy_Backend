@@ -39,6 +39,7 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import {
+  AttendanceQueryDto,
   GetAllAssignmentQueryDto,
   GetAllCourseQueryDto,
 } from './dto/query-course.dto';
@@ -72,21 +73,14 @@ export class CoursesController {
     }
   }
 
+  // updated
   @Roles(Role.ADMIN, Role.TEACHER)
   @Get('attendance')
   async getAllAttendance(
-    @Query()
-    query: {
-      status?: string;
-      date?: string;
-      classId?: string;
-      courseId?: string;
-      search?: string;
-      page?: string;
-      limit?: string;
-    },
+    @GetUser('userId') user_id: string,
+    @Query() query: AttendanceQueryDto,
   ) {
-    return this.coursesService.getAllAttendance(query);
+    return this.coursesService.getAllAttendance(user_id, query);
   }
 
   @Roles(Role.ADMIN, Role.TEACHER)

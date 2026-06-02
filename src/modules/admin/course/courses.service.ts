@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -22,10 +23,13 @@ import appConfig from 'src/config/app.config';
 import { AttendanceService } from './attendance.helper';
 import { Role } from 'src/common/guard/role/role.enum';
 import {
+  AttendanceQueryDto,
   GetAllAssignmentQueryDto,
   GetAllCourseQueryDto,
 } from './dto/query-course.dto';
-import { AttachmentType, Prisma } from '@prisma/client';
+import { AttachmentType, CourseStatus, Prisma } from '@prisma/client';
+import * as crypto from 'crypto';
+import * as QRCode from 'qrcode';
 
 @Injectable()
 export class CoursesService {
@@ -35,12 +39,290 @@ export class CoursesService {
     this.attendanceService = new AttendanceService(prisma);
   }
 
-  generateClassQR(classId: string, teacherId: string) {
-    return this.attendanceService.generateClassQR(classId, teacherId);
+  async generateClassQR(classId: string, teacherId: string) {
+    if (!classId) {
+      throw new BadRequestException('Class ID is required');
+    }
+
+    if (!teacherId) {
+      throw new BadRequestException('Teacher ID is required');
+    }
+
+    const teacher = await this.prisma.user.findUnique({
+      where: { id: teacherId },
+      select: {
+        id: true,
+        name: true,
+        role_users: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found');
+    }
+
+    const isTeacher = teacher.role_users.some(
+      (roleUser) => roleUser.role?.name?.toUpperCase() === 'TEACHER',
+    );
+
+    if (!isTeacher) {
+      throw new ForbiddenException('Only teachers can generate QR codes');
+    }
+
+    const moduleClass = await this.prisma.moduleClass.findUnique({
+      where: { id: classId },
+      include: {
+        module: {
+          include: {
+            course: true,
+          },
+        },
+      },
+    });
+
+    if (!moduleClass) {
+      throw new NotFoundException('Class not found');
+    }
+
+    if (moduleClass.module.course.instructor_id !== teacherId) {
+      throw new ForbiddenException('You are not assigned to this course/class');
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+
+    // Create QR session
+    const qrSession = await this.prisma.qRAttendanceSession.create({
+      data: {
+        token,
+        class_id: classId,
+        created_by: teacherId,
+        expires_at: expiresAt,
+        is_active: true,
+      },
+      include: {
+        class: {
+          select: {
+            id: true,
+            class_title: true,
+            class_at: true,
+          },
+        },
+      },
+    });
+
+    // Generate QR code data
+    const qrData = JSON.stringify({
+      version: '1.0',
+      type: 'attendance',
+      classId,
+      token,
+      expires: expiresAt.toISOString(),
+    });
+
+    const qrCodeImage = await QRCode.toDataURL(qrData);
+
+    return {
+      qrCodeImage,
+      token,
+      sessionId: qrSession.id,
+      expiresAt,
+      class: qrSession.class,
+    };
   }
 
-  getAllAttendance(query?: any) {
-    return this.attendanceService.getAllAttendance(query);
+  async getAllAttendance(user_id: string, query: AttendanceQueryDto) {
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+    const {
+      search,
+      page = 1,
+      limit = 10,
+      status,
+      date,
+      class_id,
+      course_id,
+    } = query;
+
+    const start_date = date ? new Date(date) : null;
+    start_date?.setHours(0, 0, 0, 0);
+    const end_date = date ? new Date(date) : null;
+    end_date?.setHours(23, 59, 59, 999);
+    const searchValue = search || null;
+    const statusValue = status || null;
+    const classId = class_id || null;
+    const courseId = course_id || null;
+
+    if (!date || (!course_id && !class_id) || !start_date || !end_date) {
+      throw new BadRequestException(
+        'date and course_id or class_id are required',
+      );
+    }
+
+    const [attendanceResult] = await this.prisma.$queryRaw<
+      {
+        requester_type: string | null;
+        total: number;
+        data: {
+          id: string | null;
+          student: { id: string; name: string | null };
+          created_at: Date | null;
+          status: string;
+          attendance_by: string | null;
+          class_id: string | null;
+        }[];
+      }[]
+    >`
+        WITH requester AS (
+          SELECT "type"
+          FROM "users"
+          WHERE "id" = ${user_id}
+        ),
+        eligible_students AS (
+          SELECT DISTINCT u."id", u."name"
+          FROM "enrollments" e
+          JOIN "users" u ON u."id" = e."user_id"
+          JOIN "courses" c ON c."id" = e."course_id"
+          WHERE e."status" = 'ACTIVE'
+            AND (${courseId}::text IS NULL OR c."id" = ${courseId})
+            AND (
+              (SELECT "type" FROM requester) <> ${Role.TEACHER}
+              OR (
+                c."instructor_id" = ${user_id}
+                AND c."status" IN ('ACTIVE', 'COMPLETED', 'UPCOMING')
+              )
+            )
+            AND (
+              ${classId}::text IS NULL
+              OR EXISTS (
+                SELECT 1
+                FROM "course_modules" cm
+                JOIN "module_classes" mc ON mc."module_id" = cm."id"
+                WHERE cm."course_id" = c."id"
+                  AND mc."id" = ${classId}
+              )
+            )
+            AND (
+              ${searchValue}::text IS NULL
+              OR u."name" ILIKE '%' || ${searchValue} || '%'
+              OR u."email" ILIKE '%' || ${searchValue} || '%'
+              OR u."phone_number" ILIKE '%' || ${searchValue} || '%'
+            )
+        ),
+        classes_for_date AS (
+          SELECT mc."id", mc."class_title", mc."class_name", mc."class_at"
+          FROM "module_classes" mc
+          JOIN "course_modules" cm ON cm."id" = mc."module_id"
+          JOIN "courses" c ON c."id" = cm."course_id"
+          WHERE (${start_date}::timestamp <= CURRENT_DATE)
+            AND mc."class_at" BETWEEN ${start_date} AND ${end_date}
+            AND (${classId}::text IS NULL OR mc."id" = ${classId})
+            AND (${courseId}::text IS NULL OR c."id" = ${courseId})
+            AND (
+              (SELECT "type" FROM requester) <> ${Role.TEACHER}
+              OR (
+                c."instructor_id" = ${user_id}
+                AND c."status" IN ('ACTIVE', 'COMPLETED', 'UPCOMING')
+              )
+            )
+        ),
+        rows AS (
+          SELECT
+            a."id",
+            es."id" AS student_id,
+            es."name" AS student_name,
+            a."created_at",
+            COALESCE(a."status"::text, 'ABSENT') AS status,
+            a."attendance_by",
+            cfd."id" AS class_id,
+            cfd."class_title",
+            cfd."class_name",
+            cfd."class_at"
+          FROM eligible_students es
+          CROSS JOIN classes_for_date cfd
+          LEFT JOIN "attendances" a
+            ON a."class_id" = cfd."id"
+           AND a."student_id" = es."id"
+
+          UNION ALL
+
+          SELECT
+            NULL,
+            es."id",
+            es."name",
+            NULL,
+            'NO_CLASS',
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            NULL
+          FROM eligible_students es
+          WHERE (${start_date}::timestamp <= CURRENT_DATE)
+            AND NOT EXISTS (SELECT 1 FROM classes_for_date)
+        ),
+        filtered_rows AS (
+          SELECT *
+          FROM rows
+          WHERE ${statusValue}::text IS NULL OR status = ${statusValue}::text
+        ),
+        total_rows AS (
+          SELECT COUNT(*)::int AS total
+          FROM filtered_rows
+        ),
+        paginated_rows AS (
+          SELECT *
+          FROM filtered_rows
+          ORDER BY "class_at" ASC NULLS LAST, "student_name" ASC NULLS LAST
+          LIMIT ${limit}
+          OFFSET ${(page - 1) * limit}
+        )
+        SELECT
+          (SELECT "type" FROM requester) AS requester_type,
+          (SELECT total FROM total_rows) AS total,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', "id",
+                'student', json_build_object('id', "student_id", 'name', "student_name"),
+                'created_at', "created_at",
+                'status', "status",
+                'attendance_by', "attendance_by",
+                'class_id', "class_id"
+              )
+            ) FILTER (WHERE "student_id" IS NOT NULL),
+            '[]'::json
+          ) AS data
+        FROM paginated_rows
+      `;
+
+    if (!attendanceResult?.requester_type) {
+      throw new NotFoundException('User not found');
+    }
+    if (attendanceResult.requester_type === Role.STUDENT) {
+      throw new ForbiddenException('Forbidden');
+    }
+
+    return {
+      success: true,
+      message: 'Attendance fetched successfully',
+      data: Array.isArray(attendanceResult.data) ? attendanceResult.data : [],
+      meta_data: {
+        page,
+        limit,
+        total: attendanceResult.total,
+        search,
+        status,
+        date,
+        class_id,
+        course_id,
+      },
+    };
   }
 
   markManualAttendance(body: any, userId: string) {

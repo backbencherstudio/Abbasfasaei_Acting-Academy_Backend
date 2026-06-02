@@ -1092,6 +1092,8 @@ model UserSetting {
 enum AttendanceStatus {
   PRESENT
   ABSENT
+  LATE
+  LEAVE
 }
 
 // -------------------------------------------------------------------

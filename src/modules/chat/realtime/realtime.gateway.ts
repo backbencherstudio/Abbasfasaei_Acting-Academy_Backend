@@ -44,7 +44,8 @@ const readMessageSchema = z.object({
 
 @WebSocketGateway({
   cors: {
-    origin: process.env.CLIENT_APP_URL || 'http://127.0.0.1:5500',
+    origin: '*',
+    // origin: process.env.CLIENT_APP_URL || 'http://127.0.0.1:5500',
     credentials: true,
   },
   namespace: '/ws',
@@ -436,7 +437,10 @@ export class RealtimeGateway
    * Notify clients that a CALL-kind message has been updated.
    * Clients should upsert the message in their local store by message id.
    */
-  emitCallMessageUpdated(toUserIds: string[], payload: Record<string, unknown>) {
+  emitCallMessageUpdated(
+    toUserIds: string[],
+    payload: Record<string, unknown>,
+  ) {
     this.emitToUsers(toUserIds, 'call:message_updated', payload);
   }
 
