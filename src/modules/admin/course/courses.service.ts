@@ -141,15 +141,20 @@ export class CoursesService {
     }
     const {
       search,
-      page = 1,
-      limit = 10,
+      page: queryPage = 1,
+      limit: queryLimit = 10,
       status,
       date,
       class_id,
       course_id,
     } = query;
 
+    const page = Math.max(1, Math.trunc(Number(queryPage) || 1));
+    const limit = Math.max(1, Math.trunc(Number(queryLimit) || 10));
     const start_date = date ? new Date(date) : null;
+    if (start_date && Number.isNaN(start_date.getTime())) {
+      throw new BadRequestException('Invalid date');
+    }
     start_date?.setHours(0, 0, 0, 0);
     const end_date = date ? new Date(date) : null;
     end_date?.setHours(23, 59, 59, 999);
@@ -157,12 +162,6 @@ export class CoursesService {
     const statusValue = status || null;
     const classId = class_id || null;
     const courseId = course_id || null;
-
-    if (!date || (!course_id && !class_id) || !start_date || !end_date) {
-      throw new BadRequestException(
-        'date and course_id or class_id are required',
-      );
-    }
 
     const [attendanceResult] = await this.prisma.$queryRaw<
       {
@@ -184,7 +183,7 @@ export class CoursesService {
           WHERE "id" = ${user_id}
         ),
         eligible_students AS (
-          SELECT DISTINCT u."id", u."name"
+          SELECT DISTINCT u."id", u."name", e."course_id"
           FROM "enrollments" e
           JOIN "users" u ON u."id" = e."user_id"
           JOIN "courses" c ON c."id" = e."course_id"
@@ -215,12 +214,27 @@ export class CoursesService {
             )
         ),
         classes_for_date AS (
-          SELECT mc."id", mc."class_title", mc."class_name", mc."class_at"
+          SELECT
+            mc."id",
+            mc."class_title",
+            mc."class_name",
+            mc."class_at",
+            cm."course_id"
           FROM "module_classes" mc
           JOIN "course_modules" cm ON cm."id" = mc."module_id"
           JOIN "courses" c ON c."id" = cm."course_id"
-          WHERE (${start_date}::timestamp <= CURRENT_DATE)
-            AND mc."class_at" BETWEEN ${start_date} AND ${end_date}
+          WHERE mc."class_at" IS NOT NULL
+            AND (
+              (
+                ${start_date}::timestamp IS NULL
+                AND mc."class_at" <= CURRENT_TIMESTAMP
+              )
+              OR (
+                ${start_date}::timestamp IS NOT NULL
+                AND ${start_date}::timestamp <= CURRENT_DATE
+                AND mc."class_at" BETWEEN ${start_date} AND ${end_date}
+              )
+            )
             AND (${classId}::text IS NULL OR mc."id" = ${classId})
             AND (${courseId}::text IS NULL OR c."id" = ${courseId})
             AND (
@@ -243,28 +257,11 @@ export class CoursesService {
             cfd."class_title",
             cfd."class_name",
             cfd."class_at"
-          FROM eligible_students es
-          CROSS JOIN classes_for_date cfd
+          FROM classes_for_date cfd
+          JOIN eligible_students es ON es."course_id" = cfd."course_id"
           LEFT JOIN "attendances" a
             ON a."class_id" = cfd."id"
            AND a."student_id" = es."id"
-
-          UNION ALL
-
-          SELECT
-            NULL,
-            es."id",
-            es."name",
-            NULL,
-            'NO_CLASS',
-            NULL,
-            NULL,
-            NULL,
-            NULL,
-            NULL
-          FROM eligible_students es
-          WHERE (${start_date}::timestamp <= CURRENT_DATE)
-            AND NOT EXISTS (SELECT 1 FROM classes_for_date)
         ),
         filtered_rows AS (
           SELECT *
