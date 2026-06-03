@@ -1,5 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { CourseStatus } from '@prisma/client';
+import {
+  AttendanceStatus,
+  CourseStatus,
+  EnrollmentStatus,
+} from '@prisma/client';
 import { Role } from 'src/common/guard/role/role.enum';
 import { NajimStorage } from 'src/common/lib/Disk';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -46,6 +50,7 @@ export class OverviewService {
         totalAssignments,
         totalClasses,
         upComingClasses,
+        attendance,
       ] = await Promise.all([
         this.prisma.user.count({
           where: {
@@ -79,6 +84,7 @@ export class OverviewService {
             },
           },
         }),
+        this.getRecentAttendance(user_id),
       ]);
 
       return {
@@ -89,7 +95,7 @@ export class OverviewService {
           my_active_courses: myActiveCourses,
           total_assignments: totalAssignments,
           total_classes: totalClasses,
-          attendance: [],
+          attendance,
           up_coming_classes: upComingClasses.map((cls) => ({
             id: cls.id,
             class_title: cls.class_title,
@@ -131,6 +137,7 @@ export class OverviewService {
           take: 4,
           orderBy: { created_at: 'desc' },
         }),
+        this.getRecentAttendance(),
       ];
 
       if (isFinance) {
@@ -168,7 +175,8 @@ export class OverviewService {
 
       const monthlyRevenue = Number(results[3]._sum.amount) || 0;
       const recentEnrollments = results[4];
-      const dynamicData = results[5];
+      const attendance = results[5];
+      const dynamicData = results[6];
 
       return {
         success: true,
@@ -178,7 +186,7 @@ export class OverviewService {
           total_teachers: results[1],
           ongoing_courses: results[2],
           monthly_revenue: monthlyRevenue,
-          attendance: [],
+          attendance,
           recent_enrollments: recentEnrollments.map((enrollment: any) => ({
             id: enrollment.id,
             status: enrollment.status,
@@ -223,5 +231,88 @@ export class OverviewService {
         },
       };
     }
+  }
+
+  private async getRecentAttendance(instructorId?: string) {
+    const recentClasses = await this.prisma.moduleClass.findMany({
+      where: {
+        class_at: { lte: new Date() },
+        ...(instructorId
+          ? { module: { course: { instructor_id: instructorId } } }
+          : {}),
+      },
+      take: 7,
+      orderBy: { class_at: 'desc' },
+      select: {
+        id: true,
+        class_name: true,
+        class_title: true,
+        class_at: true,
+        attendances: {
+          where: {
+            status: {
+              in: [AttendanceStatus.PRESENT, AttendanceStatus.LATE],
+            },
+          },
+          select: { id: true },
+        },
+        module: {
+          select: {
+            module_name: true,
+            module_title: true,
+            course: {
+              select: {
+                id: true,
+                title: true,
+                enrollments: {
+                  where: { status: EnrollmentStatus.ACTIVE },
+                  select: { id: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const attendanceData = recentClasses.map((cls) => {
+      const totalEnrolledStudents = cls.module.course.enrollments.length;
+      const attendedStudents = cls.attendances.length;
+      const attendancePercentage = totalEnrolledStudents
+        ? Number(((attendedStudents / totalEnrolledStudents) * 100).toFixed(2))
+        : 0;
+
+      return {
+        id: cls.id,
+        module_name: cls.module.module_name,
+        module_title: cls.module.module_title,
+        class_name: cls.class_name,
+        class_title: cls.class_title,
+        class_at: cls.class_at,
+        course_id: cls.module.course.id,
+        course_title: cls.module.course.title,
+        total_enrolled_students: totalEnrolledStudents,
+        attendance_percentage: attendancePercentage,
+      };
+    });
+
+    return attendanceData.slice(0, 6).map((item, index) => {
+      const previousClass = attendanceData[index + 1];
+      const previousPercentage = previousClass?.attendance_percentage;
+      const attendanceStatus =
+        previousPercentage === undefined
+          ? 'same'
+          : item.attendance_percentage > previousPercentage
+            ? 'increment'
+            : item.attendance_percentage < previousPercentage
+              ? 'decrement'
+              : 'same';
+
+      return {
+        ...item,
+        previous_attendance_percentage: previousPercentage ?? null,
+        attendance_status: attendanceStatus,
+      };
+    });
   }
 }

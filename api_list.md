@@ -3,7 +3,7 @@
 - Base URL: `http://localhost:7777`
 - Skipped modules: none
 - Note: `transaction` module include kora hoyeche, karon eta alada module
-- Sync status: `2026-05-31` e `src/app.controller.ts` ebong `src/modules/**/**.controller.ts` er route-gular shathe verify kora hoyeche; ei snapshot-e kono endpoint missing paoa jayni
+- Sync status: `2026-06-03` e `src/app.controller.ts` ebong `src/modules/**/**.controller.ts` er route-gular shathe verify kora hoyeche; attendance-related API docs latest controller/DTO changes-er shathe sync kora hoyeche
 
 ---
 
@@ -484,10 +484,10 @@ curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
   }'
 ```
 
-### Scan Attendance QR
+### Make Attendance By QR
 
 ```bash
-curl -X POST "http://localhost:7777/courses/attendance/scan-qr" \
+curl -X POST "http://localhost:7777/courses/attendance/make" \
   -H "Content-Type: application/json" \
   -d '{
     "token": "QR_TOKEN"
@@ -637,6 +637,35 @@ curl -X POST "http://localhost:7777/community/report/:reported_user_id" \
 ```bash
 curl -X GET "http://localhost:7777/admin/overview"
 ```
+
+Attendance response field-er shape:
+
+```json
+{
+  "attendance": [
+    {
+      "id": "CLASS_ID",
+      "module_name": "Module 1",
+      "module_title": "Introduction",
+      "class_name": "Voice Training",
+      "class_title": "Class 1",
+      "class_at": "2026-06-01T10:00:00.000Z",
+      "course_id": "COURSE_ID",
+      "course_title": "Introduction to Acting",
+      "total_enrolled_students": 20,
+      "attendance_percentage": 85,
+      "previous_attendance_percentage": 75,
+      "attendance_status": "increment"
+    }
+  ]
+}
+```
+
+Notes:
+- `attendance` last 6 past classes return kore.
+- Teacher role hole only teacher-er own courses-er classes return hoy.
+- `attendance_status` values: `increment`, `decrement`, `same`.
+- `attendance_percentage` calculation-e `PRESENT` and `LATE` counted as attended.
 
 ---
 
@@ -960,17 +989,26 @@ curl -X PATCH "http://localhost:7777/admin/events/:event_id" \
 
 Controller source: `src/modules/admin/course/courses.controller.ts`
 
-### Generate Attendance QR
+### Get Attendance QR
 
 ```bash
-curl -X POST "http://localhost:7777/admin/courses/attendance/generate-qr/:classId"
+curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id/attendance/qr"
 ```
 
 ### Get All Attendance
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/attendance?status=PRESENT&date=2026-05-17&classId=CLASS_ID&courseId=COURSE_ID&search=john&page=1&limit=10"
+curl -X GET "http://localhost:7777/admin/courses/attendance?status=PRESENT&date=2026-05-17&class_id=CLASS_ID&course_id=COURSE_ID&search=john&page=1&limit=10"
 ```
+
+Query params:
+- `search`: optional student name/email/phone search
+- `class_id`: optional class filter
+- `course_id`: optional course filter
+- `status`: optional `PRESENT`, `ABSENT`, `LATE`, `LEAVE`
+- `date`: optional ISO/date string; without date, past/current classes are returned
+- `page`: optional, default `1`
+- `limit`: optional, default `10`
 
 ### Mark Manual Attendance
 
@@ -978,12 +1016,14 @@ curl -X GET "http://localhost:7777/admin/courses/attendance?status=PRESENT&date=
 curl -X POST "http://localhost:7777/admin/courses/attendance/manual" \
   -H "Content-Type: application/json" \
   -d '{
-    "classId": "CLASS_ID",
-    "studentId": "STUDENT_ID",
+    "class_id": "CLASS_ID",
+    "student_id": "STUDENT_ID",
     "status": "PRESENT",
-    "attendedAt": "2026-05-17T10:00:00.000Z"
+    "attended_at": "2026-05-17T10:00:00.000Z"
   }'
 ```
+
+Allowed `status` values: `PRESENT`, `ABSENT`, `LATE`, `LEAVE`.
 
 ### Create Course
 
