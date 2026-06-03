@@ -169,8 +169,11 @@ export class CourseController {
   }
   // --------------------------------------------------------------
 
-  @Post('attendance/scan-qr')
-  scanQR(@GetUser('userId') userId: string, @Body('token') token: string) {
-    return this.courseService.scanQr(token, userId);
+  @Post('attendance/make')
+  makeAttendance(
+    @GetUser('userId') user_id: string,
+    @Body('token') token: string,
+  ) {
+    return this.courseService.makeAttendance(token, user_id);
   }
 }

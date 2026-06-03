@@ -95,6 +95,7 @@ export default () => ({
     websiteInfo: '/website-info',
     assignment: 'course/class/assignment',
     class_assets: 'course/class/assets',
+    classAttendance: 'course/class/attendance',
     community: '/community',
     media: '/media',
     conversation_avatar: '/conversation/avatar',

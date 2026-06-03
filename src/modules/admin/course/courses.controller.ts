@@ -51,28 +51,6 @@ import {
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
 
-  @Roles(Role.ADMIN, Role.TEACHER)
-  @Post('attendance/generate-qr/:classId')
-  async generateQR(@GetUser() user: any, @Param('classId') classId: string) {
-    try {
-      const qrData = await this.coursesService.generateClassQR(
-        classId,
-        user?.userId,
-      );
-      return {
-        success: true,
-        message: 'QR code generated successfully. Valid for 1 hour.',
-        data: qrData,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: 'Error generating QR code',
-        error: error.message,
-      };
-    }
-  }
-
   // updated
   @Roles(Role.ADMIN, Role.TEACHER)
   @Get('attendance')
@@ -302,6 +280,15 @@ export class CoursesController {
     @Param('class_id') class_id: string,
   ) {
     return this.coursesService.startOrEndClass(user_id, class_id, 'END');
+  }
+
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @Get('modules/classes/:class_id/attendance/qr')
+  async getAttendanceQR(
+    @GetUser('userId') user_id: string,
+    @Param('class_id') class_id: string,
+  ) {
+    return await this.coursesService.getAttendanceQR(class_id, user_id);
   }
 
   //---------------------------- assignments Management -------------------------------//

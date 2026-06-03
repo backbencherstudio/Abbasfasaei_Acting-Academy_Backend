@@ -26,7 +26,12 @@ import {
   GetAllAssignmentQueryDto,
   GetAllCourseQueryDto,
 } from './dto/query-course.dto';
-import { AttachmentType, AttendanceStatus, Prisma } from '@prisma/client';
+import {
+  AttachmentType,
+  AttendanceStatus,
+  CourseStatus,
+  Prisma,
+} from '@prisma/client';
 import * as crypto from 'crypto';
 import * as QRCode from 'qrcode';
 
@@ -34,99 +39,105 @@ import * as QRCode from 'qrcode';
 export class CoursesService {
   constructor(private prisma: PrismaService) {}
 
-  async generateClassQR(classId: string, teacherId: string) {
-    if (!classId) {
-      throw new BadRequestException('Class ID is required');
-    }
+  async getAttendanceQR(class_id: string, user_id: string) {
+    if (!class_id) throw new BadRequestException('Class ID is required');
+    if (!user_id) throw new BadRequestException('User ID is required');
 
-    if (!teacherId) {
-      throw new BadRequestException('Teacher ID is required');
-    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+      select: { id: true, type: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
 
-    const teacher = await this.prisma.user.findUnique({
-      where: { id: teacherId },
+    const moduleClass = await this.prisma.moduleClass.findFirst({
+      where: {
+        id: class_id,
+        module: {
+          course: {
+            status: CourseStatus.ACTIVE,
+            ...(user.type === Role.TEACHER && {
+              instructor_id: user.id,
+            }),
+          },
+        },
+      },
       select: {
         id: true,
-        name: true,
-        role_users: {
-          include: {
-            role: true,
-          },
+        start_at: true,
+        end_at: true,
+      },
+    });
+
+    if (!moduleClass) throw new NotFoundException('Class not found');
+
+    const now = new Date();
+    if (moduleClass.end_at && moduleClass.end_at <= now) {
+      throw new BadRequestException('Class has already ended');
+    }
+
+    let qrSession = await this.prisma.qRAttendanceSession.findFirst({
+      where: {
+        class_id,
+      },
+      select: {
+        id: true,
+        qr_image: true,
+        token: true,
+        class_id: true,
+      },
+    });
+
+    if (!qrSession) {
+      qrSession = await this.prisma.qRAttendanceSession.create({
+        data: {
+          class_id,
+          created_by: user_id,
+          token: crypto.randomBytes(32).toString('hex'),
+          expires_at: moduleClass.end_at || undefined,
+          is_active: true,
         },
-      },
-    });
-
-    if (!teacher) {
-      throw new NotFoundException('Teacher not found');
-    }
-
-    const isTeacher = teacher.role_users.some(
-      (roleUser) => roleUser.role?.name?.toUpperCase() === 'TEACHER',
-    );
-
-    if (!isTeacher) {
-      throw new ForbiddenException('Only teachers can generate QR codes');
-    }
-
-    const moduleClass = await this.prisma.moduleClass.findUnique({
-      where: { id: classId },
-      include: {
-        module: {
-          include: {
-            course: true,
-          },
+        select: {
+          id: true,
+          token: true,
+          class_id: true,
+          qr_image: true,
         },
-      },
-    });
-
-    if (!moduleClass) {
-      throw new NotFoundException('Class not found');
+      });
     }
 
-    if (moduleClass.module.course.instructor_id !== teacherId) {
-      throw new ForbiddenException('You are not assigned to this course/class');
-    }
-
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
-
-    // Create QR session
-    const qrSession = await this.prisma.qRAttendanceSession.create({
-      data: {
-        token,
-        class_id: classId,
-        created_by: teacherId,
-        expires_at: expiresAt,
-        is_active: true,
-      },
-      include: {
-        class: {
-          select: {
-            id: true,
-            class_title: true,
-            class_at: true,
-          },
+    if (!qrSession.qr_image) {
+      const filename = `${class_id}/${qrSession.token}.png`;
+      const objectKey = appConfig().storageUrl.classAttendance + '/' + filename;
+      const qrCodeBuffer = await QRCode.toBuffer(
+        JSON.stringify({ class_id, token: qrSession.token }),
+        {
+          type: 'png',
+          margin: 1,
+          errorCorrectionLevel: 'M',
         },
-      },
-    });
-
-    // Generate QR code data
-    const qrData = JSON.stringify({
-      version: '1.0',
-      type: 'attendance',
-      classId,
-      token,
-      expires: expiresAt.toISOString(),
-    });
-
-    const qrCodeImage = await QRCode.toDataURL(qrData);
+      );
+      await NajimStorage.put(objectKey, qrCodeBuffer, {
+        contentType: 'image/png',
+      });
+      qrSession = await this.prisma.qRAttendanceSession.update({
+        where: { id: qrSession.id },
+        data: { qr_image: objectKey },
+        select: {
+          id: true,
+          class_id: true,
+          token: true,
+          qr_image: true,
+        },
+      });
+    }
 
     return {
-      qrCodeImage,
-      token,
-      sessionId: qrSession.id,
-      expiresAt,
-      class: qrSession.class,
+      id: qrSession.id,
+      class_id: qrSession.class_id,
+      qr_image: qrSession.qr_image
+        ? NajimStorage.url(qrSession.qr_image)
+        : null,
+      token: qrSession.token,
     };
   }
 
@@ -1305,10 +1316,29 @@ export class CoursesService {
       if (!existingClass.start_at) {
         throw new InternalServerErrorException('Class not started');
       }
+      const qrSessions = await this.prisma.qRAttendanceSession.findMany({
+        where: {
+          class_id,
+          qr_image: { not: null },
+        },
+        select: {
+          qr_image: true,
+        },
+      });
       const updatedClass = await this.prisma.moduleClass.update({
         where: { id: class_id },
         data: {
           end_at: new Date(),
+        },
+      });
+      await Promise.all(
+        qrSessions.map((session) => NajimStorage.delete(session.qr_image!)),
+      );
+      await this.prisma.qRAttendanceSession.updateMany({
+        where: { class_id },
+        data: {
+          is_active: false,
+          qr_image: null,
         },
       });
     } else {

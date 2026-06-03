@@ -112,3 +112,11 @@ export class SubmitAssignmentDto {
   description?: string;
   fileUrl: string;
 }
+
+export class MakeAttendanceDto {
+  @ApiProperty({ example: 'token' })
+  @IsNotEmpty()
+  @Type(() => String)
+  @IsString()
+  token: string;
+}

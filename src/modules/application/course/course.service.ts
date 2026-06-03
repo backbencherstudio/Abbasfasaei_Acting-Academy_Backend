@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -9,6 +10,7 @@ import {
 import {
   AssignmentSubmissionStatus,
   AttachmentType,
+  AttendanceStatus,
   CourseStatus,
   EnrollmentStatus,
   EnrollmentStep,
@@ -17,19 +19,15 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import appConfig from 'src/config/app.config';
-import { AttendanceService } from './attendance.helper';
 import {
   CreateEnrollmentDto,
   SubmitAssignmentDto,
 } from './dto/create-course.dto';
+import { Role } from 'src/common/guard/role/role.enum';
 
 @Injectable()
 export class CourseService {
-  private readonly attendanceService: AttendanceService;
-
-  constructor(private prisma: PrismaService) {
-    this.attendanceService = new AttendanceService(prisma);
-  }
+  constructor(private prisma: PrismaService) {}
 
   async getCurrentStep(user_id: string, course_id: string) {
     if (!user_id) throw new UnauthorizedException('User not found');
@@ -183,8 +181,149 @@ export class CourseService {
     };
   }
 
-  scanQr(token: string, userId: string) {
-    return this.attendanceService.qrscanner(token, userId);
+  async makeAttendance(token: string, user_id: string) {
+    if (!token) {
+      throw new BadRequestException('QR token is required');
+    }
+
+    if (!user_id) {
+      throw new BadRequestException('User ID is required');
+    }
+
+    const now = new Date();
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: user_id,
+      },
+      select: {
+        id: true,
+        type: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.type !== Role.STUDENT) {
+      throw new ForbiddenException(
+        'Only students can mark attendance via QR code',
+      );
+    }
+
+    const qrSession = await this.prisma.qRAttendanceSession.findUnique({
+      where: {
+        token,
+      },
+      select: {
+        id: true,
+        token: true,
+        is_active: true,
+        expires_at: true,
+        qr_image: true,
+        class: {
+          select: {
+            id: true,
+            start_at: true,
+            end_at: true,
+            class_at: true,
+          },
+        },
+      },
+    });
+
+    const course = await this.prisma.course.findFirst({
+      where: {
+        modules: {
+          some: {
+            classes: {
+              some: {
+                id: qrSession.class?.id,
+              },
+            },
+          },
+        },
+        enrollments: {
+          some: {
+            user_id: user_id,
+            status: EnrollmentStatus.ACTIVE,
+          },
+        },
+      },
+    });
+
+    if (!course) {
+      throw new ForbiddenException('You are not enrolled in this course');
+    }
+
+    if (!qrSession) {
+      throw new BadRequestException('Invalid QR code');
+    }
+
+    const startsAt = qrSession.class.start_at;
+    const endsAt = qrSession.class.end_at;
+
+    if (!startsAt || startsAt > now) {
+      throw new BadRequestException('Class not started yet');
+    }
+    if (endsAt && endsAt <= now) {
+      if (qrSession.qr_image) {
+        try {
+          await NajimStorage.delete(qrSession.qr_image);
+        } catch (error) {
+          console.log('Error deleting QR image:', error);
+        }
+      }
+      await this.prisma.qRAttendanceSession.update({
+        where: { id: qrSession.id },
+        data: {
+          is_active: false,
+          qr_image: null,
+        },
+      });
+      throw new BadRequestException('Class already ended');
+    }
+
+    const existingAttendance = await this.prisma.attendance.findFirst({
+      where: {
+        class_id: qrSession.class?.id,
+        student_id: user_id,
+      },
+    });
+
+    if (existingAttendance) {
+      throw new ConflictException('Attendance already marked for this class');
+    }
+
+    const lateThreshold = new Date(startsAt.getTime() + 15 * 60 * 1000);
+
+    const attendance = await this.prisma.attendance.create({
+      data: {
+        class_id: qrSession.class?.id,
+        student_id: user_id,
+        status:
+          now > lateThreshold
+            ? AttendanceStatus.LATE
+            : AttendanceStatus.PRESENT,
+        attended_at: now,
+        attendance_by: 'QR',
+      },
+      select: {
+        id: true,
+        status: true,
+        attended_at: true,
+        attendance_by: true,
+        class_id: true,
+        student_id: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Attendance marked successfully as ${attendance.status}`,
+      data: attendance,
+    };
   }
 
   // -------------------------------------------------------------

@@ -368,16 +368,20 @@ model Attendance {
 }
 
 model QRAttendanceSession {
-  id         String      @id @default(cuid())
-  created_at DateTime    @default(now())
-  updated_at DateTime    @default(now())
-  token      String      @unique
-  class_id   String
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
   expires_at DateTime
-  is_active  Boolean     @default(true)
+
+  token      String  @unique
+  class_id   String
+  qr_image   String?
   created_by String
-  class      ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
-  creator    User        @relation(fields: [created_by], references: [id], onDelete: Cascade)
+
+  class   ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  creator User        @relation(fields: [created_by], references: [id], onDelete: Cascade)
+
+  is_active Boolean @default(true)
 
   @@index([token])
   @@index([class_id])
