@@ -1,144 +1,150 @@
-# ভিডিও ও অডিও কল — সম্পূর্ণ Implementation Guide
+# Video/Audio Call Implementation Guide
 
-> **Backend Stack:** NestJS · Prisma · PostgreSQL · Redis · LiveKit · Socket.IO
-> **সাথে পড়ুন:** WebSocket সংযোগের বিস্তারিত জানতে [`socket_implementation_guide.md`](./socket_implementation_guide.md) দেখুন।
+এই guide-টা web, Next.js এবং Flutter developer-দের জন্য। Backend already call signaling, call message, socket notification এবং LiveKit token দেয়। Frontend-এর কাজ হলো ঠিক order-এ API call করা, socket event listen করা, এবং LiveKit room connect/disconnect করা।
 
-এই গাইডটি **Web (JavaScript)** এবং **Flutter (Dart)** — উভয় developer-এর জন্য লেখা হয়েছে। প্রতিটি ধাপে দুটো প্ল্যাটফর্মের কোড উদাহরণ আলাদাভাবে দেওয়া আছে।
+Backend stack: NestJS, Socket.IO, Redis, Prisma, PostgreSQL, LiveKit.
 
----
+Related file:
+- Socket guide: `socket_implementation_guide.md`
+- Backend controller: `src/modules/chat/rtc/rtc.controller.ts`
+- Backend service: `src/modules/chat/rtc/rtc.service.ts`
 
-## সূচিপত্র
+## 1. Base URL
 
-1. [সিস্টেম আর্কিটেকচার](#১-সিস্টেম-আর্কিটেকচার)
-2. [কিভাবে কাজ করে — সংক্ষিপ্ত ধারণা](#২-কিভাবে-কাজ-করে--সংক্ষিপ্ত-ধারণা)
-3. [Database Model পরিচিতি](#৩-database-model-পরিচিতি)
-4. [REST API রেফারেন্স](#৪-rest-api-রেফারেন্স)
-5. [WebSocket Event রেফারেন্স](#৫-websocket-event-রেফারেন্স)
-6. [সম্পূর্ণ Call Flow](#৬-সম্পূর্ণ-call-flow)
-7. [Web Implementation (JavaScript)](#৭-web-implementation-javascript)
-8. [Flutter Implementation (Dart)](#৮-flutter-implementation-dart)
-9. [Media State Sync](#৯-media-state-sync)
-10. **[Call Message — Chat Timeline-এ কল দেখানো](#১০-call-message--chat-timeline-এ-কল-দেখানো)**
-11. [Edge Cases ও গুরুত্বপূর্ণ নিয়ম](#১১-edge-cases-ও-গুরুত্বপূর্ণ-নিয়ম)
-12. [সাধারণ সমস্যা ও সমাধান](#১২-সাধারণ-সমস্যা-ও-সমাধান)
+HTTP API-তে global prefix আছে:
 
----
-
-## ১. সিস্টেম আর্কিটেকচার
-
-```
-Client A (Web/Flutter)      Backend (NestJS)         Client B (Web/Flutter)
-        │                         │                          │
-        │── POST /rtc/.../start ──►                          │
-        │◄── { livekit: {         │                          │
-        │      token, url } }     │── WS: call:incoming ────►│
-        │                         │                          │
-        │◄══════════ LiveKit Room (WebRTC SFU) ═════════════►│
-        │              (আসল Audio/Video যায় এখান দিয়ে)      │
-        │                         │                          │
-        │── POST /rtc/.../leave ──►                          │
-        │                         │── WS: call:ended ───────►│
+```txt
+HTTP API base: http://localhost:4000/api
+Socket base:   http://localhost:4000/ws
 ```
 
-### তিনটি আলাদা স্তর
+Production হলে domain বদলাবে:
 
-| স্তর | কাজ | প্রযুক্তি |
-|------|-----|-----------|
-| **Signaling** | Call শুরু, join, leave, decline করা | HTTP REST API |
-| **Notification** | Incoming call, participant changes জানানো | WebSocket (Socket.IO) |
-| **Media Transport** | আসল Audio/Video ট্র্যাক পাঠানো | LiveKit (WebRTC SFU) |
-
-**গুরুত্বপূর্ণ:** Audio/Video ডেটা সরাসরি Backend দিয়ে যায় না — LiveKit server দিয়ে যায়।
-
----
-
-## ২. কিভাবে কাজ করে — সংক্ষিপ্ত ধারণা
-
-### ধাপে ধাপে:
-
-1. **Alice** `POST /start` করে → Backend একটি `CallSession` তৈরি করে এবং LiveKit token দেয়
-2. **Alice** সেই token দিয়ে LiveKit-এ সরাসরি connect করে
-3. **Backend** অন্য members-কে WebSocket দিয়ে `call:incoming` event পাঠায়
-4. **Bob** Incoming call notification পেলে `POST /join` করে → নতুন token পায়
-5. **Bob** সেই token দিয়ে একই LiveKit room-এ connect করে
-6. **LiveKit** দুজনের মধ্যে Audio/Video stream চালু করে
-7. যে কেউ `POST /leave` করলে — সবাই চলে গেলে call শেষ হয়
-
----
-
-## ৩. Database Model পরিচিতি
-
-### `CallSession` — কলের মূল রেকর্ড
-
-| Field | Type | ব্যাখ্যা |
-|-------|------|---------|
-| `id` | String | Primary key |
-| `conversation_id` | String | কোন conversation-এর call |
-| `kind` | `AUDIO` / `VIDEO` | কলের ধরন |
-| `status` | `ONGOING` / `ENDED` / `MISSED` | কলের অবস্থা |
-| `started_by` | String | কে শুরু করেছে (user_id) |
-| `started_at` | DateTime | কখন শুরু হয়েছে |
-| `ended_at` | DateTime? | কখন শেষ হয়েছে (চলমান হলে null) |
-| `room_name` | String? | LiveKit room name — **তৈরির সময় একবার সেভ হয়, আর বদলায় না** |
-
-### `CallParticipant` — প্রতিটি অংশগ্রহণকারীর রেকর্ড
-
-| Field | Type | ব্যাখ্যা |
-|-------|------|---------|
-| `call_id` | String | কোন CallSession-এর |
-| `user_id` | String | কোন user |
-| `joined_at` | DateTime | কখন join করেছে |
-| `left_at` | DateTime? | কখন চলে গেছে (এখনও আছে হলে null) |
-| `camera` | Boolean | ক্যামেরা চালু কিনা |
-| `microphone` | Boolean | মাইক চালু কিনা |
-| `is_screen_sharing` | Boolean | স্ক্রিন শেয়ার চলছে কিনা |
-
----
-
-## ৪. REST API রেফারেন্স
-
-সব endpoint-এ Header-এ JWT Token দিতে হবে:
-```
-Authorization: Bearer <your_jwt_token>
+```txt
+NEXT_PUBLIC_API_URL=https://api.example.com/api
+NEXT_PUBLIC_SOCKET_URL=https://api.example.com
 ```
 
----
+Socket.IO namespace `/ws`; এখানে `/api` লাগবে না।
 
-### `GET /api/rtc/health`
-LiveKit configuration ঠিক আছে কিনা চেক করুন।
+## 2. Main Concept
+
+Call system তিন ভাগে কাজ করে:
+
+| Layer | কাজ | Client কী করবে |
+| --- | --- | --- |
+| REST API | call start, join, decline, leave, end, token, media state | `fetch` বা HTTP client দিয়ে call করবে |
+| Socket.IO | incoming call, participant update, call ended, call message update | event listen করবে |
+| LiveKit | আসল audio/video stream | backend দেওয়া `livekit.url` এবং `livekit.token` দিয়ে connect করবে |
+
+Important:
+- Audio/video backend দিয়ে যায় না; LiveKit room দিয়ে যায়।
+- `POST /rtc/conversations/:id/start` successful হলেই backend `CALL` kind message create করে।
+- Call শেষ হলে ওই একই message update হয়ে `MISSED` বা `ENDED` হয়।
+- Receiver browser/app বন্ধ থাকলে `call:incoming` event পাবে না। Browser/app open হলে frontend-কে `GET /rtc/conversations/:id/state` call করে active call আছে কি না check করতে হবে।
+
+## 3. Required Packages
+
+Next.js:
+
+```bash
+npm i socket.io-client livekit-client
+```
+
+Flutter:
+
+```yaml
+dependencies:
+  socket_io_client: ^3.0.0
+  livekit_client: ^2.3.0
+  http: ^1.2.0
+```
+
+Flutter permissions:
+
+```xml
+<!-- android/app/src/main/AndroidManifest.xml -->
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+<uses-permission android:name="android.permission.INTERNET" />
+```
+
+```xml
+<!-- ios/Runner/Info.plist -->
+<key>NSCameraUsageDescription</key>
+<string>Video call er jonno camera permission lagbe</string>
+<key>NSMicrophoneUsageDescription</key>
+<string>Call er jonno microphone permission lagbe</string>
+```
+
+## 4. REST API Contract
+
+সব request-এ header লাগবে:
+
+```txt
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+```
+
+### 4.1 Health
+
+```txt
+GET /rtc/health
+```
+
+Use: LiveKit env ঠিক আছে কি না check.
+
+Response:
 
 ```json
-// Response (সব ঠিক থাকলে)
 {
   "ok": true,
   "error": null,
-  "url": "wss://your-livekit-server.com",
+  "url": "wss://livekit.example.com",
   "api_key_present": true,
   "token_ttl_seconds": 600
 }
 ```
 
----
+### 4.2 Active Call State
 
-### `GET /api/rtc/conversations/:conversation_id/state`
-কোনো conversation-এ এখন call চলছে কিনা জানুন।
+```txt
+GET /rtc/conversations/:conversation_id/state
+```
+
+Use:
+- Conversation open করলে call chip/ringing দেখাতে।
+- Browser/app reconnect করলে missed incoming event recover করতে।
+- Socket reconnect হলে current truth sync করতে।
+
+No active call:
 
 ```json
-// কল নেই
-{ "success": true, "message": "No active call found", "data": null }
-
-// কল চলছে
 {
   "success": true,
+  "message": "No active call found",
+  "data": null
+}
+```
+
+Active call:
+
+```json
+{
+  "success": true,
+  "message": "Active call fetched successfully",
   "data": {
-    "id": "session_id",
+    "id": "call_session_id",
+    "conversation_id": "conversation_id",
     "kind": "VIDEO",
     "status": "ONGOING",
-    "started_by": "user_abc",
-    "started_at": "2026-01-01T10:00:00.000Z",
+    "started_by": "caller_user_id",
+    "started_at": "2026-06-04T10:00:00.000Z",
+    "ended_at": null,
     "room_name": "call-abc12345-x9k2m8pq",
     "conversation": {
-      "id": "conv_id",
+      "id": "conversation_id",
       "type": "DM",
       "title": null,
       "avatar": null
@@ -146,50 +152,62 @@ LiveKit configuration ঠিক আছে কিনা চেক করুন।
     "participants": [
       {
         "id": "participant_id",
-        "user_id": "user_abc",
-        "joined_at": "2026-01-01T10:00:00.000Z",
+        "user_id": "caller_user_id",
+        "joined_at": "2026-06-04T10:00:00.000Z",
         "left_at": null,
         "camera": true,
         "microphone": true,
         "is_screen_sharing": false,
         "user": {
-          "id": "user_abc",
+          "id": "caller_user_id",
           "name": "Alice",
           "username": "alice",
-          "avatar": "https://..."
+          "avatar": null
         }
       }
     ],
     "participant_count": 1,
-    "self_participant": { ... }
+    "self_participant": null
   }
 }
 ```
 
----
+### 4.3 Start Call
 
-### `POST /api/rtc/conversations/:conversation_id/start`
-নতুন কল শুরু করুন।
-
-**Request Body:**
-```json
-{ "kind": "VIDEO" }
-// অথবা: { "kind": "AUDIO" }
-// kind না দিলে default VIDEO হবে
+```txt
+POST /rtc/conversations/:conversation_id/start
 ```
 
-**Response:**
+Body:
+
+```json
+{
+  "kind": "VIDEO"
+}
+```
+
+`kind` can be `VIDEO` or `AUDIO`. Missing হলে default `VIDEO`.
+
+Response:
+
 ```json
 {
   "success": true,
   "message": "Call started successfully",
   "data": {
-    "id": "session_id",
+    "id": "call_session_id",
+    "conversation_id": "conversation_id",
     "kind": "VIDEO",
+    "status": "ONGOING",
+    "started_by": "caller_user_id",
+    "started_at": "2026-06-04T10:00:00.000Z",
     "room_name": "call-abc12345-x9k2m8pq",
+    "participants": [],
+    "participant_count": 1,
+    "self_participant": {},
     "livekit": {
-      "token": "eyJhbGci...",
-      "url": "wss://your-livekit.com",
+      "token": "jwt_livekit_token",
+      "url": "wss://livekit.example.com",
       "room_name": "call-abc12345-x9k2m8pq",
       "audio_only_suggested": false
     },
@@ -198,61 +216,91 @@ LiveKit configuration ঠিক আছে কিনা চেক করুন।
 }
 ```
 
-> **⚠️ গুরুত্বপূর্ণ:** `/start` এর response-এ `data.livekit.token` আসে — এটাই সরাসরি LiveKit connect করতে ব্যবহার করুন। **এর পরে আর `/token` call করবেন না** — তাহলে অযথা দুটো token তৈরি হবে।
+Frontend rule:
+- `/start` response-এর `data.livekit.token` দিয়েই caller LiveKit connect করবে।
+- `/start` এর পর সাথে সাথে `/token` call করবে না।
+- যদি `already_active: true` আসে, নতুন call তৈরি হয়নি; same active call join/connect করবে।
 
----
+### 4.4 Join Call
 
-### `POST /api/rtc/conversations/:conversation_id/join`
-চলমান কলে যোগ দিন (caller ছাড়া বাকিরা এটা করবে)।
+```txt
+POST /rtc/conversations/:conversation_id/join
+```
 
-**Response:** `/start` এর মতোই — `data.livekit.token` থাকবে।
+Use:
+- Receiver accept করলে।
+- Active call chip থেকে join করলে।
 
----
+Response shape `/start` এর মতোই, `data.livekit` থাকবে।
 
-### `POST /api/rtc/conversations/:conversation_id/token`
-নতুন LiveKit token নিন।
+Frontend rule:
+- `/join` response-এর `data.livekit.token` দিয়ে LiveKit connect করবে।
+- Accept button press করলে first `/join`, then LiveKit connect.
 
-**শুধুমাত্র এই ক্ষেত্রে ব্যবহার করুন:**
-- Token মেয়াদ শেষ হওয়ার আগে refresh করতে (TTL = ১০ মিনিট)
-- Network drop-এর পর reconnect করতে
-- App background থেকে ফিরে আসলে
+### 4.5 Issue Token
 
-> **❌ ভুল:** `/start` বা `/join` এর পরপরই `/token` call করবেন না।
+```txt
+POST /rtc/conversations/:conversation_id/token
+```
 
----
+Use:
+- LiveKit reconnect করতে।
+- Existing call আছে কিন্তু local LiveKit room disconnected হয়ে গেছে।
+- App/browser network drop থেকে ফিরে এসেছে।
 
-### `POST /api/rtc/conversations/:conversation_id/decline`
-ইনকামিং কল রিজেক্ট করুন।
+Do not use:
+- `/start` এর পরপর।
+- `/join` এর পরপর।
 
-| Conversation Type | কী হবে |
-|---|---|
-| **DM** | Session শেষ হয়ে যাবে। Caller `call:ended` পাবে (reason: `"declined"`) |
-| **Group** | Session চলতে থাকবে, অন্যরা answer করতে পারবে। `call:declined` event যাবে |
+Note: এই endpoint participant upsert করে; প্রথমবার participant হিসেবে না থাকলে অন্যদের কাছে `call:participant_joined` যেতে পারে।
 
----
+### 4.6 Decline
 
-### `POST /api/rtc/conversations/:conversation_id/leave`
-কল থেকে বের হন।
+```txt
+POST /rtc/conversations/:conversation_id/decline
+```
 
-- সবাই চলে গেলে (`remaining = 0`) → Session শেষ হয়, সবাই `call:ended` পাবে
-- DM এবং Group উভয় ক্ষেত্রে একই নিয়ম
+Use:
+- Incoming call reject button.
 
----
+Behavior:
+- DM call হলে session end হবে, caller `call:ended` পাবে, call message `MISSED` হবে।
+- Group call হলে session চলবে, অন্যরা `call:declined` পাবে।
 
-### `POST /api/rtc/conversations/:conversation_id/end`
-সবার জন্য কল জোর করে শেষ করুন।
+### 4.7 Leave
 
-**কে করতে পারবে:**
-- DM-এ যেকোনো একজন participant
-- Group-এ call initiator (যে শুরু করেছে)
-- Group-এ ADMIN role-এর user
+```txt
+POST /rtc/conversations/:conversation_id/leave
+```
 
----
+Use:
+- User নিজের call থেকে বের হবে।
 
-### `PATCH /api/rtc/conversations/:conversation_id/participants/me`
-নিজের camera/mic/screen share status update করুন।
+Behavior:
+- এখনও অন্য participant থাকলে `call:participant_left` যাবে।
+- শেষ participant বের হলে session end হবে, `call:ended` যাবে, call message final হবে।
 
-**Request Body (যেকোনো একটা দিলেই হবে):**
+### 4.8 End For Everyone
+
+```txt
+POST /rtc/conversations/:conversation_id/end
+```
+
+Use:
+- Call force end.
+
+Who can call:
+- DM: যেকোন participant.
+- Group: call starter বা group ADMIN.
+
+### 4.9 Update Own Media State
+
+```txt
+PATCH /rtc/conversations/:conversation_id/participants/me
+```
+
+Body:
+
 ```json
 {
   "camera": false,
@@ -261,1881 +309,1142 @@ LiveKit configuration ঠিক আছে কিনা চেক করুন।
 }
 ```
 
----
+Use:
+- Mic toggle করার পর backend sync.
+- Camera toggle করার পর backend sync.
+- Screen share start/stop করার পর backend sync.
 
-## ৫. WebSocket Event রেফারেন্স
+Other clients `call:participant_updated` event পাবে।
 
-WebSocket কিভাবে connect করবেন সেটা `socket_implementation_guide.md`-এ আছে।
-কল-সম্পর্কিত সব event **client শুধু receive করে** — পাঠায় না।
+## 5. Socket.IO Contract
 
----
+Client connect:
 
-### `call:incoming` — ইনকামিং কল notification
+```ts
+import { io } from "socket.io-client";
+
+const socket = io(`${SOCKET_URL}/ws`, {
+  transports: ["websocket"],
+  auth: { token: jwtToken },
+});
+```
+
+Connection events:
+
+```txt
+connection:ok
+connection:error
+```
+
+Call related events client শুধু listen করবে। Call action করতে REST API call করবে; socket emit করে call start/join/end করা যাবে না।
+
+### 5.1 call:incoming
+
+কখন আসে: অন্য user `/start` করলে।
 
 ```json
 {
-  "conversation_id": "conv_abc",
-  "call_session_id": "session_xyz",
+  "conversation_id": "conversation_id",
+  "call_session_id": "call_session_id",
   "room_name": "call-abc12345-x9k2m8pq",
   "kind": "VIDEO",
-  "started_by": "user_alice",
-  "started_at": "2026-01-01T10:00:00.000Z",
-  "at": "2026-01-01T10:00:00.000Z",
+  "started_by": "caller_user_id",
+  "started_at": "2026-06-04T10:00:00.000Z",
+  "at": "2026-06-04T10:00:00.000Z",
   "conversation_type": "DM",
   "conversation_title": null,
   "caller": {
-    "id": "user_alice",
+    "id": "caller_user_id",
     "name": "Alice",
     "username": "alice",
-    "avatar": "https://..."
+    "avatar": null
   }
 }
 ```
 
-**কখন আসে:** অন্য কেউ `POST /start` করলে।
+Client action:
+- Incoming modal/banner show.
+- Ring sound start.
+- Accept press করলে `POST /join`.
+- Decline press করলে `POST /decline`.
+- Timeout হলে frontend নিজে `POST /decline` বা UI hide করতে পারে; backend currently automatic timeout scheduler করে না।
 
----
+### 5.2 call:participant_joined
 
-### `call:participant_joined` — কেউ join করেছে
+কখন আসে: অন্য user first time `/join` বা `/token` দিয়ে participant হিসেবে active হলে।
 
 ```json
 {
-  "conversation_id": "conv_abc",
-  "call_session_id": "session_xyz",
+  "conversation_id": "conversation_id",
+  "call_session_id": "call_session_id",
   "user": {
-    "id": "user_bob",
+    "id": "user_id",
     "name": "Bob",
     "username": "bob",
-    "avatar": "https://..."
+    "avatar": null
   },
   "participant": {
     "id": "participant_id",
-    "user_id": "user_bob",
-    "joined_at": "2026-01-01T10:01:00.000Z",
+    "user_id": "user_id",
+    "joined_at": "2026-06-04T10:01:00.000Z",
+    "left_at": null,
     "camera": true,
     "microphone": true,
     "is_screen_sharing": false,
-    "user": { ... }
+    "user": {}
   },
   "participant_count": 2,
-  "joined_at": "2026-01-01T10:01:00.000Z"
+  "joined_at": "2026-06-04T10:01:00.000Z"
 }
 ```
 
-**কখন আসে:** অন্য কেউ `POST /join` বা `POST /token` করলে (প্রথমবার join)।
+Client action:
+- Participant list update.
+- If caller waiting UI দেখাচ্ছে, "connected" state show.
 
----
-
-### `call:participant_left` — কেউ বের হয়ে গেছে (কিন্তু call চলছে)
+### 5.3 call:participant_left
 
 ```json
 {
-  "conversation_id": "conv_abc",
-  "call_session_id": "session_xyz",
-  "user_id": "user_carol",
-  "left_at": "2026-01-01T10:15:00.000Z",
+  "conversation_id": "conversation_id",
+  "call_session_id": "call_session_id",
+  "user_id": "user_id",
+  "left_at": "2026-06-04T10:05:00.000Z",
   "participant_count": 1
 }
 ```
 
-**কখন আসে:** কেউ `POST /leave` করলে এবং call এখনও চলছে।
+Client action:
+- Participant remove.
+- UI participant count update.
 
----
-
-### `call:participant_updated` — কেউ camera/mic বদলেছে
+### 5.4 call:participant_updated
 
 ```json
 {
-  "conversation_id": "conv_abc",
-  "call_session_id": "session_xyz",
+  "conversation_id": "conversation_id",
+  "call_session_id": "call_session_id",
   "participant": {
     "id": "participant_id",
-    "user_id": "user_bob",
+    "user_id": "user_id",
     "camera": false,
     "microphone": true,
-    "is_screen_sharing": true,
-    "user": { ... }
+    "is_screen_sharing": false,
+    "user": {}
   }
 }
 ```
 
-**কখন আসে:** কেউ `PATCH /participants/me` করলে।
+Client action:
+- Mic/camera/screen share icon update.
 
----
+### 5.5 call:declined
 
-### `call:declined` — কেউ কল রিজেক্ট করেছে (শুধু Group call)
+Group call only.
 
 ```json
 {
-  "conversation_id": "conv_abc",
-  "call_session_id": "session_xyz",
-  "user_id": "user_carol",
-  "at": "2026-01-01T10:00:30.000Z"
+  "conversation_id": "conversation_id",
+  "call_session_id": "call_session_id",
+  "user_id": "user_id",
+  "at": "2026-06-04T10:00:30.000Z"
 }
 ```
 
-**কখন আসে:** Group call-এ কেউ `POST /decline` করলে।
+Client action:
+- Group call UI-তে participant declined text দেখাতে পারো।
 
----
-
-### `call:ended` — কল শেষ হয়ে গেছে
+### 5.6 call:ended
 
 ```json
 {
-  "conversation_id": "conv_abc",
-  "call_session_id": "session_xyz",
-  "by_user_id": "user_alice",
+  "conversation_id": "conversation_id",
+  "call_session_id": "call_session_id",
+  "by_user_id": "user_id",
   "reason": "ended",
-  "at": "2026-01-01T10:30:00.000Z"
+  "at": "2026-06-04T10:10:00.000Z"
 }
 ```
 
-**`reason` এর মান:**
+`reason`: `ended`, `declined`, `empty_room`.
 
-| `reason` | কখন আসে |
-|----------|---------|
-| `"ended"` | `POST /end` দিয়ে জোর করে শেষ করা হয়েছে |
-| `"empty_room"` | শেষ participant `POST /leave` করেছে |
-| `"declined"` | DM call decline করা হয়েছে |
+Client action:
+- Incoming modal hide.
+- Ring sound stop.
+- LiveKit room disconnect.
+- Active call state clear.
+- Call overlay close.
 
-> **⚠️ গুরুত্বপূর্ণ:** এই event আসলে সাথে সাথে LiveKit room disconnect করুন এবং call UI সরিয়ে ফেলুন।
+### 5.7 message:new for CALL
 
----
-
-## ৬. সম্পূর্ণ Call Flow
-
-### ৬.১ DM (১:১) Call Flow
-
-```
-Alice                        Backend                       Bob
-  │                             │                            │
-  │── POST /start (kind=VIDEO) ─►                            │
-  │◄── { livekit: {token,url} } │                            │
-  │                             │──── WS: call:incoming ────►│
-  │                             │                            │
-  │ LiveKit.connect(url, token) │              [Bob Accept করে]
-  │                             │◄── POST /join ─────────────│
-  │                             │──── { livekit:{token} } ──►│
-  │◄── WS: call:participant_joined                            │
-  │                             │  Bob LiveKit.connect()     │
-  │◄══════ Audio/Video Stream (LiveKit) ═══════════════════►│
-  │                             │                            │
-  │── POST /leave ─────────────►│                            │
-  │                             │  remaining = 0 → end       │
-  │◄── WS: call:ended ──────────────────────────────────────►│
-```
-
-**DM নিয়ম:** শেষ participant বের হলেই call শেষ। কেউ decline করলে তৎক্ষণাৎ session শেষ।
-
----
-
-### ৬.২ Group Call Flow
-
-```
-Alice (caller)              Backend           Bob          Carol
-  │                            │               │              │
-  │── POST /start ─────────────►               │              │
-  │◄── { livekit:{token} } ────│               │              │
-  │                            │── call:incoming ─────────────►│
-  │                            │── call:incoming ─────────────►│
-  │                            │               │              │
-  │                            │◄── POST /join │              │
-  │◄── call:participant_joined ─               │              │
-  │                            │◄── POST /join ───────────────│
-  │◄── call:participant_joined ─               │              │
-  │                ◄───────────────────────────│              │
-  │                            │               │              │
-  │── POST /end ───────────────►  (force end)  │              │
-  │◄── call:ended ─────────────│               │              │
-  │                            │── call:ended ─►              │
-  │                            │── call:ended ──────────────► │
-```
-
-**Group নিয়ম:**
-- যেকোনো member স্বাধীনভাবে leave করতে পারবে
-- শুধু **initiator** বা **ADMIN** `POST /end` করতে পারবে
-- শেষ member চলে গেলে automatic end
-- Decline করলে শুধু `call:declined` যায়, session চলে
-
----
-
-### ৬.৩ Decline Flow
-
-**DM Decline:**
-```
-Bob                          Backend                      Alice
-  │── POST /decline ───────────►                             │
-  │                            │ Session → ENDED             │
-  │                            │── WS: call:ended ──────────►│
-  │◄── { success: true } ──────│   reason: "declined"        │
-```
-
-**Group Decline:**
-```
-Carol                        Backend              Alice         Bob
-  │── POST /decline ───────────►                    │             │
-  │                            │ Session → ONGOING  │             │
-  │                            │── call:declined ──►│             │
-  │                            │── call:declined ───────────────► │
-  │◄── { success: true } ──────│                    │             │
-```
-
----
-
-### ৬.৪ Reconnect / Token Refresh
-
-LiveKit token **১০ মিনিট** পরে expire হয়।
-
-```
-Client                       Backend
-  │── POST /token ─────────────►  (join করবেন না, শুধু token নিন)
-  │◄── { livekit:{token,url} } │
-  │  LiveKit.connect(url, token) — reconnect
-```
-
-- আগে থেকেই active participant → `already_joined: true`, **`call:participant_joined` আসবে না**
-- Absent ছিলেন (app kill হয়েছিল) → নতুন participant record, **`call:participant_joined` আসবে**
-
----
-
-## ৭. Web Implementation (JavaScript)
-
-LiveKit JavaScript SDK ইনস্টল করুন:
-```html
-<!-- CDN -->
-<script src="https://unpkg.com/livekit-client/dist/livekit-client.umd.min.js"></script>
-```
-অথবা npm:
-```bash
-npm install livekit-client
-```
-
----
-
-### ৭.১ Helper Functions
-
-```javascript
-// Auth header তৈরি করুন
-function authHeaders() {
-  const token = localStorage.getItem('access_token');
-  return {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
-}
-
-// API base URL
-const API_BASE = 'http://your-server.com/api';
-
-// Global state
-let lkRoom = null;
-let currentCallKind = 'VIDEO';
-let currentConversationId = null;
-let pendingIncomingCall = null;
-let micEnabled = true;
-let camEnabled = true;
-```
-
----
-
-### ৭.২ কল শুরু করা (Correct Pattern)
-
-```javascript
-// ✅ সঠিক পদ্ধতি: /start থেকে পাওয়া token সরাসরি ব্যবহার করুন
-async function startCall(conversationId, kind = 'VIDEO') {
-  currentConversationId = conversationId;
-  currentCallKind = kind;
-
-  try {
-    showCallOverlay(`${kind} call শুরু হচ্ছে...`);
-
-    const resp = await fetch(
-      `${API_BASE}/rtc/conversations/${conversationId}/start`,
-      {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ kind }),
-      }
-    );
-
-    if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.message || 'Call শুরু করা যায়নি');
-    }
-
-    const { data } = await resp.json();
-
-    // data.livekit.token সরাসরি connect করুন
-    await connectToLiveKit(data.livekit.url, data.livekit.token, kind);
-
-  } catch (error) {
-    console.error('startCall failed:', error);
-    showError(error.message);
-    hideCallOverlay();
-  }
-}
-
-// ❌ ভুল পদ্ধতি: /start এর পরে /token call করবেন না
-async function startCallWrong(conversationId, kind) {
-  await fetch(`.../start`, { method: 'POST', ... }); // token ফেলে দেওয়া হলো
-  const { data } = await fetch(`.../token`, { method: 'POST' }); // অতিরিক্ত কাজ
-  await connectToLiveKit(data.livekit.url, data.livekit.token);
-}
-```
-
----
-
-### ৭.৩ ইনকামিং কল Handle করা
-
-```javascript
-// WebSocket থেকে ইনকামিং কল listen করুন
-socket.on('call:incoming', (call) => {
-  pendingIncomingCall = call;
-  showIncomingCallBanner({
-    callerName: call.caller?.name || 'Unknown',
-    kind: call.kind,
-    conversationTitle: call.conversation_title,
-  });
-});
-
-// কল Accept করুন
-async function acceptCall() {
-  const call = pendingIncomingCall;
-  if (!call) return;
-
-  hideIncomingCallBanner();
-  currentConversationId = call.conversation_id;
-  currentCallKind = call.kind;
-
-  try {
-    showCallOverlay(`${call.kind} call-এ যোগ দেওয়া হচ্ছে...`);
-
-    const resp = await fetch(
-      `${API_BASE}/rtc/conversations/${call.conversation_id}/join`,
-      {
-        method: 'POST',
-        headers: authHeaders(),
-      }
-    );
-
-    if (!resp.ok) throw new Error('Join করা যায়নি');
-
-    const { data } = await resp.json();
-    await connectToLiveKit(data.livekit.url, data.livekit.token, call.kind);
-
-  } catch (error) {
-    console.error('acceptCall failed:', error);
-    showError(error.message);
-    hideCallOverlay();
-  }
-}
-
-// কল Decline করুন
-async function declineCall() {
-  const call = pendingIncomingCall;
-  if (!call) return;
-
-  hideIncomingCallBanner();
-  pendingIncomingCall = null;
-
-  try {
-    await fetch(
-      `${API_BASE}/rtc/conversations/${call.conversation_id}/decline`,
-      {
-        method: 'POST',
-        headers: authHeaders(),
-      }
-    );
-  } catch (error) {
-    console.warn('Decline warning:', error);
-  }
-}
-```
-
----
-
-### ৭.৪ LiveKit-এ Connect করা
-
-```javascript
-async function connectToLiveKit(serverUrl, accessToken, kind) {
-  // আগের call থাকলে disconnect করুন
-  if (lkRoom) {
-    await leaveCall();
-  }
-
-  const { Room, RoomEvent } = window.LivekitClient;
-
-  lkRoom = new Room({
-    adaptiveStream: true,
-    dynacast: true,
-  });
-
-  // Event listeners
-  lkRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-    console.log(`${participant.identity} যোগ দিয়েছে`);
-    updateCallStatus(`${participant.identity} joined`);
-  });
-
-  lkRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
-    removeParticipantVideo(participant.identity);
-    updateCallStatus(`${participant.identity} চলে গেছে`);
-  });
-
-  lkRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-    attachTrack(track, participant.identity);
-  });
-
-  lkRoom.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
-    detachTrack(track, participant.identity);
-  });
-
-  lkRoom.on(RoomEvent.Disconnected, () => {
-    cleanupCallUI();
-  });
-
-  // LiveKit server-এ connect করুন
-  await lkRoom.connect(serverUrl, accessToken);
-
-  // Mic চালু করুন
-  try {
-    await lkRoom.localParticipant.setMicrophoneEnabled(true);
-  } catch (err) {
-    micEnabled = false;
-    showError('মাইক্রোফোন পাওয়া যায়নি — শুনতে পাবেন কিন্তু বলতে পারবেন না');
-  }
-
-  // Video call হলে Camera চালু করুন
-  if (kind === 'VIDEO') {
-    try {
-      await lkRoom.localParticipant.setCameraEnabled(true);
-      showLocalVideo(lkRoom.localParticipant);
-    } catch (err) {
-      camEnabled = false;
-      showError('ক্যামেরা পাওয়া যায়নি — শুধু অডিও দিয়ে চলবে');
-    }
-  }
-
-  updateCallStatus(`${kind} call connected`);
-}
-```
-
----
-
-### ৭.৫ Video Track Attach/Detach
-
-```javascript
-function attachTrack(track, identity) {
-  if (track.kind !== 'video' && track.kind !== 'audio') return;
-
-  let wrapper = document.getElementById(`participant-${identity}`);
-  if (!wrapper) {
-    wrapper = document.createElement('div');
-    wrapper.id = `participant-${identity}`;
-    wrapper.className = 'participant-video-wrapper';
-
-    const nameLabel = document.createElement('span');
-    nameLabel.textContent = identity;
-    wrapper.appendChild(nameLabel);
-
-    document.getElementById('remote-participants').appendChild(wrapper);
-  }
-
-  if (track.kind === 'video') {
-    let videoEl = wrapper.querySelector('video');
-    if (!videoEl) {
-      videoEl = document.createElement('video');
-      videoEl.autoplay = true;
-      videoEl.playsInline = true;
-      videoEl.style.width = '100%';
-      wrapper.appendChild(videoEl);
-    }
-    track.attach(videoEl);
-  } else {
-    // Audio
-    let audioEl = wrapper.querySelector('audio');
-    if (!audioEl) {
-      audioEl = document.createElement('audio');
-      audioEl.autoplay = true;
-      wrapper.appendChild(audioEl);
-    }
-    track.attach(audioEl);
-    audioEl.play().catch(err => console.warn('Audio autoplay blocked:', err));
-  }
-}
-
-function detachTrack(track, identity) {
-  const wrapper = document.getElementById(`participant-${identity}`);
-  if (!wrapper) return;
-
-  const el = wrapper.querySelector(track.kind === 'video' ? 'video' : 'audio');
-  if (el) {
-    track.detach(el);
-    el.remove();
-  }
-
-  // Wrapper-এ কিছু না থাকলে সরিয়ে দিন
-  if (!wrapper.querySelector('video') && !wrapper.querySelector('audio')) {
-    wrapper.remove();
-  }
-}
-
-function removeParticipantVideo(identity) {
-  document.getElementById(`participant-${identity}`)?.remove();
-}
-```
-
----
-
-### ৭.৬ কল থেকে বের হওয়া
-
-```javascript
-async function leaveCall() {
-  const convId = currentConversationId;
-
-  try {
-    // LiveKit থেকে disconnect করুন
-    if (lkRoom) {
-      lkRoom.disconnect();
-    }
-
-    // Backend-কে জানান
-    if (convId) {
-      await fetch(`${API_BASE}/rtc/conversations/${convId}/leave`, {
-        method: 'POST',
-        headers: authHeaders(),
-      });
-    }
-  } catch (error) {
-    console.warn('Leave error:', error);
-  } finally {
-    cleanupCallUI();
-  }
-}
-
-function cleanupCallUI() {
-  document.getElementById('remote-participants').innerHTML = '';
-  document.getElementById('local-video').srcObject = null;
-  lkRoom = null;
-  micEnabled = true;
-  camEnabled = true;
-  currentCallKind = 'VIDEO';
-  hideCallOverlay();
-}
-```
-
----
-
-### ৭.৭ Call Ended Event Handle করা
-
-```javascript
-// WebSocket থেকে call:ended listen করুন
-socket.on('call:ended', (payload) => {
-  if (payload.conversation_id !== currentConversationId) return;
-
-  // LiveKit disconnect করুন
-  if (lkRoom) {
-    lkRoom.disconnect();
-    lkRoom = null;
-  }
-
-  cleanupCallUI();
-
-  const reasons = {
-    'ended': 'কল শেষ করা হয়েছে',
-    'empty_room': 'সবাই চলে গেছে, কল শেষ',
-    'declined': 'কল decline করা হয়েছে',
-  };
-  showMessage(reasons[payload.reason] || 'কল শেষ');
-});
-```
-
----
-
-### ৭.৮ Token Refresh (Reconnect)
-
-```javascript
-// Token মেয়াদ শেষের ৯০ সেকেন্ড আগে refresh করুন
-// TTL = 600s, তাই 510s পরে refresh করুন
-let tokenRefreshTimer = null;
-
-function scheduleTokenRefresh(conversationId) {
-  clearTimeout(tokenRefreshTimer);
-  tokenRefreshTimer = setTimeout(async () => {
-    if (!lkRoom || !conversationId) return;
-    await refreshCallToken(conversationId);
-  }, 510 * 1000); // ৮.৫ মিনিট পরে
-}
-
-async function refreshCallToken(conversationId) {
-  try {
-    const resp = await fetch(
-      `${API_BASE}/rtc/conversations/${conversationId}/token`,
-      {
-        method: 'POST',
-        headers: authHeaders(),
-      }
-    );
-
-    if (!resp.ok) throw new Error('Token refresh failed');
-
-    const { data } = await resp.json();
-
-    // LiveKit room-এ নতুন token দিন
-    // (আবার connect করুন — room.connect() পুরনো connection বন্ধ করে নতুন করে)
-    await lkRoom.connect(data.livekit.url, data.livekit.token);
-
-    // পরের refresh schedule করুন
-    scheduleTokenRefresh(conversationId);
-
-  } catch (error) {
-    console.error('Token refresh failed:', error);
-  }
-}
-```
-
----
-
-## ৮. Flutter Implementation (Dart)
-
-Flutter-এ `pubspec.yaml`-এ package যোগ করুন:
-
-```yaml
-dependencies:
-  livekit_client: ^2.2.0
-  socket_io_client: ^2.0.3+1
-  http: ^1.2.0
-```
-
----
-
-### ৮.১ Call Service
-
-```dart
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:livekit_client/livekit_client.dart';
-
-class RtcService {
-  static const String _apiBase = 'http://your-server.com/api';
-  final String _token; // JWT token
-
-  RtcService(this._token);
-
-  Map<String, String> get _headers => {
-    'Authorization': 'Bearer $_token',
-    'Content-Type': 'application/json',
-  };
-
-  // কল শুরু করা
-  Future<Map<String, dynamic>> startCall(
-    String conversationId, {
-    String kind = 'VIDEO',
-  }) async {
-    final resp = await http.post(
-      Uri.parse('$_apiBase/rtc/conversations/$conversationId/start'),
-      headers: _headers,
-      body: jsonEncode({'kind': kind}),
-    );
-
-    if (resp.statusCode != 200 && resp.statusCode != 201) {
-      final error = jsonDecode(resp.body);
-      throw Exception(error['message'] ?? 'Call শুরু করা যায়নি');
-    }
-
-    return jsonDecode(resp.body);
-  }
-
-  // চলমান কলে যোগ দেওয়া
-  Future<Map<String, dynamic>> joinCall(String conversationId) async {
-    final resp = await http.post(
-      Uri.parse('$_apiBase/rtc/conversations/$conversationId/join'),
-      headers: _headers,
-    );
-
-    if (resp.statusCode != 200 && resp.statusCode != 201) {
-      final error = jsonDecode(resp.body);
-      throw Exception(error['message'] ?? 'Join করা যায়নি');
-    }
-
-    return jsonDecode(resp.body);
-  }
-
-  // Token refresh
-  Future<Map<String, dynamic>> refreshToken(String conversationId) async {
-    final resp = await http.post(
-      Uri.parse('$_apiBase/rtc/conversations/$conversationId/token'),
-      headers: _headers,
-    );
-
-    if (resp.statusCode != 200 && resp.statusCode != 201) {
-      throw Exception('Token refresh ব্যর্থ হয়েছে');
-    }
-
-    return jsonDecode(resp.body);
-  }
-
-  // Decline করা
-  Future<void> declineCall(String conversationId) async {
-    await http.post(
-      Uri.parse('$_apiBase/rtc/conversations/$conversationId/decline'),
-      headers: _headers,
-    );
-  }
-
-  // বের হওয়া
-  Future<void> leaveCall(String conversationId) async {
-    await http.post(
-      Uri.parse('$_apiBase/rtc/conversations/$conversationId/leave'),
-      headers: _headers,
-    );
-  }
-
-  // জোর করে শেষ করা
-  Future<void> endCall(String conversationId) async {
-    await http.post(
-      Uri.parse('$_apiBase/rtc/conversations/$conversationId/end'),
-      headers: _headers,
-    );
-  }
-
-  // Media state update
-  Future<void> updateMediaState(
-    String conversationId, {
-    bool? camera,
-    bool? microphone,
-    bool? isScreenSharing,
-  }) async {
-    final body = <String, dynamic>{};
-    if (camera != null) body['camera'] = camera;
-    if (microphone != null) body['microphone'] = microphone;
-    if (isScreenSharing != null) body['is_screen_sharing'] = isScreenSharing;
-
-    await http.patch(
-      Uri.parse(
-        '$_apiBase/rtc/conversations/$conversationId/participants/me',
-      ),
-      headers: _headers,
-      body: jsonEncode(body),
-    );
-  }
-
-  // Call state দেখা
-  Future<Map<String, dynamic>?> getCallState(String conversationId) async {
-    final resp = await http.get(
-      Uri.parse('$_apiBase/rtc/conversations/$conversationId/state'),
-      headers: _headers,
-    );
-
-    final data = jsonDecode(resp.body);
-    return data['data'];
-  }
-}
-```
-
----
-
-### ৮.২ LiveKit Call Manager
-
-```dart
-import 'package:livekit_client/livekit_client.dart';
-import 'dart:async';
-
-class LiveKitCallManager {
-  Room? _room;
-  LocalAudioTrack? _audioTrack;
-  LocalVideoTrack? _videoTrack;
-
-  // Participant UI update callback
-  final Function(List<RemoteParticipant>) onParticipantsChanged;
-  // Call ended callback
-  final VoidCallback onCallEnded;
-
-  LiveKitCallManager({
-    required this.onParticipantsChanged,
-    required this.onCallEnded,
-  });
-
-  Room? get room => _room;
-  bool get isConnected => _room?.connectionState == ConnectionState.connected;
-
-  // LiveKit-এ connect করুন
-  Future<void> connect({
-    required String url,
-    required String token,
-    required String kind, // 'VIDEO' বা 'AUDIO'
-  }) async {
-    // আগের connection থাকলে বন্ধ করুন
-    await disconnect();
-
-    _room = Room();
-
-    // Event listeners
-    _room!.addListener(_onRoomEvent);
-
-    // Connect করুন
-    await _room!.connect(
-      url,
-      token,
-      roomOptions: const RoomOptions(
-        adaptiveStream: true,
-        dynacast: true,
-      ),
-    );
-
-    // Mic চালু করুন
-    _audioTrack = await LocalAudioTrack.create(
-      const AudioCaptureOptions(),
-    );
-    await _room!.localParticipant?.publishAudioTrack(_audioTrack!);
-
-    // Video call হলে Camera চালু করুন
-    if (kind == 'VIDEO') {
-      _videoTrack = await LocalVideoTrack.createCameraTrack(
-        const CameraCaptureOptions(
-          cameraPosition: CameraPosition.front,
-        ),
-      );
-      await _room!.localParticipant?.publishVideoTrack(_videoTrack!);
-    }
-  }
-
-  void _onRoomEvent() {
-    if (_room == null) return;
-
-    // Participant list update
-    final participants = _room!.remoteParticipants.values.toList();
-    onParticipantsChanged(participants);
-
-    // Room disconnect হলে
-    if (_room!.connectionState == ConnectionState.disconnected) {
-      onCallEnded();
-    }
-  }
-
-  // Mic toggle
-  Future<void> toggleMicrophone() async {
-    final participant = _room?.localParticipant;
-    if (participant == null) return;
-
-    final isMuted = participant.isMuted;
-    await participant.setMicrophoneEnabled(isMuted);
-  }
-
-  // Camera toggle
-  Future<void> toggleCamera() async {
-    final participant = _room?.localParticipant;
-    if (participant == null) return;
-
-    final isCameraEnabled = participant.isCameraEnabled();
-    await participant.setCameraEnabled(!isCameraEnabled);
-  }
-
-  // Camera switch (front/back)
-  Future<void> switchCamera() async {
-    if (_videoTrack == null) return;
-    await _videoTrack!.switchCamera();
-  }
-
-  // Speaker toggle
-  Future<void> toggleSpeaker(bool useSpeaker) async {
-    await Hardware.instance.setSpeakerphoneOn(useSpeaker);
-  }
-
-  // Disconnect
-  Future<void> disconnect() async {
-    _audioTrack?.stop();
-    _videoTrack?.stop();
-    _audioTrack = null;
-    _videoTrack = null;
-
-    await _room?.disconnect();
-    _room?.removeListener(_onRoomEvent);
-    _room?.dispose();
-    _room = null;
-  }
-}
-```
-
----
-
-### ৮.৩ WebSocket Event Listener (Socket.IO)
-
-```dart
-import 'package:socket_io_client/socket_io_client.dart' as io;
-
-class CallSocketListener {
-  final io.Socket _socket;
-
-  // Callbacks
-  final Function(Map<String, dynamic>) onCallIncoming;
-  final Function(Map<String, dynamic>) onCallEnded;
-  final Function(Map<String, dynamic>) onParticipantJoined;
-  final Function(Map<String, dynamic>) onParticipantLeft;
-  final Function(Map<String, dynamic>) onParticipantUpdated;
-  final Function(Map<String, dynamic>) onCallDeclined;
-
-  CallSocketListener({
-    required io.Socket socket,
-    required this.onCallIncoming,
-    required this.onCallEnded,
-    required this.onParticipantJoined,
-    required this.onParticipantLeft,
-    required this.onParticipantUpdated,
-    required this.onCallDeclined,
-  }) : _socket = socket {
-    _registerListeners();
-  }
-
-  void _registerListeners() {
-    _socket.on('call:incoming', (data) {
-      onCallIncoming(Map<String, dynamic>.from(data));
-    });
-
-    _socket.on('call:ended', (data) {
-      onCallEnded(Map<String, dynamic>.from(data));
-    });
-
-    _socket.on('call:participant_joined', (data) {
-      onParticipantJoined(Map<String, dynamic>.from(data));
-    });
-
-    _socket.on('call:participant_left', (data) {
-      onParticipantLeft(Map<String, dynamic>.from(data));
-    });
-
-    _socket.on('call:participant_updated', (data) {
-      onParticipantUpdated(Map<String, dynamic>.from(data));
-    });
-
-    _socket.on('call:declined', (data) {
-      onCallDeclined(Map<String, dynamic>.from(data));
-    });
-  }
-
-  void dispose() {
-    _socket.off('call:incoming');
-    _socket.off('call:ended');
-    _socket.off('call:participant_joined');
-    _socket.off('call:participant_left');
-    _socket.off('call:participant_updated');
-    _socket.off('call:declined');
-  }
-}
-```
-
----
-
-### ৮.৪ CallScreen Widget
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:livekit_client/livekit_client.dart';
-
-class CallScreen extends StatefulWidget {
-  final String conversationId;
-  final String kind; // 'VIDEO' বা 'AUDIO'
-  final bool isIncoming; // true = incoming, false = outgoing
-  final Map<String, dynamic>? incomingCallData;
-
-  const CallScreen({
-    super.key,
-    required this.conversationId,
-    required this.kind,
-    this.isIncoming = false,
-    this.incomingCallData,
-  });
-
-  @override
-  State<CallScreen> createState() => _CallScreenState();
-}
-
-class _CallScreenState extends State<CallScreen> {
-  late final RtcService _rtcService;
-  late final LiveKitCallManager _callManager;
-  late final CallSocketListener _socketListener;
-
-  bool _micEnabled = true;
-  bool _camEnabled = true;
-  bool _speakerEnabled = true;
-  bool _isConnected = false;
-  String _statusText = 'Connecting...';
-  List<RemoteParticipant> _remoteParticipants = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _rtcService = RtcService(/* your JWT token */);
-
-    _callManager = LiveKitCallManager(
-      onParticipantsChanged: (participants) {
-        setState(() => _remoteParticipants = participants);
-      },
-      onCallEnded: _onCallEnded,
-    );
-
-    // Socket listeners সেটআপ
-    _socketListener = CallSocketListener(
-      socket: yourSocket, // আপনার socket instance
-      onCallIncoming: (_) {}, // এই screen-এ দরকার নেই
-      onCallEnded: (data) => _onCallEnded(),
-      onParticipantJoined: (data) {
-        setState(() {
-          _statusText = '${data['user']?['name']} যোগ দিয়েছে';
-        });
-      },
-      onParticipantLeft: (data) {
-        setState(() {
-          _statusText = 'একজন চলে গেছে';
-        });
-      },
-      onParticipantUpdated: (_) {},
-      onCallDeclined: (_) {},
-    );
-
-    _startOrJoin();
-  }
-
-  Future<void> _startOrJoin() async {
-    try {
-      Map<String, dynamic> response;
-
-      if (widget.isIncoming) {
-        // Incoming call — join করুন
-        response = await _rtcService.joinCall(widget.conversationId);
-      } else {
-        // Outgoing call — start করুন
-        response = await _rtcService.startCall(
-          widget.conversationId,
-          kind: widget.kind,
-        );
-      }
-
-      final livekit = response['data']['livekit'];
-      await _callManager.connect(
-        url: livekit['url'],
-        token: livekit['token'],
-        kind: widget.kind,
-      );
-
-      setState(() {
-        _isConnected = true;
-        _statusText = '${widget.kind} call connected';
-      });
-
-    } catch (error) {
-      setState(() => _statusText = 'Error: $error');
-      await Future.delayed(const Duration(seconds: 2));
-      if (mounted) Navigator.pop(context);
-    }
-  }
-
-  Future<void> _toggleMic() async {
-    await _callManager.toggleMicrophone();
-    setState(() => _micEnabled = !_micEnabled);
-
-    // Backend sync
-    await _rtcService.updateMediaState(
-      widget.conversationId,
-      microphone: _micEnabled,
-    );
-  }
-
-  Future<void> _toggleCamera() async {
-    await _callManager.toggleCamera();
-    setState(() => _camEnabled = !_camEnabled);
-
-    // Backend sync
-    await _rtcService.updateMediaState(
-      widget.conversationId,
-      camera: _camEnabled,
-    );
-  }
-
-  Future<void> _hangUp() async {
-    await _callManager.disconnect();
-    await _rtcService.leaveCall(widget.conversationId);
-    if (mounted) Navigator.pop(context);
-  }
-
-  void _onCallEnded() {
-    _callManager.disconnect();
-    if (mounted) Navigator.pop(context);
-  }
-
-  @override
-  void dispose() {
-    _socketListener.dispose();
-    _callManager.disconnect();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // Remote participants video
-            if (widget.kind == 'VIDEO')
-              _buildVideoGrid()
-            else
-              _buildAudioCallUI(),
-
-            // Status text
-            Positioned(
-              top: 16,
-              left: 0,
-              right: 0,
-              child: Text(
-                _statusText,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
-              ),
-            ),
-
-            // Local video (video call হলে)
-            if (widget.kind == 'VIDEO' && _callManager.room != null)
-              Positioned(
-                bottom: 120,
-                right: 16,
-                child: SizedBox(
-                  width: 100,
-                  height: 150,
-                  child: VideoTrackRenderer(
-                    _callManager.room!.localParticipant!
-                        .videoTrackPublications.values.first.track
-                        as VideoTrack,
-                  ),
-                ),
-              ),
-
-            // Control buttons
-            Positioned(
-              bottom: 32,
-              left: 0,
-              right: 0,
-              child: _buildControls(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVideoGrid() {
-    if (_remoteParticipants.isEmpty) {
-      return const Center(
-        child: Text('অপেক্ষা করুন...', style: TextStyle(color: Colors.white)),
-      );
-    }
-
-    return GridView.builder(
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: _remoteParticipants.length == 1 ? 1 : 2,
-        childAspectRatio: 3 / 4,
-      ),
-      itemCount: _remoteParticipants.length,
-      itemBuilder: (context, index) {
-        final participant = _remoteParticipants[index];
-        final videoTrack = participant.videoTrackPublications.values
-            .where((pub) => !pub.muted)
-            .firstOrNull
-            ?.track as VideoTrack?;
-
-        return Stack(
-          children: [
-            if (videoTrack != null)
-              VideoTrackRenderer(videoTrack)
-            else
-              Container(
-                color: Colors.grey[900],
-                child: Center(
-                  child: CircleAvatar(
-                    radius: 40,
-                    child: Text(
-                      participant.identity.substring(0, 1).toUpperCase(),
-                    ),
-                  ),
-                ),
-              ),
-            Positioned(
-              bottom: 8,
-              left: 8,
-              child: Text(
-                participant.identity,
-                style: const TextStyle(
-                  color: Colors.white,
-                  shadows: [Shadow(color: Colors.black, blurRadius: 4)],
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildAudioCallUI() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.phone, size: 80, color: Colors.white),
-          const SizedBox(height: 16),
-          Text(
-            _statusText,
-            style: const TextStyle(color: Colors.white, fontSize: 18),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${_remoteParticipants.length} জন active',
-            style: const TextStyle(color: Colors.white60),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildControls() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        // Mic toggle
-        _ControlButton(
-          icon: _micEnabled ? Icons.mic : Icons.mic_off,
-          label: _micEnabled ? 'Mute' : 'Unmute',
-          color: _micEnabled ? Colors.white : Colors.red,
-          onTap: _toggleMic,
-        ),
-
-        // Hang up
-        _ControlButton(
-          icon: Icons.call_end,
-          label: 'End',
-          color: Colors.red,
-          backgroundColor: Colors.red.withOpacity(0.2),
-          onTap: _hangUp,
-        ),
-
-        // Camera toggle (video call হলে)
-        if (widget.kind == 'VIDEO')
-          _ControlButton(
-            icon: _camEnabled ? Icons.videocam : Icons.videocam_off,
-            label: _camEnabled ? 'Camera Off' : 'Camera On',
-            color: _camEnabled ? Colors.white : Colors.red,
-            onTap: _toggleCamera,
-          ),
-
-        // Speaker toggle
-        _ControlButton(
-          icon: _speakerEnabled ? Icons.volume_up : Icons.volume_off,
-          label: _speakerEnabled ? 'Speaker' : 'Earpiece',
-          color: Colors.white,
-          onTap: () async {
-            setState(() => _speakerEnabled = !_speakerEnabled);
-            await _callManager.toggleSpeaker(_speakerEnabled);
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _ControlButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final Color? backgroundColor;
-  final VoidCallback onTap;
-
-  const _ControlButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    this.backgroundColor,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 30,
-            backgroundColor: backgroundColor ?? Colors.white12,
-            child: Icon(icon, color: color, size: 28),
-          ),
-          const SizedBox(height: 6),
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-}
-```
-
----
-
-### ৮.৫ Incoming Call Banner Widget
-
-```dart
-class IncomingCallBanner extends StatelessWidget {
-  final Map<String, dynamic> callData;
-  final VoidCallback onAccept;
-  final VoidCallback onDecline;
-
-  const IncomingCallBanner({
-    super.key,
-    required this.callData,
-    required this.onAccept,
-    required this.onDecline,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final callerName = callData['caller']?['name'] ?? 'Unknown';
-    final kind = callData['kind'] ?? 'VIDEO';
-    final icon = kind == 'VIDEO' ? Icons.videocam : Icons.call;
-
-    return Material(
-      elevation: 8,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.grey[900],
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.green, size: 32),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '$callerName calling...',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    '${kind.toLowerCase()} call',
-                    style: const TextStyle(color: Colors.white60, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            // Decline
-            GestureDetector(
-              onTap: onDecline,
-              child: const CircleAvatar(
-                backgroundColor: Colors.red,
-                child: Icon(Icons.call_end, color: Colors.white),
-              ),
-            ),
-            const SizedBox(width: 12),
-            // Accept
-            GestureDetector(
-              onTap: onAccept,
-              child: const CircleAvatar(
-                backgroundColor: Colors.green,
-                child: Icon(Icons.call, color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-```
-
----
-
-### ৮.৬ Token Refresh (Flutter)
-
-```dart
-class CallTokenRefreshManager {
-  Timer? _refreshTimer;
-  final RtcService _rtcService;
-  final LiveKitCallManager _callManager;
-
-  CallTokenRefreshManager(this._rtcService, this._callManager);
-
-  // Call শুরু হলে timer চালু করুন
-  void startRefreshTimer(String conversationId) {
-    _refreshTimer?.cancel();
-    // ৮.৫ মিনিট পরে refresh (TTL ১০ মিনিট)
-    _refreshTimer = Timer(const Duration(seconds: 510), () async {
-      await _refresh(conversationId);
-    });
-  }
-
-  Future<void> _refresh(String conversationId) async {
-    try {
-      final response = await _rtcService.refreshToken(conversationId);
-      final livekit = response['data']['livekit'];
-
-      // নতুন token দিয়ে reconnect
-      await _callManager.room?.connect(
-        livekit['url'],
-        livekit['token'],
-      );
-
-      // পরের refresh schedule করুন
-      startRefreshTimer(conversationId);
-
-    } catch (e) {
-      debugPrint('Token refresh failed: $e');
-    }
-  }
-
-  void cancel() {
-    _refreshTimer?.cancel();
-    _refreshTimer = null;
-  }
-}
-```
-
----
-
-## ৯. Media State Sync
-
-Camera/Mic toggle করার পর Backend-কে জানানো উচিত — তাহলে অন্য participants WebSocket দিয়ে `call:participant_updated` পাবে এবং তাদের UI update হবে।
-
-### Web:
-```javascript
-async function toggleMic() {
-  micEnabled = !micEnabled;
-  await lkRoom.localParticipant.setMicrophoneEnabled(micEnabled);
-
-  // Backend sync
-  await fetch(`${API_BASE}/rtc/conversations/${currentConversationId}/participants/me`, {
-    method: 'PATCH',
-    headers: authHeaders(),
-    body: JSON.stringify({ microphone: micEnabled }),
-  });
-}
-```
-
-### Flutter:
-```dart
-Future<void> toggleMic() async {
-  await _callManager.toggleMicrophone();
-  final newState = !_micEnabled;
-  setState(() => _micEnabled = newState);
-
-  // Backend sync
-  await _rtcService.updateMediaState(
-    widget.conversationId,
-    microphone: newState,
-  );
-}
-```
-
-### অন্য participant-এর media state UI তে দেখানো:
-
-```javascript
-// Web
-socket.on('call:participant_updated', (data) => {
-  const { participant } = data;
-  updateParticipantUI(participant.user_id, {
-    micOn: participant.microphone,
-    camOn: participant.camera,
-    screenSharing: participant.is_screen_sharing,
-  });
-});
-```
-
-```dart
-// Flutter — CallSocketListener callback-এ
-onParticipantUpdated: (data) {
-  final participant = data['participant'];
-  setState(() {
-    // participant.user_id এর জন্য UI update করুন
-    _updateParticipantStatus(
-      participant['user_id'],
-      micOn: participant['microphone'],
-      camOn: participant['camera'],
-    );
-  });
-},
-```
-
----
-
-## ১০. Call Message — Chat Timeline-এ কল দেখানো
-
-WhatsApp, Messenger-এর মতো — কেউ call দিলে সেটা conversation-এ **message হিসেবে** দেখা যাবে। Call শেষ হলে message-এ duration এবং status update হয়।
-
-### ১০.১ Message Content Structure
-
-যখন কল শুরু হয় (`POST /start`) → Backend একটা `CALL` kind message তৈরি করে:
+Call start হলেই backend chat timeline-এ `CALL` message create করে এবং `message:new` event দেয়।
 
 ```json
 {
-  "id": "msg_xyz",
-  "conversation_id": "conv_abc",
+  "id": "message_id",
+  "conversation_id": "conversation_id",
   "kind": "CALL",
-  "call_session_id": "session_id",
+  "call_session_id": "call_session_id",
   "content": {
     "call_kind": "VIDEO",
     "status": "ONGOING",
     "duration_seconds": null,
     "reason": null
   },
-  "sender": { "id": "user_alice", "name": "Alice", "avatar": "..." },
-  "created_at": "2026-01-01T10:00:00.000Z"
+  "status": "SENT",
+  "attachments": [],
+  "reply_to": null,
+  "sender": {
+    "id": "caller_user_id",
+    "name": "Alice",
+    "avatar": null
+  },
+  "created_at": "2026-06-04T10:00:00.000Z"
 }
 ```
 
-যখন কল শেষ হয় → content আপডেট হয়:
+Client action:
+- Normal message list-এ call bubble/card render.
+- `content.status === "ONGOING"` হলে "Video call cholche" বা "Audio call cholche" দেখাও।
+
+### 5.8 call:message_updated
+
+Call final হলে existing `CALL` message update হয়।
 
 ```json
 {
-  "content": {
-    "call_kind": "VIDEO",
-    "status": "ENDED",
-    "duration_seconds": 125,
-    "reason": "ended"
-  }
-}
-```
-
-**`status` এর মান:**
-
-| status | কখন সেট হয় |
-|--------|-----------|
-| `"ONGOING"` | কল শুরু হয়েছে, চলছে |
-| `"ENDED"` | কল শেষ হয়েছে (কেউ কথা বলেছে) |
-| `"MISSED"` | কেউ ধরেনি / decline করা হয়েছে |
-
-**`reason` এর মান:**
-
-| reason | কখন |
-|--------|-----|
-| `"ended"` | জোর করে শেষ করা হয়েছে |
-| `"empty_room"` | সবাই চলে গেছে |
-| `"declined"` | DM call decline হয়েছে |
-
----
-
-### ১০.২ WebSocket Events
-
-#### `message:new` — প্রথমে call শুরু হলে
-কল শুরুর সাথে সাথে সব members-এ এই event আসবে (existing message:new flow দিয়ে):
-```json
-{
-  "id": "msg_xyz",
-  "kind": "CALL",
-  "content": { "call_kind": "VIDEO", "status": "ONGOING", ... },
-  "call_session_id": "session_id",
-  "sender": { ... }
-}
-```
-
-#### `call:message_updated` — কল শেষ হলে message আপডেট
-```json
-{
-  "conversation_id": "conv_abc",
+  "conversation_id": "conversation_id",
   "message": {
-    "id": "msg_xyz",
+    "id": "message_id",
+    "conversation_id": "conversation_id",
     "kind": "CALL",
-    "call_session_id": "session_id",
+    "call_session_id": "call_session_id",
     "content": {
       "call_kind": "VIDEO",
       "status": "ENDED",
       "duration_seconds": 125,
       "reason": "ended"
     },
-    "sender": { "id": "user_alice", "name": "Alice", "avatar": "..." },
-    "created_at": "2026-01-01T10:00:00.000Z"
+    "sender": {}
   }
 }
 ```
 
-> **Client rule:** `call:message_updated` পেলে message list-এ ওই message-এর `id` দিয়ে খুঁজে update করুন (upsert by id)।
+Client action:
+- Message list-এ `message.id` দিয়ে find করে replace/upsert.
+- `MISSED` হলে missed call card.
+- `ENDED` হলে duration সহ ended call card.
 
----
+## 6. Exact Call Flow
 
-### ১০.৩ Web — Call Message UI (JavaScript)
+### 6.1 Caller starts video call
 
-```javascript
-// message:new event-এ CALL kind handle করুন
-socket.on('message:new', (message) => {
-  if (message.kind === 'CALL') {
-    renderCallMessage(message);
-  } else {
-    renderTextMessage(message);
-  }
-});
+1. User conversation screen open করে।
+2. Socket connected কিনা নিশ্চিত করো।
+3. User video call button click করে।
+4. Frontend calls:
 
-// call:message_updated — duration আপডেট হলে
-socket.on('call:message_updated', ({ conversation_id, message }) => {
-  if (conversation_id !== currentConversationId) return;
-  updateCallMessageInUI(message);
-});
-
-// Call message render করুন
-function renderCallMessage(message) {
-  const content = message.content;
-  const isVideo = content.call_kind === 'VIDEO';
-  const icon = isVideo ? '📹' : '📞';
-
-  let label = '';
-  if (content.status === 'ONGOING') {
-    label = `${icon} ${isVideo ? 'Video' : 'Audio'} call চলছে...`;
-  } else if (content.status === 'MISSED') {
-    label = `${icon} Missed ${isVideo ? 'video' : 'audio'} call`;
-  } else {
-    const mins = Math.floor((content.duration_seconds || 0) / 60);
-    const secs = (content.duration_seconds || 0) % 60;
-    const duration = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-    label = `${icon} ${isVideo ? 'Video' : 'Audio'} call • ${duration}`;
-  }
-
-  const el = document.getElementById(`msg-${message.id}`) || createMessageEl(message.id);
-
-  el.innerHTML = `
-    <div class="call-message ${content.status.toLowerCase()}">
-      <span class="call-icon">${icon}</span>
-      <div class="call-info">
-        <span class="call-label">${label}</span>
-        <span class="call-time">${formatTime(message.created_at)}</span>
-      </div>
-    </div>
-  `;
-
-  if (!document.getElementById(`msg-${message.id}`)) {
-    document.getElementById('messages-list').appendChild(el);
-  }
-}
-
-// আপডেট হলে existing element খুঁজে বের করুন
-function updateCallMessageInUI(message) {
-  const el = document.getElementById(`msg-${message.id}`);
-  if (el) {
-    renderCallMessage(message); // re-render করুন
-  }
-}
+```txt
+POST /rtc/conversations/:conversation_id/start
+body: { "kind": "VIDEO" }
 ```
 
----
+5. Backend creates/returns active call session.
+6. Backend immediately creates `CALL` message with `ONGOING`.
+7. Backend emits `call:incoming` to other members.
+8. Caller uses `response.data.livekit.url` and `response.data.livekit.token` to connect LiveKit.
+9. Caller local mic/camera enable করে।
+10. Caller UI active call overlay দেখায়।
 
-### ১০.৪ Flutter — Call Message Widget
+### 6.2 Receiver accepts
 
-```dart
-// Message model-এ call content parse করুন
-class CallMessageContent {
-  final String callKind;    // 'AUDIO' | 'VIDEO'
-  final String status;      // 'ONGOING' | 'ENDED' | 'MISSED'
-  final int? durationSeconds;
-  final String? reason;
+1. Receiver socket gets `call:incoming`.
+2. UI incoming banner/modal shows.
+3. User accepts.
+4. Frontend calls:
 
-  CallMessageContent.fromJson(Map<String, dynamic> json)
-      : callKind = json['call_kind'] ?? 'VIDEO',
-        status = json['status'] ?? 'ONGOING',
-        durationSeconds = json['duration_seconds'] as int?,
-        reason = json['reason'] as String?;
-}
-
-// CallMessageBubble widget
-class CallMessageBubble extends StatelessWidget {
-  final Map<String, dynamic> message;
-
-  const CallMessageBubble({super.key, required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    final content = CallMessageContent.fromJson(
-      Map<String, dynamic>.from(message['content'] ?? {}),
-    );
-
-    final isVideo = content.callKind == 'VIDEO';
-    final icon = isVideo ? Icons.videocam : Icons.call;
-
-    Color bgColor;
-    IconData statusIcon;
-    String label;
-
-    switch (content.status) {
-      case 'ONGOING':
-        bgColor = Colors.green.shade100;
-        statusIcon = icon;
-        label = isVideo ? 'Video call চলছে...' : 'Audio call চলছে...';
-        break;
-      case 'MISSED':
-        bgColor = Colors.red.shade50;
-        statusIcon = isVideo ? Icons.videocam_off : Icons.phone_missed;
-        label = isVideo ? 'Missed video call' : 'Missed audio call';
-        break;
-      default: // ENDED
-        bgColor = Colors.grey.shade100;
-        statusIcon = icon;
-        final secs = content.durationSeconds ?? 0;
-        final mins = secs ~/ 60;
-        final rem = secs % 60;
-        final dur = mins > 0 ? '${mins}m ${rem}s' : '${rem}s';
-        label = isVideo ? 'Video call • $dur' : 'Audio call • $dur';
-    }
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(statusIcon, size: 22, color: Colors.grey.shade700),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-              ),
-              Text(
-                _formatTime(message['created_at']),
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(String? iso) {
-    if (iso == null) return '';
-    final dt = DateTime.tryParse(iso)?.toLocal();
-    if (dt == null) return '';
-    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-  }
-}
-
-// Message list-এ ব্যবহার করুন
-Widget buildMessageBubble(Map<String, dynamic> message) {
-  if (message['kind'] == 'CALL') {
-    return CallMessageBubble(message: message);
-  }
-  return TextMessageBubble(message: message);
-}
+```txt
+POST /rtc/conversations/:conversation_id/join
 ```
 
-**Socket-এ `call:message_updated` listen করুন:**
+5. Response থেকে LiveKit token নিয়ে connect.
+6. Backend emits `call:participant_joined` to other members.
+7. Receiver local mic/camera enable করে।
 
-```dart
-// CallSocketListener-এ যোগ করুন
-_socket.on('call:message_updated', (data) {
-  final updated = Map<String, dynamic>.from(data);
-  final message = Map<String, dynamic>.from(updated['message']);
+### 6.3 Receiver browser/app closed ছিল
 
-  // Messages state-এ id দিয়ে খুঁজে update করুন
-  setState(() {
-    final index = messages.indexWhere((m) => m['id'] == message['id']);
-    if (index != -1) {
-      messages[index] = message; // upsert
-    }
+Socket event missed হবে। তাই:
+
+1. App/browser open হলে socket connect করো।
+2. Conversation list বা chat screen load হলে active conversationগুলোর জন্য `GET /rtc/conversations/:id/state` call করো।
+3. যদি `data.status === "ONGOING"` এবং current user এখনও LiveKit room-এ না থাকে:
+   - Conversation screen-এ active call chip দেখাও।
+   - চাইলে incoming/ringing UI দেখাও যদি `data.started_by !== currentUserId`।
+4. User join করলে `/join` call করবে।
+
+### 6.4 Decline
+
+1. Incoming UI-তে Decline press.
+2. Frontend:
+
+```txt
+POST /rtc/conversations/:conversation_id/decline
+```
+
+3. DM হলে backend `call:ended` পাঠাবে এবং call message `MISSED` করবে।
+4. Group হলে backend `call:declined` পাঠাবে; call চলবে।
+
+### 6.5 Leave or end
+
+Normal leave:
+
+```txt
+POST /rtc/conversations/:conversation_id/leave
+```
+
+End for everyone:
+
+```txt
+POST /rtc/conversations/:conversation_id/end
+```
+
+Then:
+- LiveKit `room.disconnect()` call করো।
+- Local tracks detach/stop করো if SDK handles না করে।
+- Active call UI clear করো।
+
+## 7. Next.js Implementation
+
+এই section-টা App Router বা Pages Router দুই জায়গাতেই ব্যবহার করা যাবে। Browser-only hook/component-এ `"use client"` লাগবে।
+
+### 7.1 API helper
+
+Create `src/lib/rtcApi.ts`:
+
+```ts
+export type CallKind = "AUDIO" | "VIDEO";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL!;
+
+function authHeaders(token: string, json = true) {
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(json ? { "Content-Type": "application/json" } : {}),
+  };
+}
+
+async function request<T>(
+  path: string,
+  token: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      ...authHeaders(token, !!options.body),
+      ...(options.headers || {}),
+    },
   });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Request failed: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export function getCallState(conversationId: string, token: string) {
+  return request<any>(`/rtc/conversations/${conversationId}/state`, token, {
+    method: "GET",
+  });
+}
+
+export function startCall(conversationId: string, token: string, kind: CallKind) {
+  return request<any>(`/rtc/conversations/${conversationId}/start`, token, {
+    method: "POST",
+    body: JSON.stringify({ kind }),
+  });
+}
+
+export function joinCall(conversationId: string, token: string) {
+  return request<any>(`/rtc/conversations/${conversationId}/join`, token, {
+    method: "POST",
+  });
+}
+
+export function declineCall(conversationId: string, token: string) {
+  return request<any>(`/rtc/conversations/${conversationId}/decline`, token, {
+    method: "POST",
+  });
+}
+
+export function leaveCall(conversationId: string, token: string) {
+  return request<any>(`/rtc/conversations/${conversationId}/leave`, token, {
+    method: "POST",
+  });
+}
+
+export function endCall(conversationId: string, token: string) {
+  return request<any>(`/rtc/conversations/${conversationId}/end`, token, {
+    method: "POST",
+  });
+}
+
+export function updateMyMediaState(
+  conversationId: string,
+  token: string,
+  body: { camera?: boolean; microphone?: boolean; is_screen_sharing?: boolean },
+) {
+  return request<any>(`/rtc/conversations/${conversationId}/participants/me`, token, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+```
+
+### 7.2 Socket hook
+
+Create `src/hooks/useChatSocket.ts`:
+
+```ts
+"use client";
+
+import { useEffect, useRef } from "react";
+import { io, Socket } from "socket.io-client";
+
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL!;
+
+type Handlers = {
+  onIncomingCall?: (data: any) => void;
+  onCallEnded?: (data: any) => void;
+  onParticipantJoined?: (data: any) => void;
+  onParticipantLeft?: (data: any) => void;
+  onParticipantUpdated?: (data: any) => void;
+  onCallDeclined?: (data: any) => void;
+  onMessageNew?: (message: any) => void;
+  onCallMessageUpdated?: (data: any) => void;
+  onConnected?: () => void;
+};
+
+export function useChatSocket(token: string | null, handlers: Handlers) {
+  const socketRef = useRef<Socket | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const socket = io(`${SOCKET_URL}/ws`, {
+      transports: ["websocket"],
+      auth: { token },
+    });
+
+    socketRef.current = socket;
+
+    socket.on("connection:ok", () => handlers.onConnected?.());
+    socket.on("call:incoming", (d) => handlers.onIncomingCall?.(d));
+    socket.on("call:ended", (d) => handlers.onCallEnded?.(d));
+    socket.on("call:participant_joined", (d) => handlers.onParticipantJoined?.(d));
+    socket.on("call:participant_left", (d) => handlers.onParticipantLeft?.(d));
+    socket.on("call:participant_updated", (d) => handlers.onParticipantUpdated?.(d));
+    socket.on("call:declined", (d) => handlers.onCallDeclined?.(d));
+    socket.on("message:new", (m) => handlers.onMessageNew?.(m));
+    socket.on("call:message_updated", (d) => handlers.onCallMessageUpdated?.(d));
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [token]);
+
+  return socketRef;
+}
+```
+
+### 7.3 LiveKit hook
+
+Create `src/hooks/useLiveKitCall.ts`:
+
+```ts
+"use client";
+
+import { useRef, useState } from "react";
+import { Room, RoomEvent, Track } from "livekit-client";
+import { updateMyMediaState } from "@/lib/rtcApi";
+
+export function useLiveKitCall(token: string) {
+  const roomRef = useRef<Room | null>(null);
+  const [activeCall, setActiveCall] = useState<any>(null);
+  const [remoteTracks, setRemoteTracks] = useState<any[]>([]);
+
+  async function connect(callData: any, localVideoEl?: HTMLVideoElement | null) {
+    if (roomRef.current) {
+      roomRef.current.disconnect();
+    }
+
+    const room = new Room();
+    roomRef.current = room;
+
+    room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+      setRemoteTracks((prev) => [
+        ...prev,
+        { sid: track.sid, track, participantIdentity: participant.identity },
+      ]);
+    });
+
+    room.on(RoomEvent.TrackUnsubscribed, (track) => {
+      setRemoteTracks((prev) => prev.filter((item) => item.sid !== track.sid));
+    });
+
+    room.on(RoomEvent.Disconnected, () => {
+      setRemoteTracks([]);
+    });
+
+    await room.connect(callData.livekit.url, callData.livekit.token);
+    await room.localParticipant.setMicrophoneEnabled(true);
+
+    if (callData.kind === "VIDEO") {
+      await room.localParticipant.setCameraEnabled(true);
+      const videoPub = Array.from(room.localParticipant.videoTrackPublications.values())[0];
+      if (videoPub?.track && localVideoEl) {
+        videoPub.track.attach(localVideoEl);
+      }
+    }
+
+    setActiveCall(callData);
+  }
+
+  async function toggleMic() {
+    const room = roomRef.current;
+    if (!room || !activeCall) return;
+    const current = activeCall.self_participant?.microphone !== false;
+    const next = !current;
+    await room.localParticipant.setMicrophoneEnabled(next);
+    const res = await updateMyMediaState(activeCall.conversation_id, token, {
+      microphone: next,
+    });
+    setActiveCall((prev: any) => ({
+      ...prev,
+      self_participant: res.data.participant,
+    }));
+  }
+
+  async function toggleCamera(localVideoEl?: HTMLVideoElement | null) {
+    const room = roomRef.current;
+    if (!room || !activeCall) return;
+    const current = activeCall.self_participant?.camera !== false;
+    const next = !current;
+    await room.localParticipant.setCameraEnabled(next);
+    if (next && localVideoEl) {
+      const videoPub = Array.from(room.localParticipant.videoTrackPublications.values())[0];
+      if (videoPub?.track?.kind === Track.Kind.Video) {
+        videoPub.track.attach(localVideoEl);
+      }
+    }
+    const res = await updateMyMediaState(activeCall.conversation_id, token, {
+      camera: next,
+    });
+    setActiveCall((prev: any) => ({
+      ...prev,
+      self_participant: res.data.participant,
+    }));
+  }
+
+  async function disconnect() {
+    roomRef.current?.disconnect();
+    roomRef.current = null;
+    setRemoteTracks([]);
+    setActiveCall(null);
+  }
+
+  return {
+    roomRef,
+    activeCall,
+    setActiveCall,
+    remoteTracks,
+    connect,
+    toggleMic,
+    toggleCamera,
+    disconnect,
+  };
+}
+```
+
+### 7.4 Call UI component example
+
+```tsx
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import {
+  declineCall,
+  endCall,
+  getCallState,
+  joinCall,
+  leaveCall,
+  startCall,
+} from "@/lib/rtcApi";
+import { useChatSocket } from "@/hooks/useChatSocket";
+import { useLiveKitCall } from "@/hooks/useLiveKitCall";
+
+export function ChatCallController({
+  token,
+  currentUserId,
+  conversationId,
+}: {
+  token: string;
+  currentUserId: string;
+  conversationId: string;
+}) {
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [incoming, setIncoming] = useState<any>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const call = useLiveKitCall(token);
+
+  async function syncActiveCall(openAsIncoming = false) {
+    const res = await getCallState(conversationId, token);
+    const active = res.data;
+
+    if (!active) {
+      setIncoming(null);
+      call.setActiveCall(null);
+      return;
+    }
+
+    call.setActiveCall(active);
+
+    if (openAsIncoming && active.started_by !== currentUserId && !call.roomRef.current) {
+      setIncoming({
+        conversation_id: active.conversation_id,
+        call_session_id: active.id,
+        kind: active.kind,
+        started_by: active.started_by,
+        started_at: active.started_at,
+      });
+    }
+  }
+
+  useChatSocket(token, {
+    onConnected: () => {
+      syncActiveCall(true);
+    },
+    onIncomingCall: (data) => {
+      if (data.conversation_id === conversationId) setIncoming(data);
+    },
+    onCallEnded: (data) => {
+      if (data.conversation_id !== conversationId) return;
+      setIncoming(null);
+      call.disconnect();
+    },
+    onParticipantJoined: (data) => {
+      if (data.conversation_id === conversationId) syncActiveCall(false);
+    },
+    onParticipantLeft: (data) => {
+      if (data.conversation_id === conversationId) syncActiveCall(false);
+    },
+    onParticipantUpdated: (data) => {
+      if (data.conversation_id === conversationId) syncActiveCall(false);
+    },
+    onMessageNew: (message) => {
+      setMessages((prev) => [message, ...prev]);
+    },
+    onCallMessageUpdated: ({ message }) => {
+      setMessages((prev) => {
+        const index = prev.findIndex((m) => m.id === message.id);
+        if (index === -1) return [message, ...prev];
+        const next = [...prev];
+        next[index] = message;
+        return next;
+      });
+    },
+  });
+
+  useEffect(() => {
+    syncActiveCall(true);
+  }, [conversationId]);
+
+  async function handleStart(kind: "AUDIO" | "VIDEO") {
+    const res = await startCall(conversationId, token, kind);
+    await call.connect(res.data, localVideoRef.current);
+  }
+
+  async function handleAccept() {
+    if (!incoming) return;
+    setIncoming(null);
+    const res = await joinCall(incoming.conversation_id, token);
+    await call.connect(res.data, localVideoRef.current);
+  }
+
+  async function handleDecline() {
+    if (!incoming) return;
+    await declineCall(incoming.conversation_id, token);
+    setIncoming(null);
+  }
+
+  async function handleLeave() {
+    if (!call.activeCall) return;
+    await leaveCall(call.activeCall.conversation_id, token);
+    await call.disconnect();
+  }
+
+  async function handleEndForEveryone() {
+    if (!call.activeCall) return;
+    await endCall(call.activeCall.conversation_id, token);
+    await call.disconnect();
+  }
+
+  return (
+    <div>
+      <button onClick={() => handleStart("AUDIO")}>Audio Call</button>
+      <button onClick={() => handleStart("VIDEO")}>Video Call</button>
+
+      {incoming && (
+        <div>
+          <p>{incoming.kind} call incoming</p>
+          <button onClick={handleAccept}>Accept</button>
+          <button onClick={handleDecline}>Decline</button>
+        </div>
+      )}
+
+      {call.activeCall && (
+        <div>
+          <p>Active {call.activeCall.kind} call</p>
+          <video ref={localVideoRef} autoPlay playsInline muted />
+          <button onClick={() => call.toggleMic()}>Mic</button>
+          <button onClick={() => call.toggleCamera(localVideoRef.current)}>Camera</button>
+          <button onClick={handleLeave}>Leave</button>
+          <button onClick={handleEndForEveryone}>End</button>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### 7.5 Next.js step order
+
+1. Login করে JWT save করো।
+2. Chat layout mount হলে socket connect করো।
+3. `connection:ok` পেলে selected/open conversations-এর call state fetch করো।
+4. Conversation open করলে `GET /state` call করো।
+5. User call button press করলে `/start`, then LiveKit connect.
+6. `call:incoming` পেলে incoming UI show.
+7. Accept করলে `/join`, then LiveKit connect.
+8. Decline করলে `/decline`.
+9. Mic/camera toggle করলে first LiveKit local track update, then `PATCH /participants/me`.
+10. Leave করলে `/leave`, then `room.disconnect()`.
+11. `call:ended` পেলে always disconnect and clear UI.
+12. `message:new` and `call:message_updated` দিয়ে call message bubble update করো।
+
+## 8. Flutter Implementation
+
+### 8.1 RTC API service
+
+```dart
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+class RtcApi {
+  RtcApi(this.baseUrl, this.token);
+
+  final String baseUrl; // https://api.example.com/api
+  final String token;
+
+  Map<String, String> get headers => {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+
+  Future<Map<String, dynamic>> _request(
+    String path, {
+    String method = 'POST',
+    Map<String, dynamic>? body,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    late http.Response res;
+
+    if (method == 'GET') {
+      res = await http.get(uri, headers: headers);
+    } else if (method == 'PATCH') {
+      res = await http.patch(uri, headers: headers, body: jsonEncode(body ?? {}));
+    } else {
+      res = await http.post(uri, headers: headers, body: body == null ? null : jsonEncode(body));
+    }
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception(res.body);
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getState(String conversationId) {
+    return _request('/rtc/conversations/$conversationId/state', method: 'GET');
+  }
+
+  Future<Map<String, dynamic>> start(String conversationId, String kind) {
+    return _request('/rtc/conversations/$conversationId/start', body: {'kind': kind});
+  }
+
+  Future<Map<String, dynamic>> join(String conversationId) {
+    return _request('/rtc/conversations/$conversationId/join');
+  }
+
+  Future<Map<String, dynamic>> decline(String conversationId) {
+    return _request('/rtc/conversations/$conversationId/decline');
+  }
+
+  Future<Map<String, dynamic>> leave(String conversationId) {
+    return _request('/rtc/conversations/$conversationId/leave');
+  }
+
+  Future<Map<String, dynamic>> end(String conversationId) {
+    return _request('/rtc/conversations/$conversationId/end');
+  }
+
+  Future<Map<String, dynamic>> updateMedia(
+    String conversationId, {
+    bool? camera,
+    bool? microphone,
+    bool? isScreenSharing,
+  }) {
+    return _request(
+      '/rtc/conversations/$conversationId/participants/me',
+      method: 'PATCH',
+      body: {
+        if (camera != null) 'camera': camera,
+        if (microphone != null) 'microphone': microphone,
+        if (isScreenSharing != null) 'is_screen_sharing': isScreenSharing,
+      },
+    );
+  }
+}
+```
+
+### 8.2 Socket service
+
+```dart
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+
+class ChatSocket {
+  ChatSocket(this.socketUrl, this.token);
+
+  final String socketUrl; // https://api.example.com
+  final String token;
+  IO.Socket? socket;
+
+  void connect({
+    void Function()? onConnected,
+    void Function(dynamic data)? onIncomingCall,
+    void Function(dynamic data)? onCallEnded,
+    void Function(dynamic data)? onParticipantJoined,
+    void Function(dynamic data)? onParticipantLeft,
+    void Function(dynamic data)? onParticipantUpdated,
+    void Function(dynamic data)? onCallDeclined,
+    void Function(dynamic message)? onMessageNew,
+    void Function(dynamic data)? onCallMessageUpdated,
+  }) {
+    socket = IO.io(
+      '$socketUrl/ws',
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .disableAutoConnect()
+          .setAuth({'token': token})
+          .build(),
+    );
+
+    socket!.on('connection:ok', (_) => onConnected?.call());
+    socket!.on('call:incoming', (data) => onIncomingCall?.call(data));
+    socket!.on('call:ended', (data) => onCallEnded?.call(data));
+    socket!.on('call:participant_joined', (data) => onParticipantJoined?.call(data));
+    socket!.on('call:participant_left', (data) => onParticipantLeft?.call(data));
+    socket!.on('call:participant_updated', (data) => onParticipantUpdated?.call(data));
+    socket!.on('call:declined', (data) => onCallDeclined?.call(data));
+    socket!.on('message:new', (data) => onMessageNew?.call(data));
+    socket!.on('call:message_updated', (data) => onCallMessageUpdated?.call(data));
+
+    socket!.connect();
+  }
+
+  void dispose() {
+    socket?.disconnect();
+    socket?.dispose();
+  }
+}
+```
+
+### 8.3 LiveKit call manager
+
+```dart
+import 'package:livekit_client/livekit_client.dart';
+
+class CallManager {
+  Room? room;
+  Map<String, dynamic>? activeCall;
+
+  Future<void> connect(Map<String, dynamic> callData) async {
+    await disconnect();
+
+    activeCall = callData;
+    final livekit = callData['livekit'] as Map<String, dynamic>;
+
+    room = Room();
+    await room!.connect(
+      livekit['url'] as String,
+      livekit['token'] as String,
+    );
+
+    await room!.localParticipant?.setMicrophoneEnabled(true);
+
+    if (callData['kind'] == 'VIDEO') {
+      await room!.localParticipant?.setCameraEnabled(true);
+    }
+  }
+
+  Future<void> toggleMic(RtcApi api) async {
+    if (room == null || activeCall == null) return;
+    final current = activeCall?['self_participant']?['microphone'] != false;
+    final next = !current;
+
+    await room!.localParticipant?.setMicrophoneEnabled(next);
+    final res = await api.updateMedia(
+      activeCall!['conversation_id'] as String,
+      microphone: next,
+    );
+    activeCall!['self_participant'] = res['data']['participant'];
+  }
+
+  Future<void> toggleCamera(RtcApi api) async {
+    if (room == null || activeCall == null) return;
+    final current = activeCall?['self_participant']?['camera'] != false;
+    final next = !current;
+
+    await room!.localParticipant?.setCameraEnabled(next);
+    final res = await api.updateMedia(
+      activeCall!['conversation_id'] as String,
+      camera: next,
+    );
+    activeCall!['self_participant'] = res['data']['participant'];
+  }
+
+  Future<void> disconnect() async {
+    await room?.disconnect();
+    room?.dispose();
+    room = null;
+    activeCall = null;
+  }
+}
+```
+
+### 8.4 Flutter screen flow
+
+```dart
+class ChatCallController {
+  ChatCallController({
+    required this.currentUserId,
+    required this.conversationId,
+    required this.api,
+    required this.callManager,
+  });
+
+  final String currentUserId;
+  final String conversationId;
+  final RtcApi api;
+  final CallManager callManager;
+
+  Map<String, dynamic>? incomingCall;
+
+  Future<void> syncActiveCall({bool showIncomingIfNeeded = false}) async {
+    final res = await api.getState(conversationId);
+    final active = res['data'];
+
+    if (active == null) {
+      incomingCall = null;
+      return;
+    }
+
+    callManager.activeCall = Map<String, dynamic>.from(active);
+
+    if (showIncomingIfNeeded &&
+        active['started_by'] != currentUserId &&
+        callManager.room == null) {
+      incomingCall = Map<String, dynamic>.from(active);
+    }
+  }
+
+  Future<void> startVideoCall() async {
+    final res = await api.start(conversationId, 'VIDEO');
+    await callManager.connect(Map<String, dynamic>.from(res['data']));
+  }
+
+  Future<void> startAudioCall() async {
+    final res = await api.start(conversationId, 'AUDIO');
+    await callManager.connect(Map<String, dynamic>.from(res['data']));
+  }
+
+  Future<void> acceptIncoming() async {
+    if (incomingCall == null) return;
+    final convId = incomingCall!['conversation_id'] as String;
+    incomingCall = null;
+    final res = await api.join(convId);
+    await callManager.connect(Map<String, dynamic>.from(res['data']));
+  }
+
+  Future<void> declineIncoming() async {
+    if (incomingCall == null) return;
+    final convId = incomingCall!['conversation_id'] as String;
+    incomingCall = null;
+    await api.decline(convId);
+  }
+
+  Future<void> leave() async {
+    final convId = callManager.activeCall?['conversation_id'];
+    if (convId == null) return;
+    await api.leave(convId as String);
+    await callManager.disconnect();
+  }
+
+  Future<void> endForEveryone() async {
+    final convId = callManager.activeCall?['conversation_id'];
+    if (convId == null) return;
+    await api.end(convId as String);
+    await callManager.disconnect();
+  }
+}
+```
+
+Flutter step order:
+
+1. App start/login এর পর socket connect.
+2. `connection:ok` পেলে open conversations বা current conversation-এর `/state` call.
+3. `call:incoming` পেলে incoming dialog show.
+4. Accept করলে `/join`, then LiveKit connect.
+5. Decline করলে `/decline`.
+6. Call screen open হলে local/remote `VideoTrack` widgets render.
+7. Mic/camera toggle করলে LiveKit local participant update, then `PATCH /participants/me`.
+8. `call:ended` পেলে `room.disconnect()`, dialog/overlay close.
+9. App resume হলে আবার `/state` call করে active call recover.
+
+## 9. Call Message UI
+
+Message renderer-এ `kind === "CALL"` আলাদা handle করো।
+
+```ts
+function getCallMessageLabel(message: any) {
+  const content = message.content || {};
+  const type = content.call_kind === "AUDIO" ? "Audio" : "Video";
+
+  if (content.status === "ONGOING") {
+    return `${type} call cholche`;
+  }
+
+  if (content.status === "MISSED") {
+    return `Missed ${type.toLowerCase()} call`;
+  }
+
+  const total = content.duration_seconds || 0;
+  const min = Math.floor(total / 60);
+  const sec = total % 60;
+  const duration = min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+  return `${type} call ended, ${duration}`;
+}
+```
+
+Socket update:
+
+```ts
+socket.on("message:new", (message) => {
+  upsertMessage(message);
+});
+
+socket.on("call:message_updated", ({ message }) => {
+  upsertMessage(message);
 });
 ```
 
----
+Important:
+- `message:new` creates the call card.
+- `call:message_updated` updates same card.
+- Upsert must be by `message.id`.
 
-## ১১. Edge Cases ও গুরুত্বপূর্ণ নিয়ম
+## 10. Edge Cases
 
-| পরিস্থিতি | কী হবে |
-|----------|--------|
-| Caller call শুরু করে, কেউ join করেনি, caller চলে গেল | `remaining = 0` → session শেষ, কোনো event নেই (recipient নেই) |
-| DM call decline হলে | Session → `ENDED`, caller পাবে `call:ended` (reason: `"declined"`) |
-| Group call decline হলে | Session চলতে থাকে, সবাই পাবে `call:declined` |
-| Group-এর শেষ member চলে গেলে | Session → `ENDED`, `call:ended` (reason: `"empty_room"`) |
-| `/start` করলে আগে থেকে কল চলছে | আগের session ফেরত, নতুন token, `already_active: true` |
-| `/join` দুবার করলে | দ্বিতীয়বার `already_joined: true`, `call:participant_joined` আসবে না |
-| `/token` দিয়ে reconnect (আগে ছিল) | `already_joined: true`, event নেই |
-| `/token` দিয়ে reconnect (app kill হয়েছিল) | নতুন participant record, `call:participant_joined` আসবে |
-| Group rename হলো call চলাকালে | `room_name` DB-তে persisted — সবাই একই LiveKit room-এ থাকবে |
-| Admin group call force-end করল | সবাই পাবে `call:ended` (reason: `"ended"`) |
-| Blocked user call করার চেষ্টা করল | `403 Forbidden` error |
-| Member না হয়ে join করার চেষ্টা | `403 Forbidden` error |
+| Case | Expected frontend behavior |
+| --- | --- |
+| Receiver browser/app closed during incoming call | Later open করলে `/state` call করে active call show/ring |
+| `call:incoming` missed | `/state` is source of truth |
+| User clicks call while another call active in same conversation | `/start` returns `already_active: true`; join/connect same call |
+| `/join` returns `No active call found` | Incoming UI close; call already ended |
+| DM receiver declines | Caller gets `call:ended`, message becomes `MISSED` |
+| Caller starts and nobody joins, caller leaves | Message becomes `MISSED` because only caller participated |
+| Participants talked then call ends | Message becomes `ENDED` with `duration_seconds` |
+| LiveKit disconnected but backend call still active | Use `/token` or `/join` to reconnect |
+| Socket reconnect | Run `/state` again |
+| Mic/camera icon wrong | Always sync with `PATCH /participants/me` after LiveKit local toggle |
 
----
+## 11. Developer Checklist
 
-## ১১. সাধারণ সমস্যা ও সমাধান
+Next.js:
 
-### সমস্যা: "No active call found" error আসছে join করতে গেলে
-**কারণ:** Call decline বা end হয়ে গেছে join করার আগেই।  
-**সমাধান:** `call:ended` event listen করুন এবং incoming call UI বন্ধ করুন।
+- `NEXT_PUBLIC_API_URL` includes `/api`.
+- `NEXT_PUBLIC_SOCKET_URL` does not include `/api`.
+- Socket listens to all call events.
+- Conversation open/reconnect calls `/state`.
+- Start uses `/start` then LiveKit connect.
+- Accept uses `/join` then LiveKit connect.
+- Decline uses `/decline`.
+- Leave uses `/leave`; force end uses `/end`.
+- `call:ended` always disconnects LiveKit.
+- `message:new` and `call:message_updated` update call card.
 
----
+Flutter:
 
-### সমস্যা: দুজন participant আলাদা LiveKit room-এ চলে গেছে
-**কারণ:** এটা একটি পুরনো bug ছিল — room name conversation title থেকে তৈরি হতো।  
-**স্ট্যাটাস:** ✅ **Fix করা হয়েছে।** এখন `room_name` session তৈরির সময় DB-তে save হয় এবং আর বদলায় না।
+- Android/iOS permissions added.
+- Socket connects to `$socketUrl/ws`.
+- App resume triggers `/state`.
+- Incoming dialog uses `/join` or `/decline`.
+- LiveKit room disconnects on `call:ended`.
+- Mic/camera state synced to backend.
 
----
+## 12. Common Mistakes
 
-### সমস্যা: ১০ মিনিট পরে LiveKit disconnect হয়ে যাচ্ছে
-**কারণ:** LiveKit token TTL = ১০ মিনিট।  
-**সমাধান:** ৮-৯ মিনিট পরে `POST /token` করে নতুন token নিয়ে reconnect করুন। Token Refresh section দেখুন।
+1. Socket URL-এ `/api/ws` ব্যবহার করা যাবে না। Correct: `https://api.example.com/ws`.
+2. `/start` এর পর আবার `/token` call করা যাবে না।
+3. `call:incoming` না পেলে call নেই ধরে নেওয়া যাবে না; `/state` check করতে হবে।
+4. Socket দিয়ে call start/join/end emit করা যাবে না; এগুলো REST API.
+5. `call:message_updated` পেলে নতুন message append না করে same `message.id` replace করতে হবে।
+6. LiveKit disconnect করলেই backend session end হয় না; `/leave` বা `/end` call করতে হবে।
+7. `/leave` বা `/end` call করলেই local LiveKit auto disconnect হয় না; frontend-কে `room.disconnect()` করতে হবে।
 
----
+## 13. Minimal Production Flow
 
-### সমস্যা: Reconnect করলে `call:participant_joined` পাচ্ছি না
-**কারণ:** আগে থেকে active participant হলে (`already_joined: true`) event আসে না — এটা intentional।  
-**যদি absent ছিলেন:** `/token` call করলে নতুন participant record হয় এবং event আসে।
+```txt
+App mount
+  -> socket connect
+  -> connection:ok
+  -> current conversation /state
 
----
+Start call
+  -> POST /start
+  -> connect LiveKit with response.data.livekit
+  -> show call overlay
 
-### সমস্যা: DM call-এ একজন hang up করলে অন্যজনেরও call শেষ হয়ে যাচ্ছিল
-**স্ট্যাটাস:** ✅ **Fix করা হয়েছে।** DM এবং Group উভয়ের জন্য এখন একই নিয়ম — শেষ participant চলে গেলে call শেষ।
+Receive call
+  -> socket call:incoming
+  -> show incoming UI
+  -> Accept: POST /join -> connect LiveKit
+  -> Decline: POST /decline
 
----
+Reconnect/open app
+  -> socket connect
+  -> GET /state
+  -> if ONGOING and not in room, show active call/incoming UI
 
-### সমস্যা: Flutter-এ camera permission error
-**সমাধান:** `AndroidManifest.xml` এবং `Info.plist`-এ permission যোগ করুন:
+Leave/end
+  -> POST /leave or /end
+  -> room.disconnect()
+  -> clear UI
 
-```xml
-<!-- Android: AndroidManifest.xml -->
-<uses-permission android:name="android.permission.CAMERA" />
-<uses-permission android:name="android.permission.RECORD_AUDIO" />
-<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+Call message
+  -> message:new renders ONGOING call card
+  -> call:message_updated replaces same card with MISSED/ENDED
 ```
-
-```xml
-<!-- iOS: Info.plist -->
-<key>NSCameraUsageDescription</key>
-<string>Video call-এর জন্য ক্যামেরা প্রয়োজন</string>
-<key>NSMicrophoneUsageDescription</key>
-<string>Call-এর জন্য মাইক্রোফোন প্রয়োজন</string>
-```
-
----
-
-### সমস্যা: `LIVEKIT env vars missing` error
-**সমাধান:** `.env` ফাইলে এগুলো আছে কিনা চেক করুন:
-```env
-LIVEKIT_API_KEY=your_api_key
-LIVEKIT_API_SECRET=your_api_secret
-LIVEKIT_URL=wss://your-server.com
-LIVEKIT_PUBLIC_URL=wss://your-server.com
-```
-`GET /api/rtc/health` দিয়ে verify করুন।
-
----
-
-> **সাথে পড়ুন:** Socket connection setup এর জন্য [`socket_implementation_guide.md`](./socket_implementation_guide.md) দেখুন।

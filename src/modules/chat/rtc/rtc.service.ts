@@ -12,6 +12,7 @@ import {
   ConversationType,
   MemberRole,
   MessageKind,
+  ReceiptStatus,
 } from '@prisma/client';
 import { AccessToken } from 'livekit-server-sdk';
 import Redis from 'ioredis';
@@ -182,14 +183,21 @@ export class RtcService implements OnModuleDestroy {
       user_id,
     );
 
+    let callMessage: ReturnType<typeof this.formatCallMessage> | null = null;
+
     if (!alreadyActive) {
       const recipient_ids = conversation.memberships
         .map((m) => m.user_id)
         .filter((id) => id !== user_id);
 
+      // Create a CALL-kind message before notifying recipients so their
+      // timeline can show the ongoing call immediately.
+      callMessage = await this.createCallMessage(session, conversation, user_id);
+
       this.realtimeGateway.emitCallIncoming(recipient_ids, {
         conversation_id,
         call_session_id: session.id,
+        message: callMessage,
         room_name: tokenData.room_name,
         kind: session.kind,
         started_by: user_id,
@@ -203,8 +211,6 @@ export class RtcService implements OnModuleDestroy {
         ),
       });
 
-      // Create a CALL-kind message so the conversation timeline shows the call.
-      await this.createCallMessage(session, conversation, user_id);
     }
 
     return {
@@ -216,6 +222,7 @@ export class RtcService implements OnModuleDestroy {
         ...this.serializeCallSession(session, conversation, user_id),
         livekit: tokenData,
         already_active: alreadyActive,
+        call_message: callMessage,
       },
     };
   }
@@ -543,6 +550,15 @@ export class RtcService implements OnModuleDestroy {
     conversation: ConversationContext,
     sender_id: string,
   ) {
+    const existing = await this.prisma.message.findFirst({
+      where: { call_session_id: session.id, kind: MessageKind.CALL },
+      select: this.callMessageSelect(),
+    });
+
+    if (existing) {
+      return this.formatCallMessage(existing);
+    }
+
     const content: CallMessageContent = {
       call_kind: session.kind === CallKind.VIDEO ? 'VIDEO' : 'AUDIO',
       status: 'ONGOING',
@@ -551,31 +567,51 @@ export class RtcService implements OnModuleDestroy {
     };
 
     const member_ids = this.getActiveConversationUserIds(conversation);
+    const receiptMemberIds = member_ids.filter((id) => id !== sender_id);
+    let sentMembers: Array<{ user_id: string }> = [];
 
-    const message = await this.prisma.message.create({
-      data: {
-        conversation_id: session.conversation_id,
-        sender_id,
-        kind: MessageKind.CALL,
-        content,
-        call_session_id: session.id,
-      },
-      select: {
-        id: true,
-        conversation_id: true,
-        kind: true,
-        content: true,
-        created_at: true,
-        deleted_at: true,
-        call_session_id: true,
-        sender: { select: { id: true, name: true, avatar: true } },
-      },
+    const message = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.message.create({
+        data: {
+          conversation_id: session.conversation_id,
+          sender_id,
+          kind: MessageKind.CALL,
+          content,
+          call_session_id: session.id,
+        },
+        select: this.callMessageSelect(),
+      });
+
+      if (receiptMemberIds.length > 0) {
+        sentMembers = receiptMemberIds.map((user_id) => ({ user_id }));
+
+        await tx.receipt.createMany({
+          data: receiptMemberIds.map((user_id) => ({
+            message_id: created.id,
+            user_id,
+            status: ChatRepository.onlineUsers.has(user_id)
+              ? ReceiptStatus.DELIVERED
+              : ReceiptStatus.SENT,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return created;
     });
 
-    const formatted = this.formatCallMessage(message);
+    const formatted = this.formatCallMessage({
+      ...message,
+      receipts: sentMembers.map((m) => ({
+        status: ChatRepository.onlineUsers.has(m.user_id)
+          ? ReceiptStatus.DELIVERED
+          : ReceiptStatus.SENT,
+        user_id: m.user_id,
+      })),
+    });
 
     // Publish via Redis so the existing RealtimeGateway picks it up as `message:new`.
-    this.redisPublisher
+    await this.redisPublisher
       .publish(
         'chat:messages',
         JSON.stringify({
@@ -587,6 +623,8 @@ export class RtcService implements OnModuleDestroy {
       .catch((err) =>
         console.error('[RtcService] Redis call message publish failed:', err),
       );
+
+    return formatted;
   }
 
   /**
@@ -622,13 +660,7 @@ export class RtcService implements OnModuleDestroy {
     const existing = await this.prisma.message.findFirst({
       where: { call_session_id, kind: MessageKind.CALL },
       select: {
-        id: true,
-        conversation_id: true,
-        kind: true,
-        content: true,
-        created_at: true,
-        deleted_at: true,
-        call_session_id: true,
+        ...this.callMessageSelect(),
         sender: { select: { id: true, name: true, avatar: true } },
       },
     });
@@ -667,8 +699,20 @@ export class RtcService implements OnModuleDestroy {
     created_at: Date;
     deleted_at?: Date | null;
     call_session_id?: string | null;
+    receipts?: Array<{ status: string; user_id?: string | null }>;
     sender: { id: string; name: string | null; avatar: string | null };
   }) {
+    let status: 'SENT' | 'DELIVERED' | 'READ' = 'SENT';
+
+    if (message.receipts && message.receipts.length > 0) {
+      const statuses = message.receipts.map((r) => r.status);
+      if (statuses.includes(ReceiptStatus.READ)) {
+        status = 'READ';
+      } else if (statuses.includes(ReceiptStatus.DELIVERED)) {
+        status = 'DELIVERED';
+      }
+    }
+
     return {
       id: message.id,
       conversation_id: message.conversation_id,
@@ -677,7 +721,7 @@ export class RtcService implements OnModuleDestroy {
       call_session_id: message.call_session_id ?? null,
       created_at: message.created_at,
       deleted_at: message.deleted_at ?? null,
-      status: 'SENT',
+      status,
       attachments: [],
       reply_to: null,
       sender: {
@@ -688,6 +732,25 @@ export class RtcService implements OnModuleDestroy {
           : null,
       },
     };
+  }
+
+  private callMessageSelect() {
+    return {
+      id: true,
+      conversation_id: true,
+      kind: true,
+      content: true,
+      created_at: true,
+      deleted_at: true,
+      call_session_id: true,
+      receipts: {
+        select: {
+          status: true,
+          user_id: true,
+        },
+      },
+      sender: { select: { id: true, name: true, avatar: true } },
+    } as const;
   }
 
   // -------------------------------------------------------------------------
