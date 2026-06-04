@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Patch,
+  Put,
   Param,
   Delete,
   UseGuards,
@@ -50,6 +51,12 @@ import {
 @Controller('admin/courses')
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
+
+  // new
+  @Put('enrolment')
+  updateOrMakeEnrolment() {
+    // TODO
+  }
 
   // updated
   @Roles(Role.ADMIN, Role.TEACHER)
