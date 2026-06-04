@@ -269,6 +269,8 @@ model Course {
   modules     CourseModule[]
   enrollments Enrollment[]
   orders      Order[]
+
+  @@map("courses")
 }
 
 // updated
@@ -631,6 +633,7 @@ model CommunityPost {
   shares       CommunityShare[]
 
   @@index([author_id], map: "community_posts_author_idx")
+  @@map("community_posts")
 }
 
 // updated
@@ -647,6 +650,7 @@ model CommunityLike {
   comment CommunityComment? @relation(fields: [comment_id], references: [id], onDelete: Cascade)
 
   @@index([user_id, post_id], map: "community_likes_user_post_idx")
+  @@map("community_likes")
 }
 
 // updated
@@ -670,6 +674,7 @@ model CommunityComment {
   parent  CommunityComment?  @relation("CommentReplies", fields: [parent_id], references: [id], onDelete: Restrict)
 
   @@index([user_id, post_id, deleted_at], map: "community_comments_user_post_deleted_idx")
+  @@map("community_comments")
 }
 
 // updated
@@ -898,6 +903,7 @@ model Report {
   reporter    User         @relation(fields: [reporter_id], references: [id], onDelete: Cascade)
 
   @@index([message_id])
+  @@map("reports")
 }
 
 enum CallKind {
