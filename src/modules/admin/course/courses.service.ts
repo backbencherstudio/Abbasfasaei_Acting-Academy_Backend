@@ -367,17 +367,25 @@ export class CoursesService {
       throw new NotFoundException('Student not found');
     }
 
-    const attendance = await this.prisma.attendance.upsert({
-      where: { id: student_id },
+    await this.prisma.attendance.upsert({
+      where: {
+        class_id_student_id: {
+          class_id,
+          student_id,
+        },
+      },
       update: {
         status,
         attended_at: status === AttendanceStatus.PRESENT ? attended_at : null,
+        attendance_by: user_id,
+        updated_at: new Date(),
       },
       create: {
         class_id,
         student_id,
         status,
         attended_at: status === AttendanceStatus.PRESENT ? attended_at : null,
+        attendance_by: user_id,
       },
     });
 
