@@ -377,7 +377,7 @@ export class CoursesService {
       update: {
         status,
         attended_at: status === AttendanceStatus.PRESENT ? attended_at : null,
-        attendance_by: user_id,
+        attendance_by: 'MANUAL',
         updated_at: new Date(),
       },
       create: {
@@ -385,7 +385,7 @@ export class CoursesService {
         student_id,
         status,
         attended_at: status === AttendanceStatus.PRESENT ? attended_at : null,
-        attendance_by: user_id,
+        attendance_by: 'MANUAL',
       },
     });
 
