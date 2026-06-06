@@ -96,6 +96,7 @@ export default () => ({
     assignment: 'course/class/assignment',
     class_assets: 'course/class/assets',
     classAttendance: 'course/class/attendance',
+    enrollment: 'course/enrollment',
     community: '/community',
     media: '/media',
     conversation_avatar: '/conversation/avatar',

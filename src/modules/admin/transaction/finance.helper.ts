@@ -13,9 +13,16 @@ import { UpdateFinanceDto } from './dto/update-transaction.dto';
 import { PaymentType, TransactionsQueryDto } from './dto/query-transaction.dto';
 import {
   ItemType,
+  EnrollmentStatus,
+  EnrollmentStep,
+  InstallmentInterval,
+  InstallmentPlanStatus,
+  InstallmentStatus,
+  OrderItemType,
   OrderStatus,
   PaymentGateway,
-  TransactionStatus,
+  PaymentMode,
+  PaymentTransactionStatus,
 } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
@@ -617,13 +624,17 @@ export class FinanceService {
     const paymentType = body.paymentType || 'ONE_TIME';
     const paymentStatus = body.paymentStatus || OrderStatus.PAID;
     const transactionStatus =
-      body.transactionStatus || TransactionStatus.SUCCESS;
+      body.transactionStatus || PaymentTransactionStatus.SUCCESS;
     const currency = (body.currency || 'USD').toUpperCase();
-    const paymentMethod = body.paymentMethod || 'stripe';
+    const paymentMethod = body.paymentMethod || 'manual';
 
-    if (itemType === ItemType.COURSE_ENROLLMENT && !body.courseId) {
+    if (
+      itemType === ItemType.COURSE_ENROLLMENT &&
+      !body.courseId &&
+      !body.enrollmentId
+    ) {
       throw new BadRequestException(
-        'Course ID is required for course payments',
+        'Course ID or enrollment ID is required for course payments',
       );
     }
 
@@ -640,11 +651,36 @@ export class FinanceService {
       throw new NotFoundException('Student not found');
     }
 
-    const course =
-      itemType === ItemType.COURSE_ENROLLMENT && body.courseId
+    const enrollment =
+      itemType === ItemType.COURSE_ENROLLMENT
+        ? await this.prisma.enrollment.findFirst({
+            where: {
+              user_id: student.id,
+              ...(body.enrollmentId
+                ? { id: body.enrollmentId }
+                : { course_id: body.courseId }),
+            },
+            include: {
+              course: { select: { id: true, title: true, fee_pence: true } },
+              order: {
+                include: {
+                  installment_plan: { include: { installments: true } },
+                },
+              },
+            },
+          })
+        : null;
+
+    if (itemType === ItemType.COURSE_ENROLLMENT && !enrollment) {
+      throw new NotFoundException('Enrollment not found');
+    }
+
+    const course = enrollment?.course
+      ? enrollment.course
+      : itemType === ItemType.COURSE_ENROLLMENT && body.courseId
         ? await this.prisma.course.findUnique({
             where: { id: body.courseId },
-            select: { id: true, title: true },
+            select: { id: true, title: true, fee_pence: true },
           })
         : null;
 
@@ -677,33 +713,84 @@ export class FinanceService {
     }
 
     const amount = Number(body.amount);
-    const orderNumber = `PAY-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const transactionRef =
       body.transactionRef ||
       `MANUAL-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.create({
-        data: {
-          order_number: orderNumber,
-          user_id: student.id,
-          total_amount: amount,
-          paid_amount: paymentStatus === OrderStatus.PAID ? amount : 0,
-          due_amount: paymentStatus === OrderStatus.PAID ? 0 : amount,
+      let order: any = enrollment?.order;
+
+      if (!order) {
+        const totalAmount =
+          itemType === ItemType.COURSE_ENROLLMENT
+            ? Number(course?.fee_pence ?? amount)
+            : amount;
+
+        order = await tx.order.create({
+          data: {
+            order_number: `PAY-${Date.now()}-${Math.floor(
+              Math.random() * 1000,
+            )}`,
+            user_id: student.id,
+            total_amount: totalAmount,
+            paid_amount: 0,
+            due_amount: totalAmount,
+            currency,
+            status: OrderStatus.PENDING,
+            item_type:
+              itemType === ItemType.COURSE_ENROLLMENT
+                ? OrderItemType.COURSE_ENROLLMENT
+                : OrderItemType.EVENT_TICKET,
+            payment_mode:
+              paymentType === 'MONTHLY'
+                ? PaymentMode.INSTALLMENT
+                : PaymentMode.FULL,
+            notes:
+              body.notes ||
+              (itemType === ItemType.COURSE_ENROLLMENT
+                ? `Manual course payment${course ? ` for ${course.title}` : ''}`
+                : `Manual event payment${event ? ` for ${event.name}` : ''}`),
+            course_id: course?.id,
+            event_id: event?.id,
+            subtotal_amount: totalAmount,
+          },
+        });
+
+        if (enrollment) {
+          await tx.enrollment.update({
+            where: { id: enrollment.id },
+            data: { order_id: order.id },
+          });
+        }
+      }
+
+      if (
+        itemType === ItemType.COURSE_ENROLLMENT &&
+        paymentType === 'MONTHLY'
+      ) {
+        return this.addManualInstallmentPayment(tx, {
+          body,
+          enrollmentId: enrollment!.id,
+          order,
+          amount,
           currency,
-          status: paymentStatus === OrderStatus.PAID ? 'PAID' : 'PENDING',
-          item_type: itemType,
-          payment_mode: paymentType === 'MONTHLY' ? 'INSTALLMENT' : 'FULL',
-          notes:
-            body.notes ||
-            (itemType === ItemType.COURSE_ENROLLMENT
-              ? `Manual course payment${course ? ` for ${course.title}` : ''}`
-              : `Manual event payment${event ? ` for ${event.name}` : ''}`),
-          course_id: course?.id,
-          event_id: event?.id,
-          subtotal_amount: amount,
-        },
-      });
+          paymentMethod,
+          transactionRef,
+          transactionStatus: transactionStatus as PaymentTransactionStatus,
+          courseTitle: course?.title,
+        });
+      }
+
+      const orderDueAmount = Number(order.due_amount);
+      if (
+        itemType === ItemType.COURSE_ENROLLMENT &&
+        paymentType !== 'MONTHLY' &&
+        amount + 0.001 < orderDueAmount
+      ) {
+        throw new BadRequestException(
+          'Full payment amount must cover the order due amount',
+        );
+      }
 
       const transaction = await tx.paymentTransaction.create({
         data: {
@@ -712,7 +799,7 @@ export class FinanceService {
           user_id: student.id,
           amount,
           currency,
-          status: transactionStatus,
+          status: transactionStatus as PaymentTransactionStatus,
           gateway: PaymentGateway.MANUAL,
           payment_method: paymentMethod,
           paid_at: body.paymentDate ? new Date(body.paymentDate) : new Date(),
@@ -730,7 +817,39 @@ export class FinanceService {
         },
       });
 
-      return { order, transaction };
+      const orderTotalAmount = Number(order.total_amount);
+      const nextPaidAmount = Math.min(
+        Number(order.paid_amount) + amount,
+        orderTotalAmount,
+      );
+      const nextDueAmount = Math.max(orderTotalAmount - nextPaidAmount, 0);
+      const nextStatus =
+        nextDueAmount === 0 ? OrderStatus.PAID : OrderStatus.PARTIALLY_PAID;
+
+      const updatedOrder = await tx.order.update({
+        where: { id: order.id },
+        data: {
+          paid_amount: nextPaidAmount,
+          due_amount: nextDueAmount,
+          status: nextStatus,
+          payment_mode:
+            itemType === ItemType.COURSE_ENROLLMENT
+              ? PaymentMode.FULL
+              : order.payment_mode,
+        },
+      });
+
+      if (enrollment && nextStatus === OrderStatus.PAID) {
+        await tx.enrollment.update({
+          where: { id: enrollment.id },
+          data: {
+            status: EnrollmentStatus.ACTIVE,
+            step: EnrollmentStep.COMPLETED,
+          },
+        });
+      }
+
+      return { order: updatedOrder, transaction };
     });
 
     return {
@@ -738,6 +857,310 @@ export class FinanceService {
       message: 'Manual payment added successfully',
       data: result,
     };
+  }
+
+  private async addManualInstallmentPayment(
+    tx: any,
+    params: {
+      body: CreateManualPaymentDto;
+      enrollmentId: string;
+      order: any;
+      amount: number;
+      currency: string;
+      paymentMethod: string;
+      transactionRef: string;
+      transactionStatus: PaymentTransactionStatus;
+      courseTitle?: string;
+    },
+  ) {
+    const {
+      body,
+      enrollmentId,
+      order,
+      amount,
+      currency,
+      paymentMethod,
+      transactionRef,
+      transactionStatus,
+      courseTitle,
+    } = params;
+    let plan = order.installment_plan;
+
+    if (!plan) {
+      const installmentCount =
+        body.installmentCount || body.installmentDueDates?.length;
+
+      if (!installmentCount) {
+        throw new BadRequestException(
+          'Installment count or installment due dates are required to create a plan',
+        );
+      }
+
+      const totalAmount = Number(order.total_amount);
+      const installmentAmount = Number(
+        (totalAmount / installmentCount).toFixed(2),
+      );
+      const dueDates = this.buildInstallmentDueDates(
+        installmentCount,
+        body.installmentDueDates,
+        body.paymentDate,
+      );
+
+      plan = await tx.installmentPlan.create({
+        data: {
+          order_id: order.id,
+          total_amount: totalAmount,
+          paid_amount: 0,
+          due_amount: totalAmount,
+          installment_count: installmentCount,
+          interval: InstallmentInterval.MONTHLY,
+          start_date: dueDates[0],
+          next_due_date: dueDates[0],
+          status: InstallmentPlanStatus.ACTIVE,
+          installments: {
+            create: dueDates.map((dueDate, index) => ({
+              installment_no: index + 1,
+              amount:
+                index === dueDates.length - 1
+                  ? Number(
+                      (
+                        totalAmount -
+                        installmentAmount * (installmentCount - 1)
+                      ).toFixed(2),
+                    )
+                  : installmentAmount,
+              due_date: dueDate,
+            })),
+          },
+        },
+        include: { installments: true },
+      });
+    }
+
+    const pendingInstallments = [...plan.installments]
+      .filter((installment) => installment.status !== InstallmentStatus.PAID)
+      .sort((a, b) => a.installment_no - b.installment_no);
+    const installmentsToPay = body.installmentNumbers?.length
+      ? pendingInstallments.filter((installment) =>
+          body.installmentNumbers!.includes(installment.installment_no),
+        )
+      : this.pickInstallmentsByAmount(pendingInstallments, amount);
+
+    if (!installmentsToPay.length) {
+      throw new BadRequestException('No payable installments found');
+    }
+
+    const selectedAmount = installmentsToPay.reduce(
+      (sum, installment) => sum + Number(installment.amount),
+      0,
+    );
+
+    if (Number(selectedAmount.toFixed(2)) > Number(amount.toFixed(2))) {
+      throw new BadRequestException(
+        'Amount is less than selected installment total',
+      );
+    }
+
+    if (
+      Math.abs(Number(selectedAmount.toFixed(2)) - Number(amount.toFixed(2))) >
+      0.001
+    ) {
+      throw new BadRequestException(
+        'Amount must match selected installment total',
+      );
+    }
+
+    const transactions = [];
+    for (let index = 0; index < installmentsToPay.length; index += 1) {
+      const installment = installmentsToPay[index];
+      transactions.push(
+        await tx.paymentTransaction.create({
+          data: {
+            transaction_ref:
+              installmentsToPay.length === 1
+                ? transactionRef
+                : `${transactionRef}-${installment.installment_no}`,
+            order_id: order.id,
+            user_id: order.user_id,
+            installment_id: installment.id,
+            amount: Number(installment.amount),
+            currency,
+            status: transactionStatus,
+            gateway: PaymentGateway.MANUAL,
+            payment_method: paymentMethod,
+            paid_at: body.paymentDate ? new Date(body.paymentDate) : new Date(),
+            metadata: {
+              manual: true,
+              createdBy: 'finance',
+              payment_type: 'MONTHLY',
+              installment_no: installment.installment_no,
+              notes: body.notes,
+            },
+          },
+        }),
+      );
+
+      await tx.installment.update({
+        where: { id: installment.id },
+        data: {
+          status: InstallmentStatus.PAID,
+          paid_at: body.paymentDate ? new Date(body.paymentDate) : new Date(),
+        },
+      });
+    }
+
+    const totalPaid = Number(order.paid_amount) + selectedAmount;
+    const totalAmount = Number(order.total_amount);
+    const dueAmount = Math.max(totalAmount - totalPaid, 0);
+    const nextPending = pendingInstallments.find(
+      (installment) =>
+        !installmentsToPay.some((paid) => paid.id === installment.id),
+    );
+
+    const updatedPlan = await tx.installmentPlan.update({
+      where: { id: plan.id },
+      data: {
+        paid_amount: totalPaid,
+        due_amount: dueAmount,
+        next_due_date: nextPending?.due_date,
+        status:
+          dueAmount === 0
+            ? InstallmentPlanStatus.COMPLETED
+            : InstallmentPlanStatus.ACTIVE,
+      },
+      include: { installments: true },
+    });
+
+    const updatedOrder = await tx.order.update({
+      where: { id: order.id },
+      data: {
+        paid_amount: totalPaid,
+        due_amount: dueAmount,
+        status: dueAmount === 0 ? OrderStatus.PAID : OrderStatus.PARTIALLY_PAID,
+        payment_mode: PaymentMode.INSTALLMENT,
+        notes: body.notes || `Manual installment payment for ${courseTitle}`,
+      },
+    });
+
+    const hasOverdue = updatedPlan.installments.some(
+      (installment) =>
+        installment.status !== InstallmentStatus.PAID &&
+        installment.due_date < new Date(),
+    );
+
+    await tx.enrollment.update({
+      where: { id: enrollmentId },
+      data: {
+        status: hasOverdue
+          ? EnrollmentStatus.SUSPENDED
+          : EnrollmentStatus.ACTIVE,
+        step: EnrollmentStep.COMPLETED,
+      },
+    });
+
+    return { order: updatedOrder, installment_plan: updatedPlan, transactions };
+  }
+
+  private buildInstallmentDueDates(
+    installmentCount: number,
+    dueDates?: string[],
+    paymentDate?: string,
+  ) {
+    if (dueDates?.length) {
+      if (dueDates.length !== installmentCount) {
+        throw new BadRequestException(
+          'Installment due dates must match installment count',
+        );
+      }
+      return dueDates.map((dueDate) => new Date(dueDate));
+    }
+
+    const startDate = paymentDate ? new Date(paymentDate) : new Date();
+    return Array.from({ length: installmentCount }, (_, index) => {
+      const dueDate = new Date(startDate);
+      dueDate.setMonth(startDate.getMonth() + index);
+      return dueDate;
+    });
+  }
+
+  private pickInstallmentsByAmount(installments: any[], amount: number) {
+    const selected = [];
+    let remaining = amount;
+
+    for (const installment of installments) {
+      const installmentAmount = Number(installment.amount);
+      if (remaining + 0.001 < installmentAmount) break;
+      selected.push(installment);
+      remaining -= installmentAmount;
+    }
+
+    return selected;
+  }
+
+  async suspendOverdueInstallmentAccess() {
+    const now = new Date();
+    const overdueInstallments = await this.prisma.installment.findMany({
+      where: {
+        due_date: { lt: now },
+        status: { in: [InstallmentStatus.PENDING, InstallmentStatus.OVERDUE] },
+        installment_plan: {
+          status: InstallmentPlanStatus.ACTIVE,
+          order: {
+            enrollment: { status: EnrollmentStatus.ACTIVE },
+          },
+        },
+      },
+      select: {
+        id: true,
+        installment_plan: {
+          select: {
+            id: true,
+            order: {
+              select: {
+                enrollment: { select: { id: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!overdueInstallments.length) return { updated: 0 };
+
+    const enrollmentIds = [
+      ...new Set(
+        overdueInstallments
+          .map(
+            (installment) => installment.installment_plan.order.enrollment?.id,
+          )
+          .filter(Boolean),
+      ),
+    ];
+
+    await this.prisma.$transaction([
+      this.prisma.installment.updateMany({
+        where: { id: { in: overdueInstallments.map((item) => item.id) } },
+        data: { status: InstallmentStatus.OVERDUE },
+      }),
+      this.prisma.installmentPlan.updateMany({
+        where: {
+          id: {
+            in: [
+              ...new Set(
+                overdueInstallments.map((item) => item.installment_plan.id),
+              ),
+            ],
+          },
+        },
+        data: { status: InstallmentPlanStatus.OVERDUE },
+      }),
+      this.prisma.enrollment.updateMany({
+        where: { id: { in: enrollmentIds } },
+        data: { status: EnrollmentStatus.SUSPENDED },
+      }),
+    ]);
+
+    return { updated: enrollmentIds.length };
   }
 
   private async getTotalRevenueThisYear() {

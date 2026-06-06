@@ -1,16 +1,39 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Queue } from 'bullmq';
 import { FinanceAndPaymentsService } from './financeandpayments.helper';
 import { FinanceService } from './finance.helper';
 
 @Injectable()
-export class TransactionService {
-  private readonly financeService: FinanceService;
-  private readonly financeAndPaymentsService: FinanceAndPaymentsService;
+export class TransactionService implements OnModuleInit {
+  constructor(
+    private readonly financeService: FinanceService,
+    private readonly financeAndPaymentsService: FinanceAndPaymentsService,
+    @InjectQueue('installment-access-queue')
+    private readonly installmentAccessQueue: Queue,
+  ) {}
 
-  constructor(private readonly prisma: PrismaService) {
-    this.financeService = new FinanceService(prisma);
-    this.financeAndPaymentsService = new FinanceAndPaymentsService(prisma);
+  async onModuleInit() {
+    await this.installmentAccessQueue.add(
+      'suspendOverdueInstallments',
+      {},
+      {
+        jobId: 'suspend-overdue-installments-startup',
+        removeOnComplete: true,
+        removeOnFail: 25,
+      },
+    );
+
+    await this.installmentAccessQueue.add(
+      'suspendOverdueInstallments',
+      {},
+      {
+        jobId: 'suspend-overdue-installments-hourly',
+        repeat: { every: 60 * 60 * 1000 },
+        removeOnComplete: true,
+        removeOnFail: 25,
+      },
+    );
   }
 
   register(body: any) {
@@ -31,6 +54,10 @@ export class TransactionService {
 
   addManualPayment(body: any) {
     return this.financeService.addManualPayment(body);
+  }
+
+  suspendOverdueInstallmentAccess() {
+    return this.financeService.suspendOverdueInstallmentAccess();
   }
 
   getFinanceDashboardData() {

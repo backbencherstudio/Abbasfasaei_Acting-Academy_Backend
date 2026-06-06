@@ -192,7 +192,11 @@ export class RtcService implements OnModuleDestroy {
 
       // Create a CALL-kind message before notifying recipients so their
       // timeline can show the ongoing call immediately.
-      callMessage = await this.createCallMessage(session, conversation, user_id);
+      callMessage = await this.createCallMessage(
+        session,
+        conversation,
+        user_id,
+      );
 
       this.realtimeGateway.emitCallIncoming(recipient_ids, {
         conversation_id,
@@ -210,7 +214,6 @@ export class RtcService implements OnModuleDestroy {
             null,
         ),
       });
-
     }
 
     return {
@@ -514,7 +517,9 @@ export class RtcService implements OnModuleDestroy {
           : {}),
       },
       include: {
-        user: { select: { id: true, name: true, username: true, avatar: true } },
+        user: {
+          select: { id: true, name: true, username: true, avatar: true },
+        },
       },
     });
 
@@ -670,7 +675,8 @@ export class RtcService implements OnModuleDestroy {
     // Preserve call_kind from the original content; override lifecycle fields.
     const originalContent = existing.content as Record<string, unknown> | null;
     const mergedContent: CallMessageContent = {
-      call_kind: (originalContent?.['call_kind'] as 'AUDIO' | 'VIDEO') ?? 'VIDEO',
+      call_kind:
+        (originalContent?.['call_kind'] as 'AUDIO' | 'VIDEO') ?? 'VIDEO',
       status: final_status,
       duration_seconds,
       reason,
@@ -681,7 +687,10 @@ export class RtcService implements OnModuleDestroy {
       data: { content: mergedContent },
     });
 
-    const formatted = this.formatCallMessage({ ...existing, content: mergedContent });
+    const formatted = this.formatCallMessage({
+      ...existing,
+      content: mergedContent,
+    });
 
     // Notify clients — they should upsert by message id.
     this.realtimeGateway.emitCallMessageUpdated(member_ids, {
@@ -993,7 +1002,8 @@ export class RtcService implements OnModuleDestroy {
     user_id: string,
   ) {
     const caller = conversation.memberships.find((m) => m.user_id === user_id);
-    if (!caller) throw new ForbiddenException('Caller not found in conversation');
+    if (!caller)
+      throw new ForbiddenException('Caller not found in conversation');
 
     const room_name = this.getRoomName(session, conversation.id);
 
@@ -1041,7 +1051,9 @@ export class RtcService implements OnModuleDestroy {
           ? NajimStorage.url(conversation.avatar)
           : null,
       },
-      participants: session.participants.map((p) => this.serializeParticipant(p)),
+      participants: session.participants.map((p) =>
+        this.serializeParticipant(p),
+      ),
       participant_count: session.participants.length,
       self_participant: this.serializeParticipant(
         session.participants.find((p) => p.user_id === user_id) || null,
@@ -1094,8 +1106,6 @@ export class RtcService implements OnModuleDestroy {
   }
 
   private getActiveConversationUserIds(conversation: ConversationContext) {
-    return Array.from(
-      new Set(conversation.memberships.map((m) => m.user_id)),
-    );
+    return Array.from(new Set(conversation.memberships.map((m) => m.user_id)));
   }
 }

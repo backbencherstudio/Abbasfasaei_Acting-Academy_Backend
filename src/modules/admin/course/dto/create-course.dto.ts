@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { AttendanceStatus, CourseStatus } from '@prisma/client';
+import { AttendanceStatus, CourseStatus, EnrollmentType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsNotEmpty,
@@ -9,7 +9,9 @@ import {
   IsDate,
   IsEnum,
   Min,
+  IsEmail,
 } from 'class-validator';
+import { Express } from 'express';
 
 export class CreateCourseDto {
   @IsNotEmpty()
@@ -215,4 +217,64 @@ export class CreateModuleDto {
   @IsString()
   @IsOptional()
   module_overview?: string;
+}
+
+export class CreateEnrollmentDto {
+  @IsNotEmpty()
+  @IsString()
+  student_id: string;
+
+  @ApiProperty({ example: 'John Doe' })
+  @IsNotEmpty({ message: 'Name is required during form filling' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ example: 'john@example.com' })
+  @IsNotEmpty({ message: 'Email is required' })
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({ example: 'John Doe' })
+  @IsNotEmpty({ message: 'Name is required during form filling' })
+  @IsString()
+  phone: string;
+
+  @ApiProperty({ example: 'John Doe' })
+  @IsNotEmpty({ message: 'Name is required during form filling' })
+  @IsString()
+  address: string;
+
+  @ApiProperty({ example: 'John Doe' })
+  @IsNotEmpty({ message: 'Name is required during form filling' })
+  @Type(() => Date)
+  @IsDate()
+  date_of_birth: Date;
+
+  @ApiProperty({ example: 'John Doe' })
+  @IsOptional()
+  @IsString()
+  experience?: string;
+
+  @ApiProperty({ enum: EnrollmentType, example: EnrollmentType.FULL_PAYMENT })
+  @IsNotEmpty()
+  @IsEnum(EnrollmentType)
+  enrollment_type: EnrollmentType;
+
+  @ApiProperty({
+    type: 'string',
+    format: 'binary',
+    required: true,
+    description: 'PDF file for rules & regulations',
+  })
+  @IsNotEmpty()
+  rules_document: Express.Multer.File;
+
+  @ApiProperty({
+    type: 'string',
+    format: 'binary',
+    required: true,
+    description: 'PDF file for contract',
+  })
+  @IsNotEmpty()
+  contract_document: Express.Multer.File;
 }

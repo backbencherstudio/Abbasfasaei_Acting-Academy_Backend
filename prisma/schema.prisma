@@ -507,7 +507,6 @@ enum EnrollmentStatus {
 enum EnrollmentType {
   FULL_PAYMENT
   INSTALLMENT
-  MANUAL
   FREE
 }
 

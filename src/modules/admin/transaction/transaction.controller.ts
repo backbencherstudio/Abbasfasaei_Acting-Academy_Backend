@@ -50,11 +50,19 @@ export class TransactionController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.FINANCE)
+  @Roles(Role.ADMIN, Role.FINANCE)
   @Post('admin/transactions/payments/manual')
   @ApiResponse({ description: 'Add manual payment' })
   addManualPayment(@Body() body: CreateManualPaymentDto) {
     return this.transactionService.addManualPayment(body);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.FINANCE)
+  @Post('admin/transactions/installments/suspend-overdue')
+  @ApiResponse({ description: 'Suspend enrollments with overdue installments' })
+  suspendOverdueInstallmentAccess() {
+    return this.transactionService.suspendOverdueInstallmentAccess();
   }
 
   @Get('finance-and-payments')

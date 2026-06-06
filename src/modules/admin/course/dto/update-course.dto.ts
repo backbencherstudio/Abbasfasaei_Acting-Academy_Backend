@@ -5,6 +5,7 @@ import {
   CreateAttendanceDto,
   CreateClassDto,
   CreateModuleDto,
+  CreateEnrollmentDto,
 } from './create-course.dto';
 import {
   IsString,
@@ -12,8 +13,17 @@ import {
   IsEnum,
   IsNotEmpty,
   IsDate,
+  IsBoolean,
+  IsEmail,
 } from 'class-validator';
-import { AttendanceStatus, CourseStatus } from '@prisma/client';
+import {
+  AttendanceStatus,
+  CourseProgressStatus,
+  CourseStatus,
+  EnrollmentStatus,
+  EnrollmentStep,
+  EnrollmentType,
+} from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class UpdateCourseDto extends PartialType(
@@ -49,3 +59,9 @@ export class UpdateAttendanceDto extends CreateAttendanceDto {
 export class UpdateClassDto extends PartialType(CreateClassDto) {}
 
 export class UpdateModuleDto extends PartialType(CreateModuleDto) {}
+
+export class UpdateEnrollmentDto extends PartialType(CreateEnrollmentDto) {
+  @IsOptional()
+  @IsEnum(EnrollmentStatus)
+  status?: EnrollmentStatus;
+}

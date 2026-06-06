@@ -8,8 +8,12 @@ import {
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { CreateCourseDto } from './dto/create-course.dto';
-import { UpdateAttendanceDto, UpdateCourseDto } from './dto/update-course.dto';
+import { CreateCourseDto, CreateEnrollmentDto } from './dto/create-course.dto';
+import {
+  UpdateAttendanceDto,
+  UpdateCourseDto,
+  UpdateEnrollmentDto,
+} from './dto/update-course.dto';
 import {
   CreateModuleDto,
   CreateClassDto,
@@ -30,6 +34,12 @@ import {
   AttachmentType,
   AttendanceStatus,
   CourseStatus,
+  EnrollmentStatus,
+  EnrollmentStep,
+  EnrollmentType,
+  OrderItemType,
+  OrderStatus,
+  PaymentMode,
   Prisma,
 } from '@prisma/client';
 import * as crypto from 'crypto';
@@ -38,6 +48,433 @@ import * as QRCode from 'qrcode';
 @Injectable()
 export class CoursesService {
   constructor(private prisma: PrismaService) {}
+
+  async makeEnrolment(
+    user_id: string,
+    course_id: string,
+    createEnrollmentDto: CreateEnrollmentDto,
+  ) {
+    if (!user_id) throw new UnauthorizedException('Please login first');
+
+    const course = await this.prisma.course.findUnique({
+      where: { id: course_id, status: CourseStatus.ACTIVE },
+    });
+
+    const { student_id, rules_document, contract_document, ...rest } =
+      createEnrollmentDto;
+
+    if (!rules_document)
+      throw new BadRequestException('Rules documents are required');
+    if (!contract_document)
+      throw new BadRequestException('Contract documents are required');
+
+    if (!course)
+      throw new NotFoundException('Course not found or not enrollable');
+
+    const alreadyEnrolled = await this.prisma.enrollment.findFirst({
+      where: { user_id: student_id, course_id },
+    });
+    if (alreadyEnrolled)
+      throw new ConflictException('Student already enrolled in this course');
+
+    const rulesDocumentFilename = NajimStorage.generateFileName(
+      rules_document.originalname,
+    );
+    const contractDocumentFilename = NajimStorage.generateFileName(
+      contract_document.originalname,
+    );
+    const rulesDocumentObjectKey =
+      appConfig().storageUrl.enrollment + '/' + rulesDocumentFilename;
+    const contractDocumentObjectKey =
+      appConfig().storageUrl.enrollment + '/' + contractDocumentFilename;
+
+    const storedRulesDocument = await NajimStorage.put(
+      rulesDocumentObjectKey,
+      rules_document.buffer,
+      { contentType: rules_document.mimetype },
+    );
+    if (!storedRulesDocument) {
+      throw new InternalServerErrorException('Failed to store rules documents');
+    }
+    const storedContractFile = await NajimStorage.put(
+      contractDocumentObjectKey,
+      contract_document.buffer,
+      { contentType: contract_document.mimetype },
+    );
+    if (!storedContractFile) {
+      throw new InternalServerErrorException(
+        'Failed to store contract documents',
+      );
+    }
+
+    const enrollment = await this.prisma.$transaction(async (tx) => {
+      const orderNumber = `MAN-ENR-${Date.now()}-${Math.floor(
+        Math.random() * 1000,
+      )}`;
+      const totalAmount = Number(course.fee_pence ?? 0);
+
+      const order = await tx.order.create({
+        data: {
+          order_number: orderNumber,
+          user_id: student_id,
+          item_type: OrderItemType.COURSE_ENROLLMENT,
+          payment_mode: PaymentMode.MANUAL,
+          status: OrderStatus.PENDING,
+          subtotal_amount: totalAmount,
+          total_amount: totalAmount,
+          paid_amount: 0,
+          due_amount: totalAmount,
+          course_id,
+          created_by_admin_id: user_id,
+          notes: `Manual enrollment for ${course.title}`,
+        },
+      });
+
+      return tx.enrollment.create({
+        data: {
+          user_id: student_id,
+          course_id,
+          order_id: order.id,
+          status: EnrollmentStatus.PENDING,
+          step: EnrollmentStep.PAYMENT,
+          enrolled_by_admin_id: user_id,
+          rules_regulations_accepted: true,
+          digital_contract_accepted: true,
+          ...rest,
+          attachments: {
+            create: [
+              {
+                file_name: rulesDocumentFilename,
+                file_path: rulesDocumentObjectKey,
+                type: AttachmentType.RULES_REGULATIONS,
+                size_bytes: rules_document.size,
+                mime_type: rules_document.mimetype,
+              },
+              {
+                file_name: contractDocumentFilename,
+                file_path: contractDocumentObjectKey,
+                type: AttachmentType.DIGITAL_CONTRACT,
+                size_bytes: contract_document.size,
+                mime_type: contract_document.mimetype,
+              },
+            ],
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          date_of_birth: true,
+          address: true,
+          experience: true,
+          status: true,
+          step: true,
+          admin_note: true,
+          enrollment_type: true,
+          user_id: true,
+
+          course: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+            },
+          },
+          order: {
+            select: {
+              id: true,
+              order_number: true,
+              status: true,
+              subtotal_amount: true,
+              total_amount: true,
+              paid_amount: true,
+              due_amount: true,
+            },
+          },
+          attachments: {
+            select: {
+              id: true,
+              file_name: true,
+              file_path: true,
+              type: true,
+              mime_type: true,
+            },
+          },
+        },
+      });
+    });
+    return {
+      success: true,
+      message: 'Enrollment created successfully',
+      data: {
+        ...enrollment,
+        attachments: enrollment.attachments.map((attachment) => ({
+          ...attachment,
+          file_path: attachment.file_path
+            ? NajimStorage.url(attachment.file_path)
+            : null,
+        })),
+      },
+    };
+  }
+
+  async getEnrollmentDetails(enrollment_id: string) {
+    if (!enrollment_id)
+      throw new BadRequestException('Enrollment ID is required');
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollment_id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        date_of_birth: true,
+        address: true,
+        experience: true,
+        status: true,
+        step: true,
+        admin_note: true,
+        enrollment_type: true,
+        user_id: true,
+        course: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+          },
+        },
+        order: {
+          select: {
+            id: true,
+            order_number: true,
+            status: true,
+            subtotal_amount: true,
+            total_amount: true,
+            paid_amount: true,
+            due_amount: true,
+          },
+        },
+        attachments: {
+          select: {
+            id: true,
+            file_name: true,
+            file_path: true,
+            type: true,
+            mime_type: true,
+          },
+        },
+      },
+    });
+
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+
+    return {
+      success: true,
+      message: 'Enrollment details fetched successfully',
+      data: {
+        ...enrollment,
+        attachments: enrollment.attachments.map((attachment) => ({
+          ...attachment,
+          file_path: attachment.file_path
+            ? NajimStorage.url(attachment.file_path)
+            : null,
+        })),
+      },
+    };
+  }
+
+  async updateEnrollment(
+    admin_id: string,
+    enrollment_id: string,
+    updateEnrollmentDto: UpdateEnrollmentDto,
+  ) {
+    if (!admin_id) throw new UnauthorizedException('Please login first');
+    if (!enrollment_id)
+      throw new BadRequestException('Enrollment ID is required');
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollment_id },
+      include: {
+        course: { select: { id: true, title: true, fee_pence: true } },
+        order: true,
+        attachments: true,
+      },
+    });
+
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+
+    const { rules_document, contract_document, ...rest } = updateEnrollmentDto;
+
+    const data: Prisma.EnrollmentUpdateInput = {
+      ...rest,
+      enrolled_by_admin_id: enrollment.enrolled_by_admin_id ?? admin_id,
+    };
+
+    const existingRulesDocument = enrollment?.attachments?.find(
+      (attachment) => attachment?.type === AttachmentType.RULES_REGULATIONS,
+    );
+    const existingContractDocument = enrollment?.attachments?.find(
+      (attachment) => attachment?.type === AttachmentType.DIGITAL_CONTRACT,
+    );
+
+    if (!existingRulesDocument && !rules_document) {
+      throw new BadRequestException('Rules document is required');
+    }
+    if (!existingContractDocument && !contract_document) {
+      throw new BadRequestException('Contract document is required');
+    }
+    if (rules_document) {
+      const filename = NajimStorage.generateFileName(
+        rules_document.originalname,
+      );
+      const objectKey = appConfig().storageUrl.enrollment + '/' + filename;
+      if (existingRulesDocument?.file_path) {
+        await NajimStorage.delete(existingRulesDocument.file_path);
+      }
+      await NajimStorage.put(objectKey, rules_document.buffer, {
+        contentType: rules_document.mimetype,
+      });
+      await this.prisma.attachment.upsert({
+        where: { id: existingRulesDocument?.id ?? '' },
+        update: {
+          file_name: filename,
+          file_path: objectKey,
+          size_bytes: rules_document.size,
+          mime_type: rules_document.mimetype,
+        },
+        create: {
+          enrollment_id: enrollment.id,
+          file_name: filename,
+          file_path: objectKey,
+          type: AttachmentType.RULES_REGULATIONS,
+          size_bytes: rules_document.size,
+          mime_type: rules_document.mimetype,
+        },
+      });
+    }
+    if (contract_document) {
+      const filename = NajimStorage.generateFileName(
+        contract_document.originalname,
+      );
+      const objectKey = appConfig().storageUrl.enrollment + '/' + filename;
+      if (existingContractDocument?.file_path) {
+        await NajimStorage.delete(existingContractDocument.file_path);
+      }
+      await NajimStorage.put(objectKey, contract_document.buffer, {
+        contentType: contract_document.mimetype,
+      });
+      await this.prisma.attachment.upsert({
+        where: { id: existingContractDocument?.id ?? '' },
+        update: {
+          file_name: filename,
+          file_path: objectKey,
+          size_bytes: contract_document.size,
+          mime_type: contract_document.mimetype,
+        },
+        create: {
+          enrollment_id: enrollment.id,
+          file_name: filename,
+          file_path: objectKey,
+          type: AttachmentType.DIGITAL_CONTRACT,
+          size_bytes: contract_document.size,
+          mime_type: contract_document.mimetype,
+        },
+      });
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      let orderId = enrollment.order_id;
+
+      if (!orderId && enrollment.course) {
+        const order = await tx.order.create({
+          data: {
+            order_number: `MAN-ENR-${Date.now()}-${Math.floor(
+              Math.random() * 1000,
+            )}`,
+            user_id: enrollment.user_id,
+            item_type: OrderItemType.COURSE_ENROLLMENT,
+            payment_mode: PaymentMode.MANUAL,
+            status: OrderStatus.PENDING,
+            subtotal_amount: Number(enrollment.course.fee_pence ?? 0),
+            total_amount: Number(enrollment.course.fee_pence ?? 0),
+            paid_amount: 0,
+            due_amount: Number(enrollment.course.fee_pence ?? 0),
+            course_id: enrollment.course.id,
+            created_by_admin_id: admin_id,
+            notes: `Manual enrollment recovery for ${enrollment.course.title}`,
+          },
+        });
+        orderId = order.id;
+      }
+
+      return tx.enrollment.update({
+        where: { id: enrollment_id },
+        data: {
+          ...data,
+          ...(orderId && !enrollment.order_id
+            ? { order: { connect: { id: orderId } } }
+            : {}),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          date_of_birth: true,
+          address: true,
+          experience: true,
+          status: true,
+          step: true,
+          admin_note: true,
+          enrollment_type: true,
+          user_id: true,
+          course: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+            },
+          },
+          order: {
+            select: {
+              id: true,
+              order_number: true,
+              status: true,
+              subtotal_amount: true,
+              total_amount: true,
+              paid_amount: true,
+              due_amount: true,
+            },
+          },
+          attachments: {
+            select: {
+              id: true,
+              file_name: true,
+              file_path: true,
+              type: true,
+              mime_type: true,
+            },
+          },
+        },
+      });
+    });
+
+    return {
+      success: true,
+      message: 'Enrollment updated successfully',
+      data: {
+        ...updated,
+        attachments: updated.attachments.map((attachment) => ({
+          ...attachment,
+          file_path: attachment.file_path
+            ? NajimStorage.url(attachment.file_path)
+            : null,
+        })),
+      },
+    };
+  }
 
   async getAttendanceQR(class_id: string, user_id: string) {
     if (!class_id) throw new BadRequestException('Class ID is required');
@@ -1236,7 +1673,6 @@ export class CoursesService {
     };
   }
 
-  // updated
   async updateClass(
     user_id: string,
     class_id: string,

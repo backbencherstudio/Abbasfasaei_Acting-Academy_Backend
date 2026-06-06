@@ -16,7 +16,7 @@ import {
   FileTypeValidator,
 } from '@nestjs/common';
 import { CoursesService } from './courses.service';
-import { CreateCourseDto } from './dto/create-course.dto';
+import { CreateCourseDto, CreateEnrollmentDto } from './dto/create-course.dto';
 import { UpdateAttendanceDto, UpdateCourseDto } from './dto/update-course.dto';
 import { ApiOperation } from '@nestjs/swagger/dist/decorators/api-operation.decorator';
 import { Role } from 'src/common/guard/role/role.enum';
@@ -36,8 +36,12 @@ import {
   UpdateModuleDto,
   UpdateClassDto,
   UpdateAssignmentDto,
+  UpdateEnrollmentDto,
 } from './dto/update-course.dto';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import {
+  FileFieldsInterceptor,
+  FilesInterceptor,
+} from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import {
   AttendanceQueryDto,
@@ -52,10 +56,34 @@ import {
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
 
-  // new
-  @Put('enrolment')
-  updateOrMakeEnrolment() {
-    // TODO
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'rules_document', maxCount: 1 },
+        { name: 'contract_document', maxCount: 1 },
+      ],
+      { storage: memoryStorage() },
+    ),
+  )
+  @Post(':course_id/enrollment')
+  makeEnrolment(
+    @GetUser('userId') user_id: string,
+    @Param('course_id') course_id: string,
+    @Body() createEnrollmentDto: CreateEnrollmentDto,
+    @UploadedFiles()
+    files: {
+      rules_document?: Express.Multer.File[];
+      contract_document?: Express.Multer.File[];
+    },
+  ) {
+    return this.coursesService.makeEnrolment(user_id, course_id, {
+      ...createEnrollmentDto,
+      rules_document:
+        files?.rules_document?.[0] ?? createEnrollmentDto.rules_document,
+      contract_document:
+        files?.contract_document?.[0] ?? createEnrollmentDto.contract_document,
+    });
   }
 
   // updated
@@ -107,6 +135,44 @@ export class CoursesController {
     @GetUser('userId') admin_id: string,
   ) {
     return this.coursesService.getCoursesByUserId(user_id, admin_id);
+  }
+
+  @Roles(Role.ADMIN, Role.FINANCE)
+  @ApiOperation({ summary: 'Get enrollment details by ID' })
+  @Get('enrollments/:enrollment_id')
+  getEnrollmentDetails(@Param('enrollment_id') enrollment_id: string) {
+    return this.coursesService.getEnrollmentDetails(enrollment_id);
+  }
+
+  @Roles(Role.ADMIN, Role.FINANCE)
+  @ApiOperation({ summary: 'Update enrollment by ID' })
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'rules_document', maxCount: 1 },
+        { name: 'contract_document', maxCount: 1 },
+      ],
+      { storage: memoryStorage() },
+    ),
+  )
+  @Patch('enrollments/:enrollment_id')
+  updateEnrollment(
+    @GetUser('userId') user_id: string,
+    @Param('enrollment_id') enrollment_id: string,
+    @Body() updateEnrollmentDto: UpdateEnrollmentDto,
+    @UploadedFiles()
+    files: {
+      rules_document?: Express.Multer.File[];
+      contract_document?: Express.Multer.File[];
+    },
+  ) {
+    return this.coursesService.updateEnrollment(user_id, enrollment_id, {
+      ...updateEnrollmentDto,
+      rules_document:
+        files?.rules_document?.[0] ?? updateEnrollmentDto.rules_document,
+      contract_document:
+        files?.contract_document?.[0] ?? updateEnrollmentDto.contract_document,
+    });
   }
 
   // updated
