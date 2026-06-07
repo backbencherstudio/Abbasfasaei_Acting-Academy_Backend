@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { TransactionStatus } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsDate,
@@ -47,4 +48,13 @@ export class TransactionsQueryDto {
   @Type(() => Date)
   @IsDate()
   date?: Date;
+
+  @IsOptional()
+  @Transform(({ value }) =>
+    TransactionStatus[value?.toUpperCase()]
+      ? TransactionStatus[value?.toUpperCase()]
+      : undefined,
+  )
+  @IsEnum(TransactionStatus)
+  status?: TransactionStatus;
 }

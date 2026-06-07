@@ -5,45 +5,25 @@ import { Role } from 'src/common/guard/role/role.enum';
 import { Roles } from 'src/common/guard/role/roles.decorator';
 import { RolesGuard } from 'src/common/guard/role/roles.guard';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
-import {
-  CreateFinanceDto,
-  CreateManualPaymentDto,
-} from './dto/create-transaction.dto';
+import { CreateManualPaymentDto } from './dto/create-transaction.dto';
 import { TransactionsQueryDto } from './dto/query-transaction.dto';
-import { UpdateFinanceDto } from './dto/update-transaction.dto';
 import { TransactionService } from './transaction.service';
 
-@Controller()
+@Controller('admin/transactions')
 export class TransactionController {
   constructor(private readonly transactionService: TransactionService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Post('admin/transactions/register')
-  @ApiResponse({ description: 'Register finance' })
-  register(@Body() body: CreateFinanceDto) {
-    return this.transactionService.register(body);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN)
-  @Post('admin/transactions/update')
-  @ApiResponse({ description: 'Update finance' })
-  update(@Body() body: UpdateFinanceDto) {
-    return this.transactionService.update(body);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.FINANCE)
-  @Get('admin/transactions/revenue/stats')
+  @Get('stats')
   @ApiResponse({ description: 'Get revenue stats' })
   getStats() {
     return this.transactionService.getStats();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.FINANCE)
-  @Get('admin/transactions/transactions')
+  @Roles(Role.FINANCE, Role.ADMIN)
+  @Get()
   @ApiResponse({ description: 'Get all transactions' })
   getAllTransactions(@Query() query: TransactionsQueryDto) {
     return this.transactionService.getAllTransactions(query);
