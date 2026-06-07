@@ -31,7 +31,7 @@ export class TransactionController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.FINANCE)
-  @Post('admin/transactions/payments/manual')
+  @Post('payments/manual')
   @ApiResponse({ description: 'Add manual payment' })
   addManualPayment(@Body() body: CreateManualPaymentDto) {
     return this.transactionService.addManualPayment(body);
@@ -39,23 +39,9 @@ export class TransactionController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.FINANCE)
-  @Post('admin/transactions/installments/suspend-overdue')
+  @Post('installments/suspend_overdue')
   @ApiResponse({ description: 'Suspend enrollments with overdue installments' })
   suspendOverdueInstallmentAccess() {
     return this.transactionService.suspendOverdueInstallmentAccess();
-  }
-
-  @Get('finance-and-payments')
-  @DisAllowDeactivated()
-  async getFinanceDashboard() {
-    try {
-      const data = await this.transactionService.getFinanceDashboardData();
-      return { success: true, data };
-    } catch {
-      return {
-        success: false,
-        message: 'Error fetching finance dashboard data',
-      };
-    }
   }
 }
