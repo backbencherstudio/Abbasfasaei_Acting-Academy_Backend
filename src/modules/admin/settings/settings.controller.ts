@@ -9,45 +9,36 @@ import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { UpdateUserSettingsDto } from './dto/update-profile.dto';
 import { WebsiteSettingsDto } from './dto/websiteUpdate.dto';
 
-
-
-
 @ApiBearerAuth()
 @ApiTags('User')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN, Role.TEACHER)
-@Controller('settings')
+@Controller('admin/settings')
 export class SettingsController {
   constructor(private settingsService: SettingsService) {}
 
   @Get('general-settings')
-  async getGeneralSettings(
-    @GetUser() user: any,
-  ) {
+  async getGeneralSettings(@GetUser() user: any) {
     console.log(user);
-    return this.settingsService.allSettings(user.userId)
+    return this.settingsService.allSettings(user.userId);
   }
 
   @Post('general-settings')
-  async updateGeneralSettings(
-    @Body() websiteSettingsDto: WebsiteSettingsDto
-  ) {
-    return this.settingsService.allSettingsUpdate(websiteSettingsDto)
+  async updateGeneralSettings(@Body() websiteSettingsDto: WebsiteSettingsDto) {
+    return this.settingsService.allSettingsUpdate(websiteSettingsDto);
   }
 
   @Get('profile-settings')
-  async getProfileSettings(
-    @GetUser() user: any,
-  ) {
-    return this.settingsService.allProfileSettings(user.userId)
+  async getProfileSettings(@GetUser() user: any) {
+    return this.settingsService.allProfileSettings(user.userId);
   }
 
   @Post('update-profile')
   async profileUpdate(
     @GetUser() user: any,
-    @Body() updateUserDto: UpdateUserSettingsDto
+    @Body() updateUserDto: UpdateUserSettingsDto,
   ) {
-    return this.settingsService.profileUpdate(user.userId, updateUserDto)
+    return this.settingsService.profileUpdate(user.userId, updateUserDto);
   }
 
   // @Get('rolesandpermissions')

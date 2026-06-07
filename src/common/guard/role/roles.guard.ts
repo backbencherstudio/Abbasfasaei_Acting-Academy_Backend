@@ -26,7 +26,7 @@ export class RolesGuard implements CanActivate {
 
     const { user } = context.switchToHttp().getRequest();
 
-  const userDetails = await UserRepository.getUserDetails(user.userId);
+    const userDetails = await UserRepository.getUserDetails(user.userId);
 
     if (!userDetails) {
       return false;
@@ -45,8 +45,12 @@ export class RolesGuard implements CanActivate {
     }
 
     // Check if any required Role matches user's type or attached roles
-    const hasRequiredRole = requiredRoles.some((required) =>
-      attachedRoleNames.includes(String(required).toLowerCase()),
+    const hasRequiredRole = requiredRoles.some(
+      (required) =>
+        attachedRoleNames.includes(String(required).toLowerCase()) ||
+        (userDetails.type &&
+          String(userDetails.type).toLowerCase() ===
+            String(required).toLowerCase()),
     );
 
     if (hasRequiredRole) {

@@ -1,13 +1,22 @@
-import { PrismaClient } from '@prisma/client';
+import { Notification, PrismaClient } from '@prisma/client';
+import Redis from 'ioredis';
+import appConfig from 'src/config/app.config';
 
 const prisma = new PrismaClient();
+
+const redisPublisher = new Redis({
+  host: appConfig().redis.host,
+  port: Number(appConfig().redis.port),
+  password: appConfig().redis.password,
+});
 
 export class NotificationRepository {
   /**
    * Create a notification
    * @param sender_id - The ID of the user who fired the event
    * @param receiver_id - The ID of the user to notify
-   * @param text - The text of the notification
+   * @param title - The title of the notification
+   * @param content - The content of the notification
    * @param type - The type of the notification
    * @param entity_id - The ID of the entity related to the notification
    * @returns The created notification
@@ -15,13 +24,15 @@ export class NotificationRepository {
   static async createNotification({
     sender_id,
     receiver_id,
-    text,
+    title,
+    content,
     type,
     entity_id,
   }: {
     sender_id?: string;
     receiver_id?: string;
-    text?: string;
+    title?: string;
+    content?: string;
     type?:
       | 'message'
       | 'comment'
@@ -31,18 +42,22 @@ export class NotificationRepository {
       | 'package'
       | 'blog';
     entity_id?: string;
-  }) {
+  }): Promise<Notification> {
     const notificationEventData = {};
     if (type) {
       notificationEventData['type'] = type;
     }
-    if (text) {
-      notificationEventData['text'] = text;
+    if (title) {
+      notificationEventData['title'] = title;
+    }
+    if (content) {
+      notificationEventData['content'] = content;
     }
     const notificationEvent = await prisma.notificationEvent.create({
       data: {
         type: type,
-        text: text,
+        title: title,
+        content: content,
         ...notificationEventData,
       },
     });
@@ -64,6 +79,17 @@ export class NotificationRepository {
         ...notificationData,
       },
     });
+
+    redisPublisher.publish(
+      'notification',
+      JSON.stringify({
+        id: notification.id,
+        title: notificationEvent.title,
+        content: notificationEvent.content,
+        type: notificationEvent.type,
+        entity_id: notification.entity_id,
+      }),
+    );
 
     return notification;
   }

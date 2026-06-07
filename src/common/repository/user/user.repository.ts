@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 import appConfig from '../../../config/app.config';
 import { ArrayHelper } from '../../helper/array.helper';
 import { Role } from '../../guard/role/role.enum';
+import { UserStatus } from 'src/common/constants/user-status.enum';
 
 const prisma = new PrismaClient();
 
@@ -191,20 +192,20 @@ export class UserRepository {
    */
   static async createUser({
     name,
-    first_name,
-    last_name,
     email,
     password,
     phone_number,
+    experience,
+    join_date,
     role_id = null,
     type = 'user',
   }: {
     name?: string;
-    first_name?: string;
-    last_name?: string;
     email: string;
     password: string;
     phone_number?: string;
+    experience?: string;
+    join_date?: Date;
     role_id?: string;
     type?: string;
   }) {
@@ -213,14 +214,14 @@ export class UserRepository {
       if (name) {
         data['name'] = name;
       }
-      if (first_name) {
-        data['first_name'] = first_name;
-      }
-      if (last_name) {
-        data['last_name'] = last_name;
-      }
       if (phone_number) {
         data['phone_number'] = phone_number;
+      }
+      if (experience) {
+        data['experience'] = experience;
+      }
+      if (join_date) {
+        data['joined_at'] = join_date;
       }
       if (email) {
         // Check if email already exist
@@ -298,13 +299,21 @@ export class UserRepository {
       name,
       email,
       password,
+      phone_number,
+      experience,
+      join_date,
+      status,
       role_id = null,
       type = 'user',
     }: {
       name?: string;
       email?: string;
       password?: string;
+      phone_number?: string;
+      experience?: string;
+      join_date?: Date;
       role_id?: string;
+      status?: UserStatus;
       type?: string;
     },
   ) {
@@ -333,6 +342,20 @@ export class UserRepository {
           password,
           appConfig().security.salt,
         );
+      }
+
+      if (phone_number) {
+        data['phone_number'] = phone_number;
+      }
+      if (experience) {
+        data['experience'] = experience;
+      }
+      if (join_date) {
+        data['joined_at'] = join_date;
+      }
+
+      if (status) {
+        data['status'] = status;
       }
 
       if (ArrayHelper.inArray(type, Object.values(Role))) {

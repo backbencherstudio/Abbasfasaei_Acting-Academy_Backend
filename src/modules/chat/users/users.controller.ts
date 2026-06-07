@@ -10,6 +10,7 @@ import {
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
+import { QueryDiscoverUsersDto } from './dto/query-user.dto';
 
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
 
@@ -19,25 +20,26 @@ import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.
 export class UsersController {
   constructor(private users: UsersService) {}
 
-  @Get('suggest')
-  async suggest(
-    @GetUser() me: any,
-    @Query('q') q: string,
-    @Query('take') take = '10',
+  @Get('discover')
+  discoverUsers(
+    @GetUser('userId') userId: string,
+    @Query() query: QueryDiscoverUsersDto,
   ) {
-    const takeNumber = Number(take) || 10;
-   
-    return this.users.suggestUsers(me.userId, q, takeNumber);
+    return this.users.discoverUsers(userId, query);
   }
 
+  @Get(':id/block-status')
+  getBlockStatus(@GetUser('userId') userId: string, @Param('id') id: string) {
+    return this.users.getBlockStatus(userId, id);
+  }
 
   @Post(':id/block')
-  block(@GetUser() me: any, @Param('id') id: string) {
-    return this.users.block(me.userId, id);
+  block(@GetUser('userId') userId: string, @Param('id') id: string) {
+    return this.users.block(userId, id);
   }
 
   @Delete(':id/block')
-  unblock(@GetUser() me: any, @Param('id') id: string) {
-    return this.users.unblock(me.userId, id);
+  unblock(@GetUser('userId') userId: string, @Param('id') id: string) {
+    return this.users.unblock(userId, id);
   }
 }

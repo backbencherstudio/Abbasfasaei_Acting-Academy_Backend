@@ -1,5 +1,11 @@
 // external imports
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
@@ -11,11 +17,7 @@ import { UserRepository } from '../../common/repository/user/user.repository';
 import { MailService } from '../../mail/mail.service';
 import { UcodeRepository } from '../../common/repository/ucode/ucode.repository';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { SazedStorage } from '../../common/lib/Disk/SazedStorage';
-import { DateHelper } from '../../common/helper/date.helper';
-import { StripePayment } from '../../common/lib/Payment/stripe/StripePayment';
-import { StringHelper } from '../../common/helper/string.helper';
-import { ExperienceLevel } from '@prisma/client';
+import { NajimStorage } from '../../common/lib/Disk/NajimStorage';
 
 @Injectable()
 export class AuthService {
@@ -26,186 +28,151 @@ export class AuthService {
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
-  private avatarObjectKey(fileName: string): string {
-    const prefix = appConfig().storageUrl.avatar.replace(/^\/+/, '').replace(/\/+$/, '');
-    const name = String(fileName || 'avatar')
-      .trim()
-      .replace(/^\/+/, '')
-      .replace(/\s+/g, '_')
-      .replace(/[^a-zA-Z0-9._-]/g, '');
-    return `${prefix}/${name}`;
-  }
-
   async me(userId: string) {
-    try {
-      const user = await this.prisma.user.findFirst({
-        where: { id: userId },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          avatar: true,
-          address: true,
-          phone_number: true,
-          type: true,
-          role_users: {
-            select: {
-              role: { select: { name: true, title: true } },
-            },
-          },
-          gender: true,
-          date_of_birth: true,
-          experience_level: true,
-          ActingGoals: true,
-          created_at: true,
-        },
-      });
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        address: true,
+        phone_number: true,
+        type: true,
+        date_of_birth: true,
+        experience: true,
+        about: true,
+        created_at: true,
+      },
+    });
 
-      if (!user) {
-        return {
-          success: false,
-          message: 'User not found',
-        };
-      }
-
-      if (user.avatar) {
-        // If avatar already contains an absolute URL, use it as-is; otherwise build via storage adapter
-        const isAbsolute = /^https?:\/\//i.test(user.avatar);
-        const normalizedAvatar = String(user.avatar).replace(/^\/+/, '');
-        user['avatar_url'] = isAbsolute
-          ? user.avatar
-          : SazedStorage.url(this.avatarObjectKey(normalizedAvatar));
-      }
-
-      // Derive roles and single user_role
-      const roles = ((user as any).role_users || [])
-        .map((ru) => String(ru?.role?.name || '').toLowerCase())
-        .filter(Boolean);
-      (user as any).roles = roles;
-      // Priority mapping: su_admin > admin > teacher > student
-      let user_role: string | null = null;
-      if (roles.includes('su_admin')) user_role = 'su_admin';
-      else if (roles.includes('admin')) user_role = 'admin';
-      else if (roles.includes('teacher')) user_role = 'teacher';
-      else if (roles.includes('student')) user_role = 'student';
-      (user as any).user_role = user_role || null;
-
-      return { success: true, data: user };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
+
+    if (user.avatar) {
+      user['avatar'] = NajimStorage.url(user?.avatar);
+    }
+
+    return { success: true, data: user };
   }
 
   // In your updateUser method
 
   async updateUser(
-    userId: string,
+    user_id: string,
     updateUserDto: UpdateUserDto,
-    image?: Express.Multer.File,
+    avatar?: Express.Multer.File,
+    cover_image?: Express.Multer.File,
   ) {
-    try {
-      const data: any = {};
+    const data: any = {};
 
-      console.log('hit in the update user service');
+    const user = await UserRepository.getUserDetails(user_id);
 
-      // Update user data fields if provided
-      if (updateUserDto.name) {
-        data.name = updateUserDto.name;
-      }
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
 
-      if (updateUserDto.phone_number) {
-        data.phone_number = updateUserDto.phone_number;
-      }
+    if (updateUserDto.name) {
+      data.name = updateUserDto.name;
+    }
 
-      if (updateUserDto.experience_level) {
-        data.experience_level = updateUserDto.experience_level;
-      }
+    if (updateUserDto.username) {
+      data.username = updateUserDto.username;
+    }
 
-      const goalsInput =
-        (updateUserDto as any).acting_goals ??
-        (updateUserDto as any).ActingGoals;
-      if (typeof goalsInput === 'string' && goalsInput.trim().length > 0) {
-        data.ActingGoals = {
-          upsert: {
-            update: { acting_goals: goalsInput },
-            create: { acting_goals: goalsInput },
-          },
-        };
-      }
+    if (updateUserDto.about) {
+      data.about = updateUserDto.about;
+    }
 
-      if (updateUserDto.date_of_birth) {
-        data.date_of_birth = DateHelper.format(updateUserDto.date_of_birth);
-      }
+    if (updateUserDto.phone_number) {
+      data.phone_number = updateUserDto.phone_number;
+    }
 
-      if (image) {
-        const safeOriginal = (image.originalname || 'avatar')
-          .trim()
-          .replace(/\s+/g, '_')
-          .replace(/[^a-zA-Z0-9._-]/g, '');
-        const fileName = `${StringHelper.randomString()}_${safeOriginal}`;
-        const objectKey = this.avatarObjectKey(fileName);
-        try {
-          // Attempt upload first to avoid deleting old before success
-          await SazedStorage.put(objectKey, image.buffer, {
-            contentType: image.mimetype,
-            contentDisposition: 'inline',
-          });
+    if (updateUserDto.experience) {
+      data.experience = updateUserDto.experience;
+    }
 
-          const mediaUrl = `${process.env.AWS_S3_ENDPOINT}/${process.env.AWS_S3_BUCKET}/${objectKey}`;
+    if (updateUserDto.date_of_birth) {
+      data.date_of_birth = updateUserDto.date_of_birth;
+    }
 
-          // delete old image from storage only after successful upload
-          const oldImage = await this.prisma.user.findFirst({
-            where: { id: userId },
-            select: { avatar: true },
-          });
-
-          if (oldImage?.avatar) {
-            try {
-              await SazedStorage.delete(
-                `${appConfig().storageUrl.avatar.replace(/\/+$/, '')}/${String(oldImage.avatar).replace(/^\/+/, '')}`,
-              );
-            } catch (e) {
-              console.warn('Failed to delete old avatar:', e?.message || e);
-            }
-          }
-
-          data.avatar = mediaUrl;
-
-          console.log('mediaUrl', mediaUrl);
-        } catch (e) {
-          console.warn('Avatar upload failed:', e?.message || e);
-        }
-      }
-
-      console.log('avater url', data.avatar);
-
-      const user = await UserRepository.getUserDetails(userId);
-      if (user) {
-        await this.prisma.user.update({
-          where: { id: userId },
-          data: {
-            ...data,
-          },
+    if (avatar) {
+      const fileName =
+        appConfig().storageUrl.avatar +
+        '/' +
+        NajimStorage.generateFileName(avatar.originalname);
+      try {
+        // Attempt upload first to avoid deleting old before success
+        await NajimStorage.put(fileName, avatar.buffer, {
+          contentType: avatar.mimetype,
+          contentDisposition: 'inline',
         });
 
-        return {
-          success: true,
-          message: 'User updated successfully',
-        };
-      } else {
-        return {
-          success: false,
-          message: 'User not found',
-        };
+        // delete old image from storage only after successful upload
+        const oldAvatar = await this.prisma.user.findFirst({
+          where: { id: user_id },
+          select: { avatar: true },
+        });
+
+        if (oldAvatar?.avatar) {
+          try {
+            await NajimStorage.delete(oldAvatar?.avatar);
+          } catch (e) {
+            console.warn('Failed to delete old avatar:', e?.message || e);
+          }
+        }
+
+        data.avatar = fileName;
+      } catch (e) {
+        console.warn('Avatar upload failed:', e?.message || e);
       }
-    } catch (error) {
+    }
+
+    if (cover_image) {
+      const fileName =
+        appConfig().storageUrl.cover_image +
+        '/' +
+        NajimStorage.generateFileName(cover_image.originalname);
+      try {
+        // Attempt upload first to avoid deleting old before success
+        await NajimStorage.put(fileName, cover_image.buffer, {
+          contentType: cover_image.mimetype,
+          contentDisposition: 'inline',
+        });
+
+        // delete old image from storage only after successful upload
+        const oldCoverImage = await this.prisma.user.findFirst({
+          where: { id: user_id },
+          select: { cover_image: true },
+        });
+
+        if (oldCoverImage?.cover_image) {
+          try {
+            await NajimStorage.delete(oldCoverImage?.cover_image);
+          } catch (e) {
+            console.warn('Failed to delete old cover image:', e?.message || e);
+          }
+        }
+
+        data.cover_image = fileName;
+      } catch (e) {
+        console.warn('Cover image upload failed:', e?.message || e);
+      }
+    }
+
+    if (user) {
+      await this.prisma.user.update({
+        where: { id: user_id },
+        data,
+      });
+
       return {
-        success: false,
-        message: error.message,
+        success: true,
+        message: 'User updated successfully',
       };
+    } else {
+      throw new NotFoundException('User not found');
     }
   }
 
@@ -264,39 +231,32 @@ export class AuthService {
   }
 
   async login({ email, userId }) {
-    try {
-      const payload = { email: email, sub: userId };
+    const payload = { email: email, sub: userId };
 
-      const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
-      const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
-      const user = await UserRepository.getUserDetails(userId);
+    const user = await UserRepository.getUserDetails(userId);
 
-      // store refreshToken
-      await this.redis.set(
-        `refresh_token:${user.id}`,
-        refreshToken,
-        'EX',
-        60 * 60 * 24 * 7, // 7 days in seconds
-      );
+    // store refreshToken
+    // await this.redis.set(
+    //   `refresh_token:${user.id}`,
+    //   refreshToken,
+    //   'EX',
+    //   60 * 60 * 24 * 7, // 7 days in seconds
+    // );
 
-      return {
-        success: true,
-        message: 'Logged in successfully',
-        authorization: {
-          type: 'bearer',
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        },
-        type: user.type,
-        userId: user.id,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
+    return {
+      success: true,
+      message: 'Logged in successfully',
+      authorization: {
+        type: 'bearer',
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      },
+      type: user.type,
+      user_id: user.id,
+    };
   }
 
   async refreshToken(user_id: string, refreshToken: string) {
@@ -376,138 +336,113 @@ export class AuthService {
     password: string;
     type?: string;
   }) {
-    try {
-      // Check if email already exist
+    const userEmailExist = await UserRepository.exist({
+      field: 'email',
+      value: String(email),
+    });
 
-      const userEmailExist = await UserRepository.exist({
-        field: 'email',
-        value: String(email),
+    if (userEmailExist) {
+      throw new ConflictException('Email already exist');
+    }
+
+    const user = await UserRepository.createUser({
+      email: email,
+      password: password,
+      type: type ?? 'student',
+    });
+
+    if (user == null && user.success == false) {
+      throw new InternalServerErrorException('Failed to create account');
+    }
+
+    // create stripe customer account
+    // const stripeCustomer = await StripePayment.createCustomer({
+    //   user_id: user.data.id,
+    //   email: email,
+    //   name: name,
+    // });
+
+    // if (stripeCustomer) {
+    //   await this.prisma.user.update({
+    //     where: {
+    //       id: user.data.id,
+    //     },
+    //     data: {
+    //       billing_id: stripeCustomer.id,
+    //     },
+    //   });
+    // }
+
+    // ----------------------------------------------------
+    // // create otp code
+    // const token = await UcodeRepository.createToken({
+    //   userId: user.data.id,
+    //   isOtp: true,
+    // });
+
+    // // send otp code to email
+    // await this.mailService.sendOtpCodeToEmail({
+    //   email: email,
+    //   name: name,
+    //   otp: token,
+    // });
+
+    // return {
+    //   success: true,
+    //   message: 'We have sent an OTP code to your email',
+    // };
+
+    // ----------------------------------------------------
+
+    // Generate verification token
+    // const token = await UcodeRepository.createVerificationToken({
+    //   userId: user.data.id,
+    //   email: email,
+    // });
+
+    // // Send verification email with token
+    // await this.mailService.sendVerificationLink({
+    //   email,
+    //   name: email,
+    //   token: token.token,
+    //   type: type,
+    // });
+
+    // return {
+    //   success: true,
+    //   message: 'We have sent a verification link to your email',
+    // };
+
+    return {
+      success: true,
+      message: 'You have successfully registered',
+    };
+  }
+
+  async forgotPassword(email: string) {
+    const user = await UserRepository.exist({
+      field: 'email',
+      value: email,
+    });
+
+    if (user) {
+      const token = await UcodeRepository.createToken({
+        userId: user.id,
+        isOtp: true,
       });
 
-      if (userEmailExist) {
-        return {
-          success: false,
-          message: 'Email already exist',
-        };
-      }
-
-      const user = await UserRepository.createUser({
+      await this.mailService.sendOtpCodeToEmail({
         email: email,
-        password: password,
-        type: type,
+        name: user.name,
+        otp: token,
       });
-
-      if (user == null && user.success == false) {
-        return {
-          success: false,
-          message: 'Failed to create account',
-        };
-      }
-
-      // create stripe customer account
-      // const stripeCustomer = await StripePayment.createCustomer({
-      //   user_id: user.data.id,
-      //   email: email,
-      //   name: name,
-      // });
-
-      // if (stripeCustomer) {
-      //   await this.prisma.user.update({
-      //     where: {
-      //       id: user.data.id,
-      //     },
-      //     data: {
-      //       billing_id: stripeCustomer.id,
-      //     },
-      //   });
-      // }
-
-      // ----------------------------------------------------
-      // // create otp code
-      // const token = await UcodeRepository.createToken({
-      //   userId: user.data.id,
-      //   isOtp: true,
-      // });
-
-      // // send otp code to email
-      // await this.mailService.sendOtpCodeToEmail({
-      //   email: email,
-      //   name: name,
-      //   otp: token,
-      // });
-
-      // return {
-      //   success: true,
-      //   message: 'We have sent an OTP code to your email',
-      // };
-
-      // ----------------------------------------------------
-
-      // Generate verification token
-      // const token = await UcodeRepository.createVerificationToken({
-      //   userId: user.data.id,
-      //   email: email,
-      // });
-
-      // // Send verification email with token
-      // await this.mailService.sendVerificationLink({
-      //   email,
-      //   name: email,
-      //   token: token.token,
-      //   type: type,
-      // });
-
-      // return {
-      //   success: true,
-      //   message: 'We have sent a verification link to your email',
-      // };
 
       return {
         success: true,
-        message: 'You have successfully registered',
+        message: 'We have sent an OTP code to your email',
       };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
-  }
-
-  async forgotPassword(email) {
-    try {
-      const user = await UserRepository.exist({
-        field: 'email',
-        value: email,
-      });
-
-      if (user) {
-        const token = await UcodeRepository.createToken({
-          userId: user.id,
-          isOtp: true,
-        });
-
-        await this.mailService.sendOtpCodeToEmail({
-          email: email,
-          name: user.name,
-          otp: token,
-        });
-
-        return {
-          success: true,
-          message: 'We have sent an OTP code to your email',
-        };
-      } else {
-        return {
-          success: false,
-          message: 'Email not found',
-        };
-      }
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+    } else {
+      throw new NotFoundException('Email not found');
     }
   }
 
@@ -903,8 +838,6 @@ export class AuthService {
         data: {
           email: facebookData.email,
           name: facebookData.name,
-          first_name: facebookData.firstName,
-          last_name: facebookData.lastName,
           email_verified_at: new Date(), // Mark email as verified since it's from Facebook
           type: 'user', // Default type
         },

@@ -170,38 +170,42 @@ export class StripePayment {
   }
 
   /**
-   * Create stripe hosted checkout session
-   * @param customer
-   * @param price
-   * @returns
+   * Create a Stripe Checkout Session for one-time payment
    */
-  static async createCheckoutSession() {
-    const success_url = `${
-      appConfig().app.url
-    }/success?session_id={CHECKOUT_SESSION_ID}`;
-    const cancel_url = `${appConfig().app.url}/failed`;
-
-    const session = await Stripe.checkout.sessions.create({
+  static async createCheckoutSessionPayment(params: {
+    customer: string;
+    amount: number; // in pence/cents (smallest unit)
+    currency: string;
+    productName: string;
+    metadata: Record<string, string>;
+    success_url: string;
+    cancel_url: string;
+  }) {
+    return Stripe.checkout.sessions.create({
       mode: 'payment',
+      customer: params.customer,
       payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
-            currency: 'usd',
-            product_data: {
-              name: 'Sample Product',
-            },
-            unit_amount: 2000, // $20.00
+            currency: params.currency,
+            product_data: { name: params.productName },
+            unit_amount: params.amount,
           },
           quantity: 1,
         },
       ],
-
-      success_url: success_url,
-      cancel_url: cancel_url,
-      // automatic_tax: { enabled: true },
+      metadata: params.metadata,
+      success_url: params.success_url,
+      cancel_url: params.cancel_url,
     });
-    return session;
+  }
+
+  /**
+   * Retrieve a Checkout Session by ID
+   */
+  static async retrieveCheckoutSession(sessionId: string) {
+    return Stripe.checkout.sessions.retrieve(sessionId);
   }
 
   /**

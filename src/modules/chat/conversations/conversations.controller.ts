@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -11,17 +13,26 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
-import { CreateDmDto } from './dto/create-dm.dto';
-import { CreateGroupDto } from './dto/create-group.dto';
-import { id } from 'date-fns/locale';
+import {
+  AddMemberDto,
+  CreateUserReportDto,
+  CreateConversationDto,
+  MarkAsReadDto,
+  UpdateConversationSilentDto,
+} from './dto/create-conversation.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
-import { MemberRole } from '@prisma/client';
+import { ConversationType, MemberRole } from '@prisma/client';
 import { memoryStorage } from 'multer';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOkResponse } from '@nestjs/swagger';
 
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+import {
+  AttachmentsQueryDto,
+  ConversationQueryDto,
+  QueryGroupMembersDto,
+} from './dto/query-conversation.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('conversations')
@@ -29,116 +40,145 @@ import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.
 export class ConversationsController {
   constructor(private readonly service: ConversationsService) {}
 
-  @Post('dm')
-  createDm(@GetUser() user: any, @Body() dto: CreateDmDto) {
-    return this.service.createDm(user.userId, dto.otherUserId);
-  }
-
-  @Post('group')
-  @ApiOkResponse({ description: 'Group conversation created successfully.' })
+  // updated
+  @Post()
+  @ApiOkResponse({ description: 'Conversation created successfully.' })
   @UseInterceptors(
     FileInterceptor('avatar', {
       storage: memoryStorage(),
     }),
   )
-  createGroup(
-    @GetUser() user: any,
-    @Body() dto: CreateGroupDto,
+  createConversation(
+    @GetUser('userId') user_id: string,
+    @Body() createConversationDto: CreateConversationDto,
     @UploadedFile() avatar?: Express.Multer.File,
   ) {
-    return this.service.createGroup(
-      user.userId,
-      dto.title,
-      dto.memberIds,
+    return this.service.createConversation(
+      user_id,
+      createConversationDto,
       avatar,
     );
   }
 
-  @Get('group-conversations')
-  listGroupConversations(@GetUser() user: any) {
-    return this.service.listGroupConversations(user.userId);
+  // updated
+  @Get()
+  getMyConversations(
+    @GetUser('userId') user_id: string,
+    @Query() query: ConversationQueryDto,
+  ) {
+    return this.service.getMyConversations(user_id, query);
   }
 
-  @Get()
-  listMine(
-    @GetUser() user: any,
-    @Query('take') take = '20',
-    @Query('skip') skip = '0',
+  // updated
+  @Patch(':conversation_id/read')
+  markAsRead(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+    @Body() markAsReadDto: MarkAsReadDto,
   ) {
-    return this.service.myConversations(
-      user.userId,
-      Number(take),
-      Number(skip),
+    return this.service.markAsRead(conversation_id, user_id, markAsReadDto);
+  }
+
+  //updated
+  @Post(':conversation_id/members')
+  addMembers(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+    @Body() addMemberDto: AddMemberDto,
+  ) {
+    return this.service.addMembers(conversation_id, user_id, addMemberDto);
+  }
+
+  // updated
+  @Get(':conversation_id/members')
+  getMembers(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+    @Query() query: QueryGroupMembersDto,
+  ) {
+    return this.service.getGroupMembers(conversation_id, user_id, query);
+  }
+
+  // updated
+  @Patch(':conversation_id/members/:member_id/role')
+  updateMemberRole(
+    @Param('conversation_id') conversation_id: string,
+    @Param('member_id') member_id: string,
+    @GetUser('userId') user_id: string,
+    @Body() body: { role: MemberRole },
+  ) {
+    return this.service.updateMemberRole(
+      conversation_id,
+      user_id,
+      member_id,
+      body.role,
     );
   }
 
-  // unread for one conversation
-  @Get(':id/unread')
-  unread(@Param('id') id: string, @GetUser() user: any) {
-    return this.service.unreadFor(id, user.userId);
-  }
-
-  // mark read up to now or specific timestamp
-  @Patch(':id/read')
-  markRead(
-    @Param('id') id: string,
-    @GetUser() user: any,
-    @Body() body: { at?: string; messageCreatedAt?: string },
+  // updated
+  @Delete(':conversation_id/members/:member_id')
+  removeMember(
+    @Param('conversation_id') conversation_id: string,
+    @Param('member_id') member_id: string,
+    @GetUser('userId') user_id: string,
   ) {
-    const at = body?.at
-      ? new Date(body.at)
-      : body?.messageCreatedAt
-        ? new Date(body.messageCreatedAt)
-        : undefined;
-    return this.service.markRead(id, user.userId, at);
+    return this.service.removeMember(conversation_id, user_id, member_id);
   }
 
-  // --- member management ---
-  @Post(':id/members')
-  addMembers(
-    @Param('id') id: string,
-    @GetUser() user: any,
-    @Body() body: { memberIds: string[] },
+  @Delete(':conversation_id/leave')
+  leaveConversation(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
   ) {
-    return this.service.addMembers(id, user.userId, body.memberIds || []);
+    return this.service.leaveConversation(conversation_id, user_id);
   }
 
-  @Get(':id/members')
-  getMembers(
-    @Param('id') id: string,
-    @GetUser() user: any,
-    @Query('role') role?: MemberRole,
+  @Delete(':conversation_id')
+  deleteConversation(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
   ) {
-    return this.service.getGroupMembers(id, user.userId, role);
+    return this.service.deleteConversation(conversation_id, user_id);
   }
 
-  @Patch(':id/members/:userId/role')
-  setRole(
-    @Param('id') id: string,
-    @Param('userId') targetUserId: string,
-    @GetUser() user: any,
-    @Body() body: { role: MemberRole },
-  ) {
-    return this.service.setRole(id, user.userId, targetUserId, body.role);
-  }
-
-  @Post(':id/members/:userId/remove')
-  remove(
-    @Param('id') id: string,
-    @Param('userId') targetUserId: string,
-    @GetUser() user: any,
-  ) {
-    return this.service.removeMember(id, user.userId, targetUserId);
-  }
-
-  //------ clear conversation for me----
-  @Patch(':id/clear')
+  // updated
+  @Patch(':conversation_id/clear')
   clearForMe(
-    @Param('id') id,
-    @GetUser() user: any,
-    @Body() body?: { upTo?: string },
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
   ) {
-    const upTo = body?.upTo ? new Date(body.upTo) : undefined;
-    return this.service.clearForUser(id, user.userId, upTo);
+    return this.service.clearForMe(conversation_id, user_id);
+  }
+
+  @Patch(':conversation_id/silent')
+  updateSilent(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+    @Body() body: UpdateConversationSilentDto,
+  ) {
+    return this.service.updateConversationSilent(
+      conversation_id,
+      user_id,
+      body,
+    );
+  }
+
+  // updated
+  @Get(':conversation_id/attachments')
+  getAttachments(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+    @Query() query: AttachmentsQueryDto,
+  ) {
+    return this.service.getAttachments(conversation_id, user_id, query);
+  }
+
+  @Post('report/:reported_user_id')
+  reportUser(
+    @GetUser('userId') user_id: string,
+    @Param('reported_user_id') reported_user_id: string,
+    @Body() body: CreateUserReportDto,
+  ) {
+    return this.service.reportUser(user_id, reported_user_id, body);
   }
 }

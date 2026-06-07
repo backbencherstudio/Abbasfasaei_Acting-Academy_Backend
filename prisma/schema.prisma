@@ -30,113 +30,101 @@ model Account {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @default(now())
-  joined_at    DateTime?
-  deleted_at   DateTime?
-  status       Int?      @default(1) @db.SmallInt
-  approved_at  DateTime?
-  availability String?
-
-  email       String? @unique
-  username    String? @unique
-  name        String? @db.VarChar(255)
-  first_name  String? @db.VarChar(255)
-  last_name   String? @db.VarChar(255)
-  password    String? @db.VarChar(255)
-  domain      String? @unique
-  avatar      String?
-  cover_image String?
-  about       String?
-
-  phone_number  String?
-  country       String?
-  state         String?
-  city          String?
-  address       String?
-  zip_code      String?
-  gender        String?
-  date_of_birth DateTime? @db.Date
-
-  customer_id       String?
-  type              String?   @default("user")
+  id                String    @id @default(cuid())
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @default(now())
+  deleted_at        DateTime?
+  approved_at       DateTime?
   email_verified_at DateTime?
+  joined_at         DateTime? @default(now())
+
+  status   Int?    @default(1) @db.SmallInt
+  email    String? @unique
+  username String? @unique
+  name     String? @db.VarChar(255)
+
+  password String? @db.VarChar(255)
+  avatar   String?
+
+  cover_image   String?
+  about         String?
+  phone_number  String?
+  address       String?
+  date_of_birth DateTime? @db.Date
+  experience    String?
+
+  availability Int?
+  customer_id  String?
+
+  type String? @default("user")
 
   is_two_factor_enabled Int?    @default(0)
   two_factor_secret     String?
 
-  lastSeenAt       DateTime?
-  actingGoalsId    String?
-  experience_level ExperienceLevel?
+  last_active_at DateTime?
 
   // Accounts & auth
   accounts Account[]
 
   // Community: authored and interactions
-  authoredPosts        CommunityPost[]        @relation("authoredPosts")
-  communityShares      CommunityShare[]
-  communityLikes       CommunityLike[]
-  communityComments    CommunityComment[]
-  CommunityCommentLike CommunityCommentLike[]
-  communityPollVotes   CommunityPollVote[]
+  posts                CommunityPost[]
+  community_shares     CommunityShare[]
+  community_likes      CommunityLike[]
+  community_comments   CommunityComment[]
+  community_poll_votes CommunityPollVote[]
 
   // Chat schema relations
-  memberships      Membership[]
-  messages         Message[]         @relation("MessageSender")
-  deletedMessages  Message[]         @relation("MessageDeletedBy")
-  blocksInitiated  Block[]           @relation("UserBlocks")
-  blockedBy        Block[]           @relation("UserBlockedBy")
-  receipts         Receipt[]
-  reports          Report[]
-  callParticipants CallParticipant[]
+  memberships       Membership[]
+  messages          Message[]         @relation("MessageSender")
+  deleted_messages  Message[]         @relation("MessageDeletedBy")
+  blocks_initiated  Block[]           @relation("UserBlocks")
+  blocked_by        Block[]           @relation("UserBlockedBy")
+  receipts          Receipt[]
+  reports           Report[]
+  call_participants CallParticipant[]
 
   // Direct message/notification relations
-  receiver_messages      Message[]      @relation("receiver")
-  sender_messages        Message[]      @relation("sender")
-  receiver_notifications Notification[] @relation("receiver")
-  sender_notifications   Notification[] @relation("sender")
+  receiver_notifications Notification[]    @relation("receiver")
+  sender_notifications   Notification[]    @relation("sender")
+  message_reactions      MessageReaction[]
 
   // Courses & enrollments
-  Course     Course[]
-  Enrollment Enrollment[]
+  assigned_courses Course[]     @relation("instructor")
+  enrollments      Enrollment[]
 
   // Assignments & attendance
-  AssignmentSubmission      AssignmentSubmission[]
-  attendances               Attendance[]           @relation("UserAttendances")
-  assignmentGradesAsStudent AssignmentGrade[]      @relation("AssignmentGradeStudent")
-  assignmentGradesAsTeacher AssignmentGrade[]      @relation("AssignmentGradeTeacher")
-  assignmentsAsTeacher      Assignment[]           @relation("AssignmentTeacher")
-
-  // ActingGoals
-  ActingGoals ActingGoals?
+  assignment_submissions AssignmentSubmission[]
+  attendances            Attendance[]           @relation("UserAttendances")
 
   // Events
-  createdEvents    Event[]       @relation("EventCreator")
-  eventMemberships EventMember[]
-  // eventPayments    EventPayment[]
+  created_events Event[]
 
-  // Payments
-  // payment_histories PaymentHistory[]
-  // userPayments      UserPayment[]
-
-  // Roles & settings
   role_users    RoleUser[]
   roles         Role[]
   user_settings UserSetting[]
   ucodes        Ucode[]
 
   // Conversations (creator/participant)
-  creator_conversations     Conversation[] @relation("creator")
-  participant_conversations Conversation[] @relation("participant")
-  userReportsAsReporter     UserReport[]   @relation("Reporter")
-  userReportsAsReported     UserReport[]   @relation("ReportedUser")
+  creator_conversations    Conversation[] @relation("creator")
+  user_reports_as_reporter UserReport[]   @relation("Reporter")
+  user_reports_as_reported UserReport[]   @relation("ReportedUser")
 
-  createdQRSessions QRAttendanceSession[]
+  created_qr_sessions QRAttendanceSession[]
 
-  transactions Transaction[]
-  payments     Payment[]
+  orders               Order[]
+  payment_transactions PaymentTransaction[]
+  event_registrations  EventRegistration[]
 
+  created_assignment_grades AssignmentGrade[]
+  created_module_classes    ModuleClass[]
+  course_modules            CourseModule[]
+
+  created_assignments   Assignment[]    @relation
+  created_courses       Course[]        @relation("creator")
+  allowed_friends_posts CommunityPost[] @relation("VisibilityAllowedFriends")
+
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_name_trgm_idx")
+  @@index([username(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_username_trgm_idx")
   @@map("users")
 }
 
@@ -212,6 +200,7 @@ model RoleUser {
   @@map("role_users")
 }
 
+// updated
 model NotificationEvent {
   id            String         @id @default(cuid())
   created_at    DateTime       @default(now())
@@ -219,12 +208,14 @@ model NotificationEvent {
   deleted_at    DateTime?
   status        Int?           @default(1) @db.SmallInt
   type          String?
-  text          String?
+  title         String?
+  content       String?
   notifications Notification[]
 
   @@map("notification_events")
 }
 
+// updated
 model Notification {
   id                    String             @id @default(cuid())
   created_at            DateTime           @default(now())
@@ -243,150 +234,122 @@ model Notification {
   @@map("notifications")
 }
 
-// -------------------------------------------------------------
-// LEGACY PAYMENT MODELS (COMMENTED OUT FOR MIGRATION)
-// -------------------------------------------------------------
+// updated
+enum CourseStatus {
+  DRAFT
+  UPCOMING
+  ACTIVE
+  INACTIVE
+  COMPLETED
+}
 
-// model UserPayment {
-//   id                String           @id @default(cuid())
-//   enrollmentId      String           @unique
-//   payment_type      PaymentType?
-//   payment_status    PaymentStatus    @default(DUE)
-//   payment_method    String?
-//   account_holder    String?
-//   card_number       String?
-//   card_expiry       String?
-//   card_cvc          String?
-//   provider          String?          @default("STRIPE")
-//   customer_id       String?
-//   payment_method_id String?
-//   card_brand        String?
-//   card_last4        String?
-//   card_exp_month    Int?
-//   card_exp_year     Int?
-//   invoice_url       String?
-//   invoice_sent      Boolean?         @default(false)
-//   amount            Decimal?
-//   currency          String?          @default("USD")
-//   payment_date      DateTime?        @default(now())
-//   transaction_id    String?
-//   user_id           String
-//   enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-//   user              User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
-//   payment_histories PaymentHistory[]
-// 
-//   @@map("enrollment_payments")
-// }
-// 
-// model PaymentHistory {
-//   id             String        @id @default(cuid())
-//   created_at     DateTime      @default(now())
-//   updated_at     DateTime      @default(now())
-//   deleted_at     DateTime?
-//   user_id        String
-//   description    String?
-//   userPaymentId  String?
-//   amount         Decimal?
-//   currency       String?       @default("USD")
-//   payment_date   DateTime?     @default(now())
-//   payment_status PaymentStatus @default(DUE)
-//   payment_type   PaymentType?
-//   transaction_id String?
-//   userPayment    UserPayment?  @relation(fields: [userPaymentId], references: [id], onDelete: Cascade)
-//   user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-// 
-//   @@map("payment_histories")
-// }
-
+// updated
 model Course {
   id         String   @id @default(cuid())
   created_at DateTime @default(now())
   updated_at DateTime @default(now()) @updatedAt
   start_date DateTime
 
-  title                 String
-  createdBy             String
-  instructorId          String?
-  fee                   Decimal
-  course_overview       String
-  course_module_details String
-  installment_process   String
-  seat_capacity         String         @default("50")
-  class_time            String
-  duration              String
-  status                CourseStatus   @default(ACTIVE)
-  instructor            User?          @relation(fields: [instructorId], references: [id], onDelete: Cascade)
-  modules               CourseModule[]
-  enrollments           Enrollment[]
-  payments              Payment[]
+  title               String
+  fee_pence           Int          @default(0) // price in pence e.g 2300 -> 23.00
+  course_overview     String
+  seat_capacity       Int          @default(50)
+  installment_process String
+  class_time          String
+  duration            Int
+  rules_regulations   String
+  contract            String
+  status              CourseStatus @default(DRAFT)
+
+  creator_id    String?
+  instructor_id String?
+
+  instructor  User?          @relation("instructor", fields: [instructor_id], references: [id], onDelete: Cascade)
+  creator     User?          @relation("creator", fields: [creator_id], references: [id], onDelete: Cascade)
+  modules     CourseModule[]
+  enrollments Enrollment[]
+  orders      Order[]
+
+  @@map("courses")
 }
 
+// updated
 model CourseModule {
-  id              String        @id @default(cuid())
-  courseId        String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
   module_name     String
   module_overview String?
   module_title    String
-  course          Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  classes         ModuleClass[]
+
+  course_id  String
+  creator_id String?
+
+  creator User?         @relation(fields: [creator_id], references: [id], onDelete: SetNull)
+  course  Course        @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  classes ModuleClass[]
 
   @@map("course_modules")
 }
 
+// updated
 model ModuleClass {
-  id             String       @id @default(cuid())
-  moduleId       String
-  class_title    String
-  class_name     String?
-  class_overview String?
-  duration       String?
-  start_date     DateTime?
-  class_time     String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  assignments    Assignment[]
-  attendances    Attendance[]
-  classAssets    ClassAsset[]
-  module         CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
 
-  qrSessions QRAttendanceSession[]
+  class_at DateTime?
+  start_at DateTime?
+  end_at   DateTime?
+
+  class_name     String
+  class_title    String
+  class_overview String?
+  duration       Int?
+
+  module_id  String
+  creator_id String?
+
+  creator      User?                 @relation(fields: [creator_id], references: [id], onDelete: SetNull)
+  module       CourseModule          @relation(fields: [module_id], references: [id], onDelete: Cascade)
+  attendances  Attendance[]
+  qr_sessions  QRAttendanceSession[]
+  class_assets Attachment[]
+  assignments  Assignment[]
 
   @@map("module_classes")
 }
 
+// updated
 model Assignment {
-  id              String                 @id @default(cuid())
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
   title           String
   description     String?
-  submission_Date DateTime
-  due_date        DateTime
+  submission_date DateTime
   total_marks     Int
-  attachment_url  Json?
-  average_score   Int?                   @default(0)
-  createdAt       DateTime               @default(now())
-  teacherId       String
-  teacher         User                   @relation("AssignmentTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
-  moduleClassId   String
-  moduleClass     ModuleClass            @relation(fields: [moduleClassId], references: [id], onDelete: Cascade)
-  submissions     AssignmentSubmission[]
-  grades          AssignmentGrade[]
+
+  class_id   String
+  creator_id String?
+
+  creator User?       @relation(fields: [creator_id], references: [id], onDelete: SetNull)
+  class   ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
+
+  attachments Attachment[]
+  submissions AssignmentSubmission[]
+  grades      AssignmentGrade[]
 
   @@map("assignments")
 }
 
-model ClassAsset {
-  id         String      @id @default(cuid())
-  created_at DateTime    @default(now())
-  updated_at DateTime    @default(now())
-  deleted_at DateTime?
-  class_id   String
-  asset_type AssetType
-  asset_url  String
-  class      ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
-
-  @@map("class_assets")
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  LEAVE
 }
 
 model Attendance {
@@ -407,16 +370,20 @@ model Attendance {
 }
 
 model QRAttendanceSession {
-  id         String      @id @default(cuid())
-  created_at DateTime    @default(now())
-  updated_at DateTime    @default(now())
-  token      String      @unique
-  class_id   String
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
   expires_at DateTime
-  is_active  Boolean     @default(true)
+
+  token      String  @unique
+  class_id   String
+  qr_image   String?
   created_by String
-  class      ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
-  creator    User        @relation(fields: [created_by], references: [id], onDelete: Cascade)
+
+  class   ModuleClass @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  creator User        @relation(fields: [created_by], references: [id], onDelete: Cascade)
+
+  is_active Boolean @default(true)
 
   @@index([token])
   @@index([class_id])
@@ -425,53 +392,98 @@ model QRAttendanceSession {
   @@map("qr_attendance_sessions")
 }
 
+// updated
+enum AssignmentSubmissionStatus {
+  PENDING
+  SUBMITTED
+  NOT_SUBMITTED
+  GRADED
+}
+
+// updated
 model AssignmentSubmission {
-  id          String   @id @default(cuid())
-  title       String?
-  description String?
-  fileUrl     String?
-  submitted   Boolean  @default(false)
-  submittedAt DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+  id           String   @id @default(cuid())
+  submitted_at DateTime @default(now())
+  updated_at   DateTime @default(now()) @updatedAt
 
-  total_Submissions Int? @default(0)
+  description   String?
+  assignment_id String
+  student_id    String
+  status        AssignmentSubmissionStatus @default(PENDING)
+  attachments   Attachment[]
 
-  assignmentId String
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-
-  studentId String
-  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  grade AssignmentGrade? @relation("SubmissionToGrade")
+  student    User              @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  assignment Assignment        @relation(fields: [assignment_id], references: [id], onDelete: Cascade)
+  grades     AssignmentGrade[]
 
   @@map("assignment_submissions")
 }
 
+// updated
 model AssignmentGrade {
-  id           String   @id @default(cuid())
-  assignmentId String
-  studentId    String
-  teacherId    String
+  id        String   @id @default(cuid())
+  graded_at DateTime @default(now())
+
   grade        String
   grade_number Int
   feedback     String?
-  gradedBy     String?
-  gradedAt     DateTime @default(now())
 
-  total_graded Int? @default(0)
+  graded_by String? @default("SYSTEM")
 
-  status String @default("PENDING")
+  assignment_id String
+  creator_id    String?
+  submission_id String? @unique
 
-  assignment   Assignment            @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  student      User                  @relation("AssignmentGradeStudent", fields: [studentId], references: [id], onDelete: Cascade)
-  teacher      User                  @relation("AssignmentGradeTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
-  submissionId String?               @unique
-  submission   AssignmentSubmission? @relation("SubmissionToGrade", fields: [submissionId], references: [id], onDelete: Cascade)
+  assignment Assignment            @relation(fields: [assignment_id], references: [id], onDelete: Cascade)
+  creator    User?                 @relation(fields: [creator_id], references: [id], onDelete: SetNull)
+  submission AssignmentSubmission? @relation(fields: [submission_id], references: [id], onDelete: Cascade)
 
-  @@unique([assignmentId, studentId])
+  @@unique([assignment_id, creator_id])
   @@map("assignment_grades")
 }
 
+// updated
+enum AttachmentType {
+  IMAGE
+  DOCUMENT
+  VIDEO
+  AUDIO
+  RULES_REGULATIONS
+  DIGITAL_CONTRACT
+  FILE
+}
+
+// updated
+model Attachment {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  type       AttachmentType?
+  file_path  String
+  file_name  String?
+  mime_type  String?
+  size_bytes BigInt?
+
+  enrollment_id            String?
+  class_id                 String?
+  assignment_id            String?
+  assignment_submission_id String?
+  community_post_id        String?
+  message_id               String?
+
+  message               Message?              @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  class                 ModuleClass?          @relation(fields: [class_id], references: [id], onDelete: Cascade)
+  enrollment            Enrollment?           @relation(fields: [enrollment_id], references: [id], onDelete: Cascade)
+  assignment            Assignment?           @relation(fields: [assignment_id], references: [id], onDelete: Cascade)
+  assignment_submission AssignmentSubmission? @relation(fields: [assignment_submission_id], references: [id], onDelete: Cascade)
+  community_post        CommunityPost?        @relation(fields: [community_post_id], references: [id], onDelete: Cascade)
+
+  @@index([enrollment_id])
+  @@map("attachments")
+}
+
+// updated
 enum EnrollmentStep {
   DIGITAL_SIGNATURE_START
   COURSE_SELECTION
@@ -482,222 +494,107 @@ enum EnrollmentStep {
   COMPLETED
 }
 
+// updated
 enum EnrollmentStatus {
-  ACTIVE
   PENDING
-  ALUMNI
-  RESTRICTED
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+  EXPIRED
 }
 
+// updated
+enum EnrollmentType {
+  FULL_PAYMENT
+  INSTALLMENT
+  FREE
+}
+
+// updated
+enum CourseProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+// updated
 model Enrollment {
   id         String   @id @default(cuid())
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  user_id          String
-  full_name        String
-  email            String
-  phone            String
-  address          String
-  date_of_birth    DateTime?       @db.Date
-  experience_level ExperienceLevel
+  user_id String
 
-  courseId           String?
-  enrolled_documents Json?
-  status             EnrollmentStatus @default(PENDING)
-  IsPaymentCompleted Boolean          @default(false)
-  actingGoals        ActingGoals?
-  step               EnrollmentStep   @default(FORM_FILLING)
+  name          String
+  email         String
+  phone         String
+  address       String
+  date_of_birth DateTime
+  experience    String?
 
-  course Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course_id String?
+  order_id  String? @unique
+
+  status          EnrollmentStatus @default(PENDING)
+  step            EnrollmentStep   @default(FORM_FILLING)
+  enrollment_type EnrollmentType   @default(FULL_PAYMENT)
+
+  course_progress_status CourseProgressStatus @default(NOT_STARTED)
+  progress_percent       Int                  @default(0)
+
+  access_starts_at DateTime?
+  access_ends_at   DateTime?
+
+  started_at   DateTime?
+  completed_at DateTime?
+
+  enrolled_by_admin_id String?
+  admin_note           String?
+
+  rules_regulations_accepted     Boolean?          @default(false)
+  rules_regulations_signature_id String?
+  rules_regulations_signature    DigitalSignature? @relation("RulesRegulationsSignature", fields: [rules_regulations_signature_id], references: [id], onDelete: SetNull)
+
+  digital_contract_accepted     Boolean?          @default(false)
+  digital_contract_signature_id String?
+  digital_contract_signature    DigitalSignature? @relation("DigitalContractSignature", fields: [digital_contract_signature_id], references: [id], onDelete: SetNull)
+
+  course Course? @relation(fields: [course_id], references: [id], onDelete: SetNull)
   user   User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  order  Order?  @relation(fields: [order_id], references: [id], onDelete: SetNull)
 
-  digital_contract_signing  DigitalContractSigning?
-  rules_regulations_signing RulesAndRegulationsSigning?
+  attachments Attachment[]
 
+  @@unique([user_id, course_id])
+  @@index([user_id, course_id, status], map: "enrollments_user_course_status_idx")
+  @@index([user_id])
+  @@index([course_id])
+  @@index([status])
   @@map("enrollments")
 }
 
-model DigitalContractSigning {
-  id               String            @id @default(cuid())
-  enrollmentId     String            @unique
-  agreed           Boolean           @default(false)
-  enrollment       Enrollment        @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  digitalSignature DigitalSignature?
-
-  @@map("digital_contract_signings")
-}
-
-model RulesAndRegulationsSigning {
-  id               String            @id @default(cuid())
-  enrollmentId     String            @unique
-  accepted         Boolean           @default(false)
-  enrollment       Enrollment        @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  digitalSignature DigitalSignature?
-
-  @@map("enrollment_terms_and_conditions")
-}
-
+// updated
 model DigitalSignature {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
+  signed_at DateTime @default(now())
+
   full_name String
   signature String
 
-  signed_at DateTime? @db.Date
-
-  digital_contract_signing_id  String? @unique
-  rules_regulations_signing_id String? @unique
-
-  digital_contract_signing  DigitalContractSigning?     @relation(fields: [digital_contract_signing_id], references: [id], onDelete: Cascade)
-  rules_regulations_signing RulesAndRegulationsSigning? @relation(fields: [rules_regulations_signing_id], references: [id], onDelete: Cascade)
+  rules_regulations_enrollments Enrollment[] @relation("RulesRegulationsSignature")
+  digital_contract_enrollments  Enrollment[] @relation("DigitalContractSignature")
 
   @@map("digital_signatures")
 }
 
-model ActingGoals {
-  id           String      @id @default(cuid())
-  acting_goals String
-  userId       String      @unique
-  enrollmentId String?     @unique
-  enrollment   Enrollment? @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("acting_goals")
-}
-
-// model EnrollmentProfile {
-//   id                String           @id @default(cuid())
-//   enrollmentId      String           @unique
-//   avatar            String?
-//   personal_info     Json?
-//   account_settings  Json?
-//   subscription      Json?
-//   contract_docs     Json?
-//   feedback          Json?
-//   push_notification Json?
-//   support           Json?
-//   address           String
-//   created_at        DateTime         @default(now())
-//   date_of_birth     DateTime?        @db.Date
-//   email             String
-//   enrollment_status EnrollmentStatus @default(PENDING)
-//   experience_level  ExperienceLevel
-//   full_name         String
-//   phone             String
-//   updated_at        DateTime         @default(now()) @updatedAt
-//   enrollment        Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
-// 
-//   @@map("enrollment_profiles")
-// }
-
-//
 //---------------------------------- Community & Social Models -----------------//
-//
+// updated
 enum PostType {
   POST
   POLL
 }
 
-model CommunityPost {
-  id           String                @id @default(cuid())
-  author_Id    String
-  content      String
-  status       PostStatus            @default(REQUEST)
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
-  media_Url    String?
-  mediaType    MediaType?
-  post_type    PostType              @default(POST)
-  visibility   PostVisibility        @default(PUBLIC)
-  comments     CommunityComment[]
-  likes        CommunityLike[]
-  poll_options CommunityPollOption[]
-  author       User                  @relation("authoredPosts", fields: [author_Id], references: [id], onDelete: Cascade)
-  shares       CommunityShare[]
-}
-
-model CommunityLike {
-  id        String        @id @default(cuid())
-  postId    String
-  userId    String
-  createdAt DateTime      @default(now())
-  avatar    String?
-  name      String?
-  username  String?
-  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model CommunityComment {
-  id        String                 @id @default(cuid())
-  postId    String
-  userId    String
-  content   String
-  createdAt DateTime               @default(now())
-  avatar    String?
-  name      String?
-  username  String?
-  parentId  String?
-  parent    CommunityComment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   CommunityComment[]     @relation("CommentReplies")
-  post      CommunityPost          @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  likes     CommunityCommentLike[]
-}
-
-model CommunityCommentLike {
-  id        String           @id @default(cuid())
-  commentId String
-  userId    String
-  name      String?
-  username  String?
-  avatar    String?
-  createdAt DateTime         @default(now())
-  comment   CommunityComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model CommunityShare {
-  id        String        @id @default(cuid())
-  postId    String
-  userId    String
-  createdAt DateTime      @default(now())
-  avatar    String?
-  name      String?
-  username  String?
-  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model CommunityPollOption {
-  id     String              @id @default(cuid())
-  postId String
-  title  String
-  post   CommunityPost       @relation(fields: [postId], references: [id], onDelete: Cascade)
-  votes  CommunityPollVote[]
-}
-
-model CommunityPollVote {
-  id        String              @id @default(cuid())
-  createdAt DateTime            @default(now())
-  optionId  String
-  userId    String
-  option    CommunityPollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model UserReport {
-  id             String       @id @default(cuid())
-  reporterId     String
-  reportedUserId String
-  reason         String
-  description    String?
-  createdAt      DateTime     @default(now())
-  status         ReportStatus @default(OPEN)
-  reportedUser   User         @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
-  reporter       User         @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
-}
-
+// updated
 enum PostStatus {
   APPROVED
   REQUEST
@@ -706,202 +603,420 @@ enum PostStatus {
   ANNOUNCEMENT
 }
 
+// updated
+enum PostVisibility {
+  PUBLIC
+  PRIVATE
+  FRIENDS
+}
+
+// updated
+model CommunityPost {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  author_id String
+  content   String
+
+  visibility      PostVisibility @default(PUBLIC)
+  allowed_friends User[]         @relation("VisibilityAllowedFriends")
+
+  status       PostStatus            @default(REQUEST)
+  attachments  Attachment[]
+  post_type    PostType              @default(POST)
+  comments     CommunityComment[]
+  likes        CommunityLike[]
+  poll_options CommunityPollOption[]
+  author       User                  @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  shares       CommunityShare[]
+
+  @@index([author_id], map: "community_posts_author_idx")
+  @@map("community_posts")
+}
+
+// updated
+model CommunityLike {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+
+  user_id    String
+  post_id    String?
+  comment_id String?
+
+  user    User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  post    CommunityPost?    @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  comment CommunityComment? @relation(fields: [comment_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, post_id], map: "community_likes_user_post_idx")
+  @@map("community_likes")
+}
+
+// updated
+model CommunityComment {
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  post_id String
+  user_id String
+
+  content String
+
+  parent_id String?
+
+  likes   CommunityLike[]
+  replies CommunityComment[] @relation("CommentReplies")
+  user    User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  post    CommunityPost      @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  parent  CommunityComment?  @relation("CommentReplies", fields: [parent_id], references: [id], onDelete: Restrict)
+
+  @@index([user_id, post_id, deleted_at], map: "community_comments_user_post_deleted_idx")
+  @@map("community_comments")
+}
+
+// updated
+model CommunityShare {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+
+  post_id String
+  user_id String
+  medium  String?
+
+  user User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  post CommunityPost @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@map("community_shares")
+}
+
+// updated
+model CommunityPollOption {
+  id String @id @default(cuid())
+
+  post_id String
+  title   String
+
+  votes CommunityPollVote[]
+  post  CommunityPost       @relation(fields: [post_id], references: [id], onDelete: Cascade)
+
+  @@index([post_id], map: "community_poll_options_post_idx")
+  @@map("community_poll_options")
+}
+
+// updated
+model CommunityPollVote {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+
+  option_id String
+  user_id   String
+
+  option CommunityPollOption @relation(fields: [option_id], references: [id], onDelete: Cascade)
+  user   User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, option_id])
+  @@index([user_id, option_id], map: "community_poll_votes_user_option_idx")
+  @@map("community_poll_votes")
+}
+
+// updated
+enum ReportStatus {
+  OPEN
+  REVIEWED
+}
+
+// updated
+model UserReport {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  reporter_id String
+  reported_id String
+  reason      String
+  description String?
+  status      ReportStatus @default(OPEN)
+
+  reported_user User @relation("ReportedUser", fields: [reported_id], references: [id], onDelete: Cascade)
+  reporter      User @relation("Reporter", fields: [reporter_id], references: [id], onDelete: Cascade)
+
+  @@map("user_reports")
+}
+
 //
 //---------------------------------- Chat Models -----------------//
 //
 
+enum ConversationType {
+  DM
+  GROUP
+}
+
 model Conversation {
-  id             String           @id @default(cuid())
-  creator_id     String?
-  participant_id String?
-  avatarUrl      String?
-  createdAt      DateTime         @default(now())
-  createdBy      String?
-  dmKey          String?          @unique
-  title          String?
-  type           ConversationType
-  updatedAt      DateTime         @updatedAt
-  receiverTitle  String?
-  senderTitle    String?
-  callSessions   CallSession[]
-  memberships    Membership[]
-  creator        User?            @relation("creator", fields: [creator_id], references: [id], onDelete: Cascade)
-  participant    User?            @relation("participant", fields: [participant_id], references: [id], onDelete: Cascade)
-  messages       Message[]
+  id            String           @id @default(cuid())
+  creator_id    String?
+  avatar        String?
+  created_at    DateTime         @default(now())
+  dm_key        String?          @unique
+  title         String?
+  type          ConversationType
+  updated_at    DateTime         @updatedAt
+  call_sessions CallSession[]
+  memberships   Membership[]
+  creator       User?            @relation("creator", fields: [creator_id], references: [id], onDelete: SetNull)
+  messages      Message[]
 
   @@map("conversations")
 }
 
-model Membership {
-  id             String       @id @default(cuid())
-  role           MemberRole   @default(MEMBER)
-  joinedAt       DateTime     @default(now())
-  lastReadAt     DateTime?
-  clearedAt      DateTime?
-  mutedUntil     DateTime?
-  archivedAt     DateTime?
-  leftAt         DateTime?
-  userId         String
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+enum MemberRole {
+  ADMIN
+  MEMBER
+}
 
-  @@unique([userId, conversationId])
-  @@index([conversationId, userId])
+model Membership {
+  id           String    @id @default(cuid())
+  nickname     String?
+  joined_at    DateTime  @default(now())
+  last_read_at DateTime?
+  cleared_at   DateTime?
+  muted_until  DateTime?
+
+  archived_at DateTime?
+
+  left_at DateTime?
+
+  user_id         String
+  conversation_id String
+
+  role MemberRole @default(MEMBER)
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([conversation_id, user_id])
+  @@map("memberships")
+}
+
+enum MessageKind {
+  TEXT
+  IMAGE
+  FILE
+  AUDIO
+  VIDEO
+  CALL
+  SYSTEM
 }
 
 model Message {
-  id             String       @id @default(cuid())
-  receiver_id    String?
-  content        Json
-  conversationId String
-  createdAt      DateTime     @default(now())
-  deletedAt      DateTime?
-  deletedById    String?
-  kind           MessageKind  @default(TEXT)
-  senderId       String
-  sender_user_id String?
-  readAt         DateTime?
-  media_Url      String?
-  receipts       Receipt[]
-  reports        Report[]
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  deletedBy      User?        @relation("MessageDeletedBy", fields: [deletedById], references: [id], onDelete: Cascade)
-  receiver       User?        @relation("receiver", fields: [receiver_id], references: [id], onDelete: Cascade)
-  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  sender_user    User?        @relation("sender", fields: [sender_user_id], references: [id], onDelete: Cascade)
+  id              String      @id @default(cuid())
+  content         Json?
+  conversation_id String
+  created_at      DateTime    @default(now())
+  edited_at       DateTime?
+  deleted_at      DateTime?
+  deleted_by_id   String?
+  kind            MessageKind @default(TEXT)
+  sender_id       String
 
-  @@index([conversationId, createdAt])
+  reply_to_id     String?
+  call_session_id String?
+
+  attachments Attachment[]
+  receipts    Receipt[]
+  reports     Report[]
+  reactions   MessageReaction[]
+
+  replies  Message[] @relation("MessageReplies")
+  reply_to Message?  @relation("MessageReplies", fields: [reply_to_id], references: [id], onDelete: SetNull)
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  deleted_by   User?        @relation("MessageDeletedBy", fields: [deleted_by_id], references: [id], onDelete: SetNull)
+  sender       User         @relation("MessageSender", fields: [sender_id], references: [id], onDelete: Cascade)
+
+  call_session CallSession? @relation(fields: [call_session_id], references: [id], onDelete: SetNull)
+
+  @@index([conversation_id, created_at])
+  @@index([sender_id])
+  @@index([reply_to_id])
+  @@index([call_session_id])
   @@map("messages")
 }
 
-model Receipt {
-  id        String        @id @default(cuid())
-  status    ReceiptStatus
-  at        DateTime      @default(now())
-  messageId String
-  userId    String
-  message   Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+model MessageReaction {
+  id         String   @id @default(cuid())
+  message_id String
+  user_id    String
+  emoji      String
+  created_at DateTime @default(now())
+  message    Message  @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, userId])
+  @@unique([message_id, user_id, emoji])
+  @@index([message_id])
+  @@map("message_reactions")
+}
+
+enum ReceiptStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+model Receipt {
+  id         String        @id @default(cuid())
+  status     ReceiptStatus
+  at         DateTime      @default(now())
+  message_id String
+  user_id    String
+  message    Message       @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([message_id, user_id])
+  @@map("receipts")
 }
 
 model Block {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  blockerId String
-  blockedId String
-  blocked   User     @relation("UserBlockedBy", fields: [blockedId], references: [id], onDelete: Cascade)
-  blocker   User     @relation("UserBlocks", fields: [blockerId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  blocker_id String
+  blocked_id String
+  blocked    User     @relation("UserBlockedBy", fields: [blocked_id], references: [id], onDelete: Cascade)
+  blocker    User     @relation("UserBlocks", fields: [blocker_id], references: [id], onDelete: Cascade)
 
-  @@unique([blockerId, blockedId])
+  @@unique([blocker_id, blocked_id])
+  @@index([blocker_id, blocked_id], map: "blocks_blocker_blocked_idx")
+  @@map("blocks")
 }
 
 model Report {
-  id         String       @id @default(cuid())
-  messageId  String
-  reporterId String
-  reason     String
-  status     ReportStatus @default(OPEN)
-  createdAt  DateTime     @default(now())
-  message    Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  id          String       @id @default(cuid())
+  message_id  String
+  reporter_id String
+  reason      String
+  status      ReportStatus @default(OPEN)
+  created_at  DateTime     @default(now())
+  message     Message      @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  reporter    User         @relation(fields: [reporter_id], references: [id], onDelete: Cascade)
 
-  @@index([messageId])
+  @@index([message_id])
+  @@map("reports")
+}
+
+enum CallKind {
+  AUDIO
+  VIDEO
+}
+
+enum CallStatus {
+  ONGOING
+  ENDED
+  MISSED
 }
 
 model CallSession {
-  id             String            @id @default(cuid())
-  conversationId String
-  kind           CallKind
-  startedBy      String
-  startedAt      DateTime          @default(now())
-  endedAt        DateTime?
-  participants   CallParticipant[]
-  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id              String     @id @default(cuid())
+  conversation_id String
+  kind            CallKind
+  status          CallStatus @default(ONGOING)
+  started_by      String
+  started_at      DateTime   @default(now())
+  ended_at        DateTime?
+  /// Persisted at call creation. Stable even if conversation title changes later.
+  room_name       String?
+
+  participants CallParticipant[]
+  messages     Message[]
+  conversation Conversation      @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@map("call_sessions")
 }
 
 model CallParticipant {
-  id         String      @id @default(cuid())
-  callId     String
-  userId     String
-  joinedAt   DateTime    @default(now())
-  leftAt     DateTime?
-  camera     String      @default("on")
-  microphone String      @default("on")
-  call       CallSession @relation(fields: [callId], references: [id], onDelete: Cascade)
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String      @id @default(cuid())
+  call_id           String
+  user_id           String
+  joined_at         DateTime    @default(now())
+  left_at           DateTime?
+  camera            Boolean     @default(true)
+  microphone        Boolean     @default(true)
+  is_screen_sharing Boolean     @default(false)
+  call              CallSession @relation(fields: [call_id], references: [id], onDelete: Cascade)
+  user              User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@index([callId])
+  @@index([call_id])
+  @@map("call_participants")
 }
 
 //
 //---------------------------------- Event Models -----------------//
 //
 
+// updated
 model Event {
-  id          String    @id @default(cuid())
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @default(now())
-  deleted_at  DateTime?
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  start_at DateTime
+  time     String?
+
   name        String
   description String?
   overview    String?
-  date        DateTime
-  time        String?
-  location    String
-  amount      Decimal?
 
-  created_by String
-  members    EventMember[]
-  // payments           EventPayment[]
-  creator    User          @relation("EventCreator", fields: [created_by], references: [id], onDelete: Cascade)
-  payments   Payment[]
+  location String
 
+  amount_pence Int @default(0) // price in pence e.g 2300 -> 23.00
+
+  created_by String?
+
+  orders        Order[]
+  registrations EventRegistration[]
+  creator       User?               @relation(fields: [created_by], references: [id], onDelete: Cascade)
+
+  @@index([created_by])
+  @@index([start_at])
   @@map("events")
 }
 
-model EventMember {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-
-  ticket_number String @unique
-
-  event_id   String
-  user_id    String
-  payment_id String @unique
-
-  event   Event   @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  payment Payment @relation(fields: [payment_id], references: [id], onDelete: Cascade)
-
-  @@unique([event_id, user_id])
-  @@map("event_members")
+// updated
+enum EventRegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  ATTENDED
 }
 
-// model EventPayment {
-//   id              String             @id @default(cuid())
-//   created_at      DateTime           @default(now())
-//   updated_at      DateTime           @default(now())
-//   event_id        String
-//   user_id         String
-//   amount          Decimal
-//   currency        String?            @default("USD")
-//   status          EventPaymentStatus @default(PENDING)
-//   transaction_id  String?
-//   payment_method  String?
-//   payment_date    DateTime?
-//   receipt_file    String?
-//   invoice_file    String?
-//   transaction_ref String?
-//   event           Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
-//   user            User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
-// 
-//   @@unique([event_id, user_id])
-//   @@map("event_payments")
-// }
+// updated
+model EventRegistration {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  ticket_number String? @unique
+
+  event_id String
+  user_id  String
+  order_id String? @unique
+
+  status EventRegistrationStatus @default(PENDING)
+
+  attended_at DateTime?
+
+  event Event  @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user  User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  order Order? @relation(fields: [order_id], references: [id], onDelete: SetNull)
+
+  @@unique([event_id, user_id])
+  @@index([event_id])
+  @@index([user_id])
+  @@index([status])
+  @@map("event_registrations")
+}
 
 model Faq {
   id         String    @id @default(cuid())
@@ -990,131 +1105,20 @@ model UserSetting {
   @@map("user_settings")
 }
 
-enum CourseType {
-  ONE_YEAR_ADULT
-  TWO_YEAR_ADULT
-  TWO_YEAR_KIDS
-  FULL_PACKAGE_KIDS
-  FULL_PACKAGE_ADULTS
-}
-
-enum CourseStatus {
-  ACTIVE
-  INACTIVE
-}
-
-enum AssetType {
-  VIDEO
-  PHOTO
-  FILE
-}
-
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-}
-
-// enum PaymentType {
-//   MONTHLY
-//   ONE_TIME
-// }
-
-// enum PaymentStatus {
-//   PAID
-//   DUE
-//   OVER_DUE
-// }
-
-enum ExperienceLevel {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
-}
-
-enum MediaType {
-  PHOTO
-  VIDEO
-}
-
-enum PostVisibility {
-  PUBLIC
-  PRIVATE
-  FRIENDS
-}
-
-enum ReportStatus {
-  OPEN
-  REVIEWED
-}
-
-enum ConversationType {
-  DM
-  GROUP
-}
-
-enum MemberRole {
-  ADMIN
-  MEMBER
-}
-
-enum UserRole {
-  STUDENT
-  TEACHER
-  ADMIN
-}
-
-enum MessageKind {
-  TEXT
-  IMAGE
-  FILE
-  AUDIO
-  VIDEO
-  SYSTEM
-}
-
-enum ReceiptStatus {
-  DELIVERED
-  READ
-}
-
-enum CallKind {
-  AUDIO
-  VIDEO
-}
-
-enum EventStatus {
-  UPCOMING
-  ONGOING
-  COMPLETED
-  CANCELLED
-}
-
-// enum EventPaymentStatus {
-//   PENDING
-//   PAID
-//   FAILED
-//   REFUNDED
-// }
-
-enum OrderStatus {
-  PENDING
-  PROCESSING
-  COMPLETED
-  CANCELLED
-  REFUNDED
-  PARTIAL_PAID
-}
-
+// -------------------------------------------------------------------
+// updated
 enum ItemType {
   COURSE_ENROLLMENT
   EVENT_TICKET
 }
 
+// updated
 enum PaymentType {
   MONTHLY
   ONE_TIME
 }
 
+// updated
 enum TransactionStatus {
   PENDING
   SUCCESS
@@ -1122,73 +1126,215 @@ enum TransactionStatus {
   REFUNDED
 }
 
-enum PaymentGateway {
-  STRIPE
-  STRIPE_MANUAL_ENTRY
+// updated
+enum OrderItemType {
+  COURSE_ENROLLMENT
+  EVENT_TICKET
 }
 
-model Payment {
+// updated
+enum PaymentMode {
+  FULL
+  INSTALLMENT
+  MANUAL
+  FREE
+}
+
+// updated
+enum PaymentTransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+// updated
+enum PaymentGateway {
+  STRIPE
+  MANUAL
+}
+
+// updated
+enum InstallmentPlanStatus {
+  ACTIVE
+  COMPLETED
+  OVERDUE
+  CANCELLED
+}
+
+// updated
+enum InstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+// updated
+enum InstallmentInterval {
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+// updated
+model PaymentTransaction {
   id         String   @id @default(cuid())
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  order_number String      @unique // e.g., ORD-2026-XXXX
-  user_id      String
-  total_amount Decimal
-  paid_amount  Decimal     @default(0)
-  due_amount   Decimal     @default(0)
-  currency     String      @default("USD")
-  status       OrderStatus @default(PENDING)
+  transaction_ref String @unique
 
-  item_type              ItemType
-  payment_type           PaymentType
-  installment_amount     Decimal?
-  next_billing_date      DateTime?
-  stripe_subscription_id String?     @unique
-  notes                  String?
+  user_id  String
+  order_id String
+
+  installment_id String?
+
+  amount   Decimal @db.Decimal(10, 2)
+  currency String  @default("USD")
+
+  status  PaymentTransactionStatus @default(PENDING)
+  gateway PaymentGateway           @default(STRIPE)
+
+  payment_method String?
+  card_last4     String?
+  receipt_url    String?
+
+  stripe_payment_intent_id   String? @unique
+  stripe_charge_id           String? @unique
+  stripe_checkout_session_id String? @unique
+
+  metadata Json?
+
+  paid_at DateTime?
+
+  user        User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  order       Order        @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  installment Installment? @relation(fields: [installment_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([order_id])
+  @@index([installment_id])
+  @@index([status])
+  @@index([transaction_ref])
+  @@map("payment_transactions")
+}
+
+// ==============================================================================
+// updated
+model InstallmentPlan {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  order_id String @unique
+
+  total_amount Decimal @db.Decimal(10, 2)
+  paid_amount  Decimal @default(0) @db.Decimal(10, 2)
+  due_amount   Decimal @default(0) @db.Decimal(10, 2)
+
+  installment_count Int
+  interval          InstallmentInterval @default(MONTHLY)
+
+  start_date    DateTime
+  end_date      DateTime?
+  next_due_date DateTime?
+
+  status InstallmentPlanStatus @default(ACTIVE)
+
+  stripe_subscription_id String? @unique
+
+  order        Order         @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  installments Installment[]
+
+  @@index([status])
+  @@index([next_due_date])
+  @@map("installment_plans")
+}
+
+// updated
+model Installment {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  installment_plan_id String
+
+  installment_no Int
+  amount         Decimal @db.Decimal(10, 2)
+
+  due_date DateTime
+
+  status InstallmentStatus @default(PENDING)
+
+  paid_at DateTime?
+
+  installment_plan InstallmentPlan      @relation(fields: [installment_plan_id], references: [id], onDelete: Cascade)
+  transactions     PaymentTransaction[]
+
+  @@unique([installment_plan_id, installment_no])
+  @@index([installment_plan_id])
+  @@index([status])
+  @@index([due_date])
+  @@map("installments")
+}
+
+// updated
+enum OrderStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  PAYMENT_FAILED
+  CANCELLED
+  REFUNDED
+}
+
+// updated
+model Order {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  order_number String @unique
+
+  user_id String
+
+  item_type    OrderItemType
+  payment_mode PaymentMode
+  status       OrderStatus   @default(PENDING)
+
+  subtotal_amount Decimal @db.Decimal(10, 2)
+  discount_amount Decimal @default(0) @db.Decimal(10, 2)
+  total_amount    Decimal @db.Decimal(10, 2)
+
+  paid_amount Decimal @default(0) @db.Decimal(10, 2)
+  due_amount  Decimal @default(0) @db.Decimal(10, 2)
+
+  currency String @default("USD")
 
   course_id String?
   event_id  String?
+
+  notes String?
+
+  created_by_admin_id String?
+  admin_note          String?
 
   user   User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
   course Course? @relation(fields: [course_id], references: [id], onDelete: SetNull)
   event  Event?  @relation(fields: [event_id], references: [id], onDelete: SetNull)
 
-  transactions Transaction[]
-  eventMembers EventMember[]
+  enrollment       Enrollment?
+  installment_plan InstallmentPlan?
+  transactions     PaymentTransaction[]
+
+  event_registrations EventRegistration[]
 
   @@index([user_id])
   @@index([status])
-  @@map("payments")
+  @@index([item_type])
+  @@index([course_id])
+  @@index([event_id])
+  @@map("orders")
 }
-
-model Transaction {
-  id              String @id @default(cuid())
-  transaction_ref String @unique
-  user_id         String
-
-  amount   Decimal
-  currency String            @default("USD")
-  status   TransactionStatus @default(PENDING)
-  gateway  PaymentGateway    @default(STRIPE)
-
-  payment_method String?
-  payment_type   PaymentType @default(ONE_TIME)
-  card_last4     String?
-  receipt_url    String?
-  metadata       Json? // To store raw webhook data from payment provider
-
-  payment_date DateTime? @default(now())
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
-
-  user      User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  payment   Payment? @relation(fields: [paymentId], references: [id])
-  paymentId String?
-
-  @@index([user_id])
-  @@index([transaction_ref])
-  @@map("transactions")
-}
-
-// ==============================================================================

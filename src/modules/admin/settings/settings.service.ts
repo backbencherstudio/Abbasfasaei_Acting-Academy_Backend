@@ -29,10 +29,10 @@ export class SettingsService {
             phone_number: true,
             email: true,
             password: true,
-          }
+          },
         });
 
-        return { teacherInfo}
+        return { teacherInfo };
       }
     }
     const settings = await this.prisma.websiteInfo.findMany({
@@ -83,8 +83,6 @@ export class SettingsService {
       const updateData: any = {};
       let userData: any = null; // Declare userData outside the block
 
-      if (firstName) updateData.first_name = firstName;
-      if (lastName) updateData.last_name = lastName;
       if (email) updateData.email = email;
 
       if (currentPassword || newPassword || confirmNewPassword) {
@@ -103,8 +101,7 @@ export class SettingsService {
           select: {
             id: true,
             password: true,
-            first_name: true,
-            last_name: true,
+            name: true,
           },
         });
 
@@ -129,8 +126,7 @@ export class SettingsService {
         userData = await this.prisma.user.findUnique({
           where: { id: userId },
           select: {
-            first_name: true,
-            last_name: true,
+            name: true,
           },
         });
       }
@@ -140,8 +136,8 @@ export class SettingsService {
       }
 
       if (firstName || lastName) {
-        const currentFirstName = firstName || userData?.first_name || '';
-        const currentLastName = lastName || userData?.last_name || '';
+        const currentFirstName = firstName || '';
+        const currentLastName = lastName || '';
         updateData.name = `${currentFirstName} ${currentLastName}`.trim();
       }
 
@@ -151,8 +147,6 @@ export class SettingsService {
         select: {
           id: true,
           email: true,
-          first_name: true,
-          last_name: true,
           name: true,
         },
       });
