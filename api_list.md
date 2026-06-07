@@ -1,9 +1,9 @@
 # API Curl List
 
-- Base URL: `http://localhost:7777`
+- Base URL: `http://localhost:7777/api`
 - Skipped modules: none
 - Note: `transaction` module include kora hoyeche, karon eta alada module
-- Sync status: `2026-06-03` e `src/app.controller.ts` ebong `src/modules/**/**.controller.ts` er route-gular shathe verify kora hoyeche; attendance-related API docs latest controller/DTO changes-er shathe sync kora hoyeche
+- Sync status: `2026-06-07` e current controller route-gular shathe sync kora hoyeche; root health check chara shob route global `/api` prefix-er under-e ache
 
 ---
 
@@ -16,22 +16,28 @@
 curl -X GET "http://localhost:7777/"
 ```
 
+### API Health Check
+
+```bash
+curl -X GET "http://localhost:7777/api/"
+```
+
 ### Test Chunk Stream
 
 ```bash
-curl -X GET "http://localhost:7777/test-chunk-stream"
+curl -X GET "http://localhost:7777/api/test-chunk-stream"
 ```
 
 ### Test File Stream
 
 ```bash
-curl -X GET "http://localhost:7777/test-file-stream"
+curl -X GET "http://localhost:7777/api/test-file-stream"
 ```
 
 ### Test File Upload
 
 ```bash
-curl -X POST "http://localhost:7777/test-file-upload" \
+curl -X POST "http://localhost:7777/api/test-file-upload" \
   -F "image=@/path/to/image.jpg"
 ```
 
@@ -45,13 +51,13 @@ curl -X POST "http://localhost:7777/test-file-upload" \
 ### Get Current User
 
 ```bash
-curl -X GET "http://localhost:7777/auth/me"
+curl -X GET "http://localhost:7777/api/auth/me"
 ```
 
 ### Register
 
 ```bash
-curl -X POST "http://localhost:7777/auth/register" \
+curl -X POST "http://localhost:7777/api/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -63,7 +69,7 @@ curl -X POST "http://localhost:7777/auth/register" \
 ### Login
 
 ```bash
-curl -X POST "http://localhost:7777/auth/login" \
+curl -X POST "http://localhost:7777/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -74,7 +80,7 @@ curl -X POST "http://localhost:7777/auth/login" \
 ### Refresh Token
 
 ```bash
-curl -X POST "http://localhost:7777/auth/refresh-token" \
+curl -X POST "http://localhost:7777/api/auth/refresh-token" \
   -H "Content-Type: application/json" \
   -d '{
     "refresh_token": "YOUR_REFRESH_TOKEN"
@@ -84,37 +90,37 @@ curl -X POST "http://localhost:7777/auth/refresh-token" \
 ### Logout
 
 ```bash
-curl -X POST "http://localhost:7777/auth/logout"
+curl -X POST "http://localhost:7777/api/auth/logout"
 ```
 
 ### Google Login
 
 ```bash
-curl -X GET "http://localhost:7777/auth/google"
+curl -X GET "http://localhost:7777/api/auth/google"
 ```
 
 ### Google Redirect
 
 ```bash
-curl -X GET "http://localhost:7777/auth/google/redirect"
+curl -X GET "http://localhost:7777/api/auth/google/redirect"
 ```
 
 ### Facebook Login
 
 ```bash
-curl -X GET "http://localhost:7777/auth/facebook"
+curl -X GET "http://localhost:7777/api/auth/facebook"
 ```
 
 ### Facebook Redirect
 
 ```bash
-curl -X GET "http://localhost:7777/auth/facebook/redirect"
+curl -X GET "http://localhost:7777/api/auth/facebook/redirect"
 ```
 
 ### Update User
 
 ```bash
-curl -X PATCH "http://localhost:7777/auth/update" \
+curl -X PATCH "http://localhost:7777/api/auth/update" \
   -F "name=John Doe" \
   -F "username=johndoe" \
   -F "phone_number=+8801712345678" \
@@ -128,7 +134,7 @@ curl -X PATCH "http://localhost:7777/auth/update" \
 ### Forgot Password
 
 ```bash
-curl -X POST "http://localhost:7777/auth/forgot-password" \
+curl -X POST "http://localhost:7777/api/auth/forgot-password" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com"
@@ -138,7 +144,7 @@ curl -X POST "http://localhost:7777/auth/forgot-password" \
 ### Verify Email
 
 ```bash
-curl -X POST "http://localhost:7777/auth/verify-email" \
+curl -X POST "http://localhost:7777/api/auth/verify-email" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -149,7 +155,7 @@ curl -X POST "http://localhost:7777/auth/verify-email" \
 ### Resend Verification Email
 
 ```bash
-curl -X POST "http://localhost:7777/auth/resend-verification-email" \
+curl -X POST "http://localhost:7777/api/auth/resend-verification-email" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com"
@@ -159,7 +165,7 @@ curl -X POST "http://localhost:7777/auth/resend-verification-email" \
 ### Reset Password
 
 ```bash
-curl -X POST "http://localhost:7777/auth/reset-password" \
+curl -X POST "http://localhost:7777/api/auth/reset-password" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -171,7 +177,7 @@ curl -X POST "http://localhost:7777/auth/reset-password" \
 ### Change Password
 
 ```bash
-curl -X POST "http://localhost:7777/auth/change-password" \
+curl -X POST "http://localhost:7777/api/auth/change-password" \
   -H "Content-Type: application/json" \
   -d '{
     "old_password": "oldpassword123",
@@ -182,7 +188,7 @@ curl -X POST "http://localhost:7777/auth/change-password" \
 ### Request Email Change
 
 ```bash
-curl -X POST "http://localhost:7777/auth/request-email-change" \
+curl -X POST "http://localhost:7777/api/auth/request-email-change" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "newemail@example.com"
@@ -192,7 +198,7 @@ curl -X POST "http://localhost:7777/auth/request-email-change" \
 ### Change Email
 
 ```bash
-curl -X POST "http://localhost:7777/auth/change-email" \
+curl -X POST "http://localhost:7777/api/auth/change-email" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "newemail@example.com",
@@ -203,13 +209,13 @@ curl -X POST "http://localhost:7777/auth/change-email" \
 ### Generate 2FA Secret
 
 ```bash
-curl -X POST "http://localhost:7777/auth/generate-2fa-secret"
+curl -X POST "http://localhost:7777/api/auth/generate-2fa-secret"
 ```
 
 ### Verify 2FA
 
 ```bash
-curl -X POST "http://localhost:7777/auth/verify-2fa" \
+curl -X POST "http://localhost:7777/api/auth/verify-2fa" \
   -H "Content-Type: application/json" \
   -d '{
     "token": "123456"
@@ -219,13 +225,13 @@ curl -X POST "http://localhost:7777/auth/verify-2fa" \
 ### Enable 2FA
 
 ```bash
-curl -X POST "http://localhost:7777/auth/enable-2fa"
+curl -X POST "http://localhost:7777/api/auth/enable-2fa"
 ```
 
 ### Disable 2FA
 
 ```bash
-curl -X POST "http://localhost:7777/auth/disable-2fa"
+curl -X POST "http://localhost:7777/api/auth/disable-2fa"
 ```
 
 ---
@@ -238,19 +244,19 @@ curl -X POST "http://localhost:7777/auth/disable-2fa"
 ### Get Profile
 
 ```bash
-curl -X GET "http://localhost:7777/profile"
+curl -X GET "http://localhost:7777/api/profile"
 ```
 
 ### Get Personal Info
 
 ```bash
-curl -X GET "http://localhost:7777/profile/personal-info"
+curl -X GET "http://localhost:7777/api/profile/personal-info"
 ```
 
 ### Update Personal Info
 
 ```bash
-curl -X PUT "http://localhost:7777/profile/personal-info" \
+curl -X PUT "http://localhost:7777/api/profile/personal-info" \
   -H "Content-Type: application/json" \
   -d '{
     "fullName": "John Doe",
@@ -269,25 +275,25 @@ curl -X PUT "http://localhost:7777/profile/personal-info" \
 ### Disable Account
 
 ```bash
-curl -X PUT "http://localhost:7777/profile/disable-account"
+curl -X PUT "http://localhost:7777/api/profile/disable-account"
 ```
 
 ### Delete Account
 
 ```bash
-curl -X DELETE "http://localhost:7777/profile/delete-account"
+curl -X DELETE "http://localhost:7777/api/profile/delete-account"
 ```
 
 ### Activate Account
 
 ```bash
-curl -X PUT "http://localhost:7777/profile/activate-account"
+curl -X PUT "http://localhost:7777/api/profile/activate-account"
 ```
 
 ### Profile Logout
 
 ```bash
-curl -X POST "http://localhost:7777/profile/logout"
+curl -X POST "http://localhost:7777/api/profile/logout"
 ```
 
 ---
@@ -300,7 +306,7 @@ curl -X POST "http://localhost:7777/profile/logout"
 ### Get Student Overview
 
 ```bash
-curl -X GET "http://localhost:7777/overview"
+curl -X GET "http://localhost:7777/api/overview"
 ```
 
 ---
@@ -313,7 +319,7 @@ curl -X GET "http://localhost:7777/overview"
 ### Create Contact
 
 ```bash
-curl -X POST "http://localhost:7777/contact" \
+curl -X POST "http://localhost:7777/api/contact" \
   -H "Content-Type: application/json" \
   -d '{
     "first_name": "John",
@@ -334,13 +340,13 @@ curl -X POST "http://localhost:7777/contact" \
 ### Get All FAQ
 
 ```bash
-curl -X GET "http://localhost:7777/faq"
+curl -X GET "http://localhost:7777/api/faq"
 ```
 
 ### Get FAQ By ID
 
 ```bash
-curl -X GET "http://localhost:7777/faq/:id"
+curl -X GET "http://localhost:7777/api/faq/:id"
 ```
 
 ---
@@ -353,13 +359,13 @@ curl -X GET "http://localhost:7777/faq/:id"
 ### Get All Events
 
 ```bash
-curl -X GET "http://localhost:7777/events"
+curl -X GET "http://localhost:7777/api/events"
 ```
 
 ### Get Event By ID
 
 ```bash
-curl -X GET "http://localhost:7777/events/:event_id"
+curl -X GET "http://localhost:7777/api/events/:event_id"
 ```
 
 ---
@@ -372,55 +378,55 @@ curl -X GET "http://localhost:7777/events/:event_id"
 ### Get All Courses
 
 ```bash
-curl -X GET "http://localhost:7777/courses?my_courses=false"
+curl -X GET "http://localhost:7777/api/courses?my_courses=false"
 ```
 
 ### Get Course Details
 
 ```bash
-curl -X GET "http://localhost:7777/courses/:course_id"
+curl -X GET "http://localhost:7777/api/courses/:course_id"
 ```
 
 ### Get Course Assignments
 
 ```bash
-curl -X GET "http://localhost:7777/courses/:course_id/assignments"
+curl -X GET "http://localhost:7777/api/courses/:course_id/assignments"
 ```
 
 ### Get Course Assets
 
 ```bash
-curl -X GET "http://localhost:7777/courses/:course_id/assets?type=VIDEO"
+curl -X GET "http://localhost:7777/api/courses/:course_id/assets?type=VIDEO"
 ```
 
 ### Get Module Details
 
 ```bash
-curl -X GET "http://localhost:7777/courses/modules/:module_id"
+curl -X GET "http://localhost:7777/api/courses/modules/:module_id"
 ```
 
 ### Get Class Details
 
 ```bash
-curl -X GET "http://localhost:7777/courses/modules/classes/:class_id"
+curl -X GET "http://localhost:7777/api/courses/modules/classes/:class_id"
 ```
 
 ### Get Assignment Details
 
 ```bash
-curl -X GET "http://localhost:7777/courses/modules/classes/assignments/:assignment_id"
+curl -X GET "http://localhost:7777/api/courses/modules/classes/assignments/:assignment_id"
 ```
 
 ### Get Class Assignments
 
 ```bash
-curl -X GET "http://localhost:7777/courses/modules/classes/:class_id/assignments"
+curl -X GET "http://localhost:7777/api/courses/modules/classes/:class_id/assignments"
 ```
 
 ### Submit Assignment
 
 ```bash
-curl -X POST "http://localhost:7777/courses/modules/classes/assignments/:assignment_id" \
+curl -X POST "http://localhost:7777/api/courses/modules/classes/assignments/:assignment_id" \
   -F "title=Submission Title" \
   -F "description=Submission Description" \
   -F "fileUrl=https://example.com/submission.pdf" \
@@ -430,19 +436,19 @@ curl -X POST "http://localhost:7777/courses/modules/classes/assignments/:assignm
 ### Get Class Assets
 
 ```bash
-curl -X GET "http://localhost:7777/courses/modules/classes/:class_id/assets"
+curl -X GET "http://localhost:7777/api/courses/modules/classes/:class_id/assets"
 ```
 
 ### Get Enrollment Current Step
 
 ```bash
-curl -X GET "http://localhost:7777/courses/:course_id/enrollment/current_step"
+curl -X GET "http://localhost:7777/api/courses/:course_id/enrollment/current_step"
 ```
 
 ### Enroll User - Form Filling
 
 ```bash
-curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
+curl -X POST "http://localhost:7777/api/courses/:course_id/enrollment" \
   -H "Content-Type: application/json" \
   -d '{
     "step": "FORM_FILLING",
@@ -459,7 +465,7 @@ curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
 ### Enroll User - Rules Signing
 
 ```bash
-curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
+curl -X POST "http://localhost:7777/api/courses/:course_id/enrollment" \
   -H "Content-Type: application/json" \
   -d '{
     "step": "RULES_SIGNING",
@@ -473,7 +479,7 @@ curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
 ### Enroll User - Contract Signing
 
 ```bash
-curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
+curl -X POST "http://localhost:7777/api/courses/:course_id/enrollment" \
   -H "Content-Type: application/json" \
   -d '{
     "step": "CONTRACT_SIGNING",
@@ -487,7 +493,7 @@ curl -X POST "http://localhost:7777/courses/:course_id/enrollment" \
 ### Make Attendance By QR
 
 ```bash
-curl -X POST "http://localhost:7777/courses/attendance/make" \
+curl -X POST "http://localhost:7777/api/courses/attendance/make" \
   -H "Content-Type: application/json" \
   -d '{
     "token": "QR_TOKEN"
@@ -504,7 +510,7 @@ curl -X POST "http://localhost:7777/courses/attendance/make" \
 ### Create Post
 
 ```bash
-curl -X POST "http://localhost:7777/community/post" \
+curl -X POST "http://localhost:7777/api/community/post" \
   -F "post_type=POST" \
   -F "content=This is my first post" \
   -F "visibility=PUBLIC" \
@@ -514,7 +520,7 @@ curl -X POST "http://localhost:7777/community/post" \
 ### Create Poll Post
 
 ```bash
-curl -X POST "http://localhost:7777/community/post" \
+curl -X POST "http://localhost:7777/api/community/post" \
   -F "post_type=POLL" \
   -F "content=Which class do you like?" \
   -F "poll_options=Option 1" \
@@ -525,7 +531,7 @@ curl -X POST "http://localhost:7777/community/post" \
 ### Update Post
 
 ```bash
-curl -X PATCH "http://localhost:7777/community/post/:post_id" \
+curl -X PATCH "http://localhost:7777/api/community/post/:post_id" \
   -H "Content-Type: application/json" \
   -d '{
     "content": "Updated post content",
@@ -536,43 +542,43 @@ curl -X PATCH "http://localhost:7777/community/post/:post_id" \
 ### Get Community Feed
 
 ```bash
-curl -X GET "http://localhost:7777/community/feed?search=hello&cursor=CURSOR_VALUE&limit=10"
+curl -X GET "http://localhost:7777/api/community/feed?search=hello&cursor=CURSOR_VALUE&limit=10"
 ```
 
 ### Get Post Allowed List
 
 ```bash
-curl -X GET "http://localhost:7777/community/post/:post_id/allowed_list"
+curl -X GET "http://localhost:7777/api/community/post/:post_id/allowed_list"
 ```
 
 ### Delete Post
 
 ```bash
-curl -X DELETE "http://localhost:7777/community/post/:post_id"
+curl -X DELETE "http://localhost:7777/api/community/post/:post_id"
 ```
 
 ### Get Post Likes
 
 ```bash
-curl -X GET "http://localhost:7777/community/posts/:post_id/likes?cursor=CURSOR_VALUE&limit=10"
+curl -X GET "http://localhost:7777/api/community/posts/:post_id/likes?cursor=CURSOR_VALUE&limit=10"
 ```
 
 ### Like Post
 
 ```bash
-curl -X POST "http://localhost:7777/community/posts/:post_id/like"
+curl -X POST "http://localhost:7777/api/community/posts/:post_id/like"
 ```
 
 ### Vote On Poll
 
 ```bash
-curl -X PATCH "http://localhost:7777/community/post/:post_id/vote/:option_id"
+curl -X PATCH "http://localhost:7777/api/community/post/:post_id/vote/:option_id"
 ```
 
 ### Comment On Post
 
 ```bash
-curl -X POST "http://localhost:7777/community/post/:post_id/comment" \
+curl -X POST "http://localhost:7777/api/community/post/:post_id/comment" \
   -H "Content-Type: application/json" \
   -d '{
     "content": "Nice post",
@@ -583,25 +589,25 @@ curl -X POST "http://localhost:7777/community/post/:post_id/comment" \
 ### Get Post Comments
 
 ```bash
-curl -X GET "http://localhost:7777/community/post/:post_id/comments"
+curl -X GET "http://localhost:7777/api/community/post/:post_id/comments"
 ```
 
 ### Like Comment
 
 ```bash
-curl -X POST "http://localhost:7777/community/posts/comments/:comment_id/like"
+curl -X POST "http://localhost:7777/api/community/posts/comments/:comment_id/like"
 ```
 
 ### Delete Comment
 
 ```bash
-curl -X PATCH "http://localhost:7777/community/posts/comments/:comment_id/delete"
+curl -X PATCH "http://localhost:7777/api/community/posts/comments/:comment_id/delete"
 ```
 
 ### Share Post
 
 ```bash
-curl -X POST "http://localhost:7777/community/posts/:post_id/share" \
+curl -X POST "http://localhost:7777/api/community/posts/:post_id/share" \
   -H "Content-Type: application/json" \
   -d '{
     "medium": "facebook"
@@ -611,13 +617,13 @@ curl -X POST "http://localhost:7777/community/posts/:post_id/share" \
 ### Get User Profile
 
 ```bash
-curl -X GET "http://localhost:7777/community/profile/:user_id"
+curl -X GET "http://localhost:7777/api/community/profile/:user_id"
 ```
 
 ### Report User
 
 ```bash
-curl -X POST "http://localhost:7777/community/report/:reported_user_id" \
+curl -X POST "http://localhost:7777/api/community/report/:reported_user_id" \
   -H "Content-Type: application/json" \
   -d '{
     "reason": "spam",
@@ -635,7 +641,7 @@ curl -X POST "http://localhost:7777/community/report/:reported_user_id" \
 ### Get Admin Overview
 
 ```bash
-curl -X GET "http://localhost:7777/admin/overview"
+curl -X GET "http://localhost:7777/api/admin/overview"
 ```
 
 Attendance response field-er shape:
@@ -677,7 +683,7 @@ Notes:
 ### Create User
 
 ```bash
-curl -X POST "http://localhost:7777/admin/users" \
+curl -X POST "http://localhost:7777/api/admin/users" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "John Doe",
@@ -693,31 +699,31 @@ curl -X POST "http://localhost:7777/admin/users" \
 ### Get All Users
 
 ```bash
-curl -X GET "http://localhost:7777/admin/users?search=john&type=STUDENT&page=1&limit=10&status=ACTIVE"
+curl -X GET "http://localhost:7777/api/admin/users?search=john&type=STUDENT&page=1&limit=10&status=ACTIVE"
 ```
 
 ### Approve User
 
 ```bash
-curl -X POST "http://localhost:7777/admin/users/:user_id/approve"
+curl -X POST "http://localhost:7777/api/admin/users/:user_id/approve"
 ```
 
 ### Reject User
 
 ```bash
-curl -X POST "http://localhost:7777/admin/users/:user_id/reject"
+curl -X POST "http://localhost:7777/api/admin/users/:user_id/reject"
 ```
 
 ### Get User By ID
 
 ```bash
-curl -X GET "http://localhost:7777/admin/users/:user_id"
+curl -X GET "http://localhost:7777/api/admin/users/:user_id"
 ```
 
 ### Update User
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/users/:user_id" \
+curl -X PATCH "http://localhost:7777/api/admin/users/:user_id" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Updated Name",
@@ -728,7 +734,7 @@ curl -X PATCH "http://localhost:7777/admin/users/:user_id" \
 ### Update User Status
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/users/:user_id/status" \
+curl -X PATCH "http://localhost:7777/api/admin/users/:user_id/status" \
   -H "Content-Type: application/json" \
   -d '{
     "status": "BLOCKED"
@@ -738,7 +744,7 @@ curl -X PATCH "http://localhost:7777/admin/users/:user_id/status" \
 ### Delete User
 
 ```bash
-curl -X DELETE "http://localhost:7777/admin/users/:user_id"
+curl -X DELETE "http://localhost:7777/api/admin/users/:user_id"
 ```
 
 ---
@@ -751,13 +757,13 @@ curl -X DELETE "http://localhost:7777/admin/users/:user_id"
 ### Get General Settings
 
 ```bash
-curl -X GET "http://localhost:7777/admin/settings/general-settings"
+curl -X GET "http://localhost:7777/api/admin/settings/general-settings"
 ```
 
 ### Update General Settings
 
 ```bash
-curl -X POST "http://localhost:7777/admin/settings/general-settings" \
+curl -X POST "http://localhost:7777/api/admin/settings/general-settings" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Website Name",
@@ -770,13 +776,13 @@ curl -X POST "http://localhost:7777/admin/settings/general-settings" \
 ### Get Profile Settings
 
 ```bash
-curl -X GET "http://localhost:7777/admin/settings/profile-settings"
+curl -X GET "http://localhost:7777/api/admin/settings/profile-settings"
 ```
 
 ### Update Profile Settings
 
 ```bash
-curl -X POST "http://localhost:7777/admin/settings/update-profile" \
+curl -X POST "http://localhost:7777/api/admin/settings/update-profile" \
   -H "Content-Type: application/json" \
   -d '{
     "firstName": "John",
@@ -798,7 +804,7 @@ curl -X POST "http://localhost:7777/admin/settings/update-profile" \
 ### Update Website Info
 
 ```bash
-curl -X POST "http://localhost:7777/admin/website-info" \
+curl -X POST "http://localhost:7777/api/admin/website-info" \
   -F "name=My Website" \
   -F "phone_number=081234567890" \
   -F "email=mywebsite@gmail.com" \
@@ -812,7 +818,7 @@ curl -X POST "http://localhost:7777/admin/website-info" \
 ### Get Website Info
 
 ```bash
-curl -X GET "http://localhost:7777/admin/website-info"
+curl -X GET "http://localhost:7777/api/admin/website-info"
 ```
 
 ---
@@ -825,7 +831,7 @@ curl -X GET "http://localhost:7777/admin/website-info"
 ### Create Contact
 
 ```bash
-curl -X POST "http://localhost:7777/admin/contact" \
+curl -X POST "http://localhost:7777/api/admin/contact" \
   -H "Content-Type: application/json" \
   -d '{
     "first_name": "John",
@@ -839,19 +845,19 @@ curl -X POST "http://localhost:7777/admin/contact" \
 ### Get All Contacts
 
 ```bash
-curl -X GET "http://localhost:7777/admin/contact?q=john&status=1"
+curl -X GET "http://localhost:7777/api/admin/contact?q=john&status=1"
 ```
 
 ### Get Contact By ID
 
 ```bash
-curl -X GET "http://localhost:7777/admin/contact/:id"
+curl -X GET "http://localhost:7777/api/admin/contact/:id"
 ```
 
 ### Update Contact
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/contact/:id" \
+curl -X PATCH "http://localhost:7777/api/admin/contact/:id" \
   -H "Content-Type: application/json" \
   -d '{
     "message": "Updated message"
@@ -861,7 +867,7 @@ curl -X PATCH "http://localhost:7777/admin/contact/:id" \
 ### Delete Contact
 
 ```bash
-curl -X DELETE "http://localhost:7777/admin/contact/:id"
+curl -X DELETE "http://localhost:7777/api/admin/contact/:id"
 ```
 
 ---
@@ -874,7 +880,7 @@ curl -X DELETE "http://localhost:7777/admin/contact/:id"
 ### Create FAQ
 
 ```bash
-curl -X POST "http://localhost:7777/admin/faq" \
+curl -X POST "http://localhost:7777/api/admin/faq" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "What is the fee?",
@@ -886,7 +892,7 @@ curl -X POST "http://localhost:7777/admin/faq" \
 ### Batch Create FAQ
 
 ```bash
-curl -X POST "http://localhost:7777/admin/faq/batch-create" \
+curl -X POST "http://localhost:7777/api/admin/faq/batch-create" \
   -H "Content-Type: application/json" \
   -d '{
     "faqs": [
@@ -902,19 +908,19 @@ curl -X POST "http://localhost:7777/admin/faq/batch-create" \
 ### Get All FAQ
 
 ```bash
-curl -X GET "http://localhost:7777/admin/faq"
+curl -X GET "http://localhost:7777/api/admin/faq"
 ```
 
 ### Get FAQ By ID
 
 ```bash
-curl -X GET "http://localhost:7777/admin/faq/:id"
+curl -X GET "http://localhost:7777/api/admin/faq/:id"
 ```
 
 ### Update FAQ
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/faq/:id" \
+curl -X PATCH "http://localhost:7777/api/admin/faq/:id" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "Updated question",
@@ -925,7 +931,7 @@ curl -X PATCH "http://localhost:7777/admin/faq/:id" \
 ### Delete FAQ
 
 ```bash
-curl -X DELETE "http://localhost:7777/admin/faq/:id"
+curl -X DELETE "http://localhost:7777/api/admin/faq/:id"
 ```
 
 ---
@@ -938,25 +944,25 @@ curl -X DELETE "http://localhost:7777/admin/faq/:id"
 ### Get All Events
 
 ```bash
-curl -X GET "http://localhost:7777/admin/events?search=hiphop&page=1&limit=10&status=UPCOMING"
+curl -X GET "http://localhost:7777/api/admin/events?search=hiphop&page=1&limit=10&status=UPCOMING"
 ```
 
 ### Get Event By ID
 
 ```bash
-curl -X GET "http://localhost:7777/admin/events/:event_id"
+curl -X GET "http://localhost:7777/api/admin/events/:event_id"
 ```
 
 ### Get Event Members
 
 ```bash
-curl -X GET "http://localhost:7777/admin/events/:event_id/members?search=john&page=1&limit=10&start_date=2026-01-01&end_date=2026-12-31"
+curl -X GET "http://localhost:7777/api/admin/events/:event_id/members?search=john&page=1&limit=10&start_date=2026-01-01&end_date=2026-12-31"
 ```
 
 ### Create Event
 
 ```bash
-curl -X POST "http://localhost:7777/admin/events" \
+curl -X POST "http://localhost:7777/api/admin/events" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Hip Hop Fest",
@@ -972,7 +978,7 @@ curl -X POST "http://localhost:7777/admin/events" \
 ### Update Event
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/events/:event_id" \
+curl -X PATCH "http://localhost:7777/api/admin/events/:event_id" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Updated Event Name",
@@ -992,13 +998,13 @@ Controller source: `src/modules/admin/course/courses.controller.ts`
 ### Get Attendance QR
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id/attendance/qr"
+curl -X GET "http://localhost:7777/api/admin/courses/modules/classes/:class_id/attendance/qr"
 ```
 
 ### Get All Attendance
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/attendance?status=PRESENT&date=2026-05-17&class_id=CLASS_ID&course_id=COURSE_ID&search=john&page=1&limit=10"
+curl -X GET "http://localhost:7777/api/admin/courses/attendance?status=PRESENT&date=2026-05-17&class_id=CLASS_ID&course_id=COURSE_ID&search=john&page=1&limit=10"
 ```
 
 Query params:
@@ -1013,7 +1019,7 @@ Query params:
 ### Mark Manual Attendance
 
 ```bash
-curl -X POST "http://localhost:7777/admin/courses/attendance/manual" \
+curl -X POST "http://localhost:7777/api/admin/courses/attendance/manual" \
   -H "Content-Type: application/json" \
   -d '{
     "class_id": "CLASS_ID",
@@ -1028,7 +1034,7 @@ Allowed `status` values: `PRESENT`, `ABSENT`, `LATE`, `LEAVE`.
 ### Create Course
 
 ```bash
-curl -X POST "http://localhost:7777/admin/courses" \
+curl -X POST "http://localhost:7777/api/admin/courses" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Introduction to Acting",
@@ -1049,31 +1055,31 @@ curl -X POST "http://localhost:7777/admin/courses" \
 ### Get All Courses
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses?search=acting&page=1&limit=10&status=ACTIVE"
+curl -X GET "http://localhost:7777/api/admin/courses?search=acting&page=1&limit=10&status=ACTIVE"
 ```
 
 ### Get All Courses - Teacher/Admin Basic
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses"
+curl -X GET "http://localhost:7777/api/admin/courses"
 ```
 
 ### Get Courses By User ID
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/courses/users/:user_id"
+curl -X GET "http://localhost:7777/api/admin/courses/courses/users/:user_id"
 ```
 
 ### Get Course By ID
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/:course_id"
+curl -X GET "http://localhost:7777/api/admin/courses/:course_id"
 ```
 
 ### Update Course
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/courses/:course_id" \
+curl -X PATCH "http://localhost:7777/api/admin/courses/:course_id" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Updated Course Title"
@@ -1083,7 +1089,7 @@ curl -X PATCH "http://localhost:7777/admin/courses/:course_id" \
 ### Update Course - Full Example
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/courses/:course_id" \
+curl -X PATCH "http://localhost:7777/api/admin/courses/:course_id" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Advanced Acting",
@@ -1104,13 +1110,13 @@ curl -X PATCH "http://localhost:7777/admin/courses/:course_id" \
 ### Delete Course
 
 ```bash
-curl -X DELETE "http://localhost:7777/admin/courses/:course_id"
+curl -X DELETE "http://localhost:7777/api/admin/courses/:course_id"
 ```
 
 ### Add Module
 
 ```bash
-curl -X POST "http://localhost:7777/admin/courses/:course_id/modules" \
+curl -X POST "http://localhost:7777/api/admin/courses/:course_id/modules" \
   -H "Content-Type: application/json" \
   -d '{
     "module_name": "Module 1",
@@ -1122,19 +1128,19 @@ curl -X POST "http://localhost:7777/admin/courses/:course_id/modules" \
 ### Get All Modules
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/:course_id/modules"
+curl -X GET "http://localhost:7777/api/admin/courses/:course_id/modules"
 ```
 
 ### Get Module By ID
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/modules/:module_id"
+curl -X GET "http://localhost:7777/api/admin/courses/modules/:module_id"
 ```
 
 ### Update Module
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/courses/modules/:module_id" \
+curl -X PATCH "http://localhost:7777/api/admin/courses/modules/:module_id" \
   -H "Content-Type: application/json" \
   -d '{
     "module_title": "Updated Module Title"
@@ -1144,7 +1150,7 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/:module_id" \
 ### Update Module - Full Example
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/courses/modules/:module_id" \
+curl -X PATCH "http://localhost:7777/api/admin/courses/modules/:module_id" \
   -H "Content-Type: application/json" \
   -d '{
     "module_name": "Updated Module Name",
@@ -1156,13 +1162,13 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/:module_id" \
 ### Delete Module
 
 ```bash
-curl -X DELETE "http://localhost:7777/admin/courses/modules/:module_id"
+curl -X DELETE "http://localhost:7777/api/admin/courses/modules/:module_id"
 ```
 
 ### Add Class
 
 ```bash
-curl -X POST "http://localhost:7777/admin/courses/modules/:module_id/classes" \
+curl -X POST "http://localhost:7777/api/admin/courses/modules/:module_id/classes" \
   -H "Content-Type: application/json" \
   -d '{
     "class_title": "Class 1",
@@ -1177,19 +1183,19 @@ curl -X POST "http://localhost:7777/admin/courses/modules/:module_id/classes" \
 ### Get All Classes
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/modules/:module_id/classes"
+curl -X GET "http://localhost:7777/api/admin/courses/modules/:module_id/classes"
 ```
 
 ### Get Class By ID
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id"
+curl -X GET "http://localhost:7777/api/admin/courses/modules/classes/:class_id"
 ```
 
 ### Update Class
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id" \
+curl -X PATCH "http://localhost:7777/api/admin/courses/modules/classes/:class_id" \
   -H "Content-Type: application/json" \
   -d '{
     "class_title": "Updated Class Title"
@@ -1199,7 +1205,7 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id" \
 ### Update Class - Full Example
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id" \
+curl -X PATCH "http://localhost:7777/api/admin/courses/modules/classes/:class_id" \
   -H "Content-Type: application/json" \
   -d '{
     "class_title": "Updated Class Title",
@@ -1214,25 +1220,25 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id" \
 ### Delete Class
 
 ```bash
-curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/:class_id"
+curl -X DELETE "http://localhost:7777/api/admin/courses/modules/classes/:class_id"
 ```
 
 ### Start Class
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id/start"
+curl -X PATCH "http://localhost:7777/api/admin/courses/modules/classes/:class_id/start"
 ```
 
 ### End Class
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/:class_id/end"
+curl -X PATCH "http://localhost:7777/api/admin/courses/modules/classes/:class_id/end"
 ```
 
 ### Create Assignment
 
 ```bash
-curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assignments" \
+curl -X POST "http://localhost:7777/api/admin/courses/modules/classes/:class_id/assignments" \
   -F "title=Homework 1" \
   -F "description=Practice scene" \
   -F "submission_date=2027-02-01" \
@@ -1243,19 +1249,19 @@ curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assi
 ### Get All Assignments
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id/assignments"
+curl -X GET "http://localhost:7777/api/admin/courses/modules/classes/:class_id/assignments"
 ```
 
 ### Get Assignment By ID
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id"
+curl -X GET "http://localhost:7777/api/admin/courses/modules/classes/assignments/:assignment_id"
 ```
 
 ### Update Assignment
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id" \
+curl -X PATCH "http://localhost:7777/api/admin/courses/modules/classes/assignments/:assignment_id" \
   -F "title=Updated Assignment Title" \
   -F "description=Updated description" \
   -F "total_marks=80"
@@ -1264,7 +1270,7 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/assignments/:
 ### Update Assignment - Full Example
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id" \
+curl -X PATCH "http://localhost:7777/api/admin/courses/modules/classes/assignments/:assignment_id" \
   -F "title=Updated Assignment Title" \
   -F "description=Updated assignment description" \
   -F "submission_date=2027-02-05" \
@@ -1275,19 +1281,19 @@ curl -X PATCH "http://localhost:7777/admin/courses/modules/classes/assignments/:
 ### Delete Assignment
 
 ```bash
-curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id"
+curl -X DELETE "http://localhost:7777/api/admin/courses/modules/classes/assignments/:assignment_id"
 ```
 
 ### Get Assignment Submissions
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/modules/classes/assignments/:assignment_id/submissions?search=john&page=1&limit=10&status=SUBMITTED"
+curl -X GET "http://localhost:7777/api/admin/courses/modules/classes/assignments/:assignment_id/submissions?search=john&page=1&limit=10&status=SUBMITTED"
 ```
 
 ### Grade Submission
 
 ```bash
-curl -X POST "http://localhost:7777/admin/courses/modules/classes/assignments/submissions/:submission_id/grade" \
+curl -X POST "http://localhost:7777/api/admin/courses/modules/classes/assignments/submissions/:submission_id/grade" \
   -H "Content-Type: application/json" \
   -d '{
     "grade": "A+",
@@ -1299,7 +1305,7 @@ curl -X POST "http://localhost:7777/admin/courses/modules/classes/assignments/su
 ### Upload Class Assets
 
 ```bash
-curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assets" \
+curl -X POST "http://localhost:7777/api/admin/courses/modules/classes/:class_id/assets" \
   -F "attachments=@/path/to/file1.pdf" \
   -F "attachments=@/path/to/file2.mp4"
 ```
@@ -1307,20 +1313,20 @@ curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/asse
 ### Upload Class Assets - Single File
 
 ```bash
-curl -X POST "http://localhost:7777/admin/courses/modules/classes/:class_id/assets" \
+curl -X POST "http://localhost:7777/api/admin/courses/modules/classes/:class_id/assets" \
   -F "attachments=@/path/to/file.pdf"
 ```
 
 ### Get Class Assets
 
 ```bash
-curl -X GET "http://localhost:7777/admin/courses/modules/classes/:class_id/assets"
+curl -X GET "http://localhost:7777/api/admin/courses/modules/classes/:class_id/assets"
 ```
 
 ### Delete Class Asset
 
 ```bash
-curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/assets/:asset_id"
+curl -X DELETE "http://localhost:7777/api/admin/courses/modules/classes/assets/:asset_id"
 ```
 
 ---
@@ -1333,7 +1339,7 @@ curl -X DELETE "http://localhost:7777/admin/courses/modules/classes/assets/:asse
 ### Create Admin Post
 
 ```bash
-curl -X POST "http://localhost:7777/admin/community" \
+curl -X POST "http://localhost:7777/api/admin/community" \
   -F "post_type=POST" \
   -F "content=Official admin announcement" \
   -F "attachments=@/path/to/file.jpg"
@@ -1342,7 +1348,7 @@ curl -X POST "http://localhost:7777/admin/community" \
 ### Create Admin Poll Post
 
 ```bash
-curl -X POST "http://localhost:7777/admin/community" \
+curl -X POST "http://localhost:7777/api/admin/community" \
   -F "post_type=POLL" \
   -F "content=Which batch suits you?" \
   -F "poll_options=Morning" \
@@ -1352,19 +1358,19 @@ curl -X POST "http://localhost:7777/admin/community" \
 ### Get All Community Posts
 
 ```bash
-curl -X GET "http://localhost:7777/admin/community/posts?search=hello&status=ACTIVE&role=STUDENT&page=1&limit=10"
+curl -X GET "http://localhost:7777/api/admin/community/posts?search=hello&status=ACTIVE&role=STUDENT&page=1&limit=10"
 ```
 
 ### Get Community Post By ID
 
 ```bash
-curl -X GET "http://localhost:7777/admin/community/posts/:post_id"
+curl -X GET "http://localhost:7777/api/admin/community/posts/:post_id"
 ```
 
 ### Update Post Status
 
 ```bash
-curl -X PATCH "http://localhost:7777/admin/community/post/:post_id/status" \
+curl -X PATCH "http://localhost:7777/api/admin/community/post/:post_id/status" \
   -H "Content-Type: application/json" \
   -d '{
     "status": "ACTIVE"
@@ -1374,7 +1380,7 @@ curl -X PATCH "http://localhost:7777/admin/community/post/:post_id/status" \
 ### Delete Community Post
 
 ```bash
-curl -X DELETE "http://localhost:7777/admin/community/post/:post_id"
+curl -X DELETE "http://localhost:7777/api/admin/community/post/:post_id"
 ```
 
 ---
@@ -1384,47 +1390,22 @@ curl -X DELETE "http://localhost:7777/admin/community/post/:post_id"
 <details>
 <summary>Admin Transaction Module</summary>
 
-### Register Finance User
-
-```bash
-curl -X POST "http://localhost:7777/admin/transactions/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Finance User",
-    "email": "finance@example.com",
-    "phone": "0123456789",
-    "experienceLevel": "ADVANCED",
-    "joined_at": "2026-02-28T12:45:05+06:00",
-    "password": "password123"
-  }'
-```
-
-### Update Finance User
-
-```bash
-curl -X POST "http://localhost:7777/admin/transactions/update" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Updated Finance User"
-  }'
-```
-
 ### Get Revenue Stats
 
 ```bash
-curl -X GET "http://localhost:7777/admin/transactions/revenue/stats"
+curl -X GET "http://localhost:7777/api/admin/transactions/stats"
 ```
 
 ### Get All Transactions
 
 ```bash
-curl -X GET "http://localhost:7777/admin/transactions/transactions?search=john&page=1&limit=10&payment_type=ONE_TIME&date=2026-05-17"
+curl -X GET "http://localhost:7777/api/admin/transactions?search=john&page=1&limit=10&payment_type=ONE_TIME&date=2026-05-17&status=SUCCESS"
 ```
 
 ### Add Manual Payment
 
 ```bash
-curl -X POST "http://localhost:7777/admin/transactions/payments/manual" \
+curl -X POST "http://localhost:7777/api/admin/transactions/admin/transactions/payments/manual" \
   -H "Content-Type: application/json" \
   -d '{
     "studentId": "student_user_id",
@@ -1442,10 +1423,16 @@ curl -X POST "http://localhost:7777/admin/transactions/payments/manual" \
   }'
 ```
 
+### Suspend Overdue Installment Access
+
+```bash
+curl -X POST "http://localhost:7777/api/admin/transactions/admin/transactions/installments/suspend-overdue"
+```
+
 ### Get Finance And Payments Dashboard
 
 ```bash
-curl -X GET "http://localhost:7777/finance-and-payments"
+curl -X GET "http://localhost:7777/api/admin/transactions/finance-and-payments"
 ```
 
 ---
@@ -1458,31 +1445,31 @@ curl -X GET "http://localhost:7777/finance-and-payments"
 ### Get Notifications
 
 ```bash
-curl -X GET "http://localhost:7777/notification?page=1&limit=10&search=message"
+curl -X GET "http://localhost:7777/api/notification?page=1&limit=10&search=message"
 ```
 
 ### Mark Notification As Read
 
 ```bash
-curl -X PATCH "http://localhost:7777/notification/:id/read"
+curl -X PATCH "http://localhost:7777/api/notification/:id/read"
 ```
 
 ### Mark All Notifications As Read
 
 ```bash
-curl -X PATCH "http://localhost:7777/notification/read-all"
+curl -X PATCH "http://localhost:7777/api/notification/read-all"
 ```
 
 ### Delete Notification
 
 ```bash
-curl -X DELETE "http://localhost:7777/notification/:id"
+curl -X DELETE "http://localhost:7777/api/notification/:id"
 ```
 
 ### Delete All Notifications
 
 ```bash
-curl -X DELETE "http://localhost:7777/notification"
+curl -X DELETE "http://localhost:7777/api/notification"
 ```
 
 ---
@@ -1497,7 +1484,7 @@ Controller source: `src/modules/chat/conversations/conversations.controller.ts`
 ### Create DM Conversation
 
 ```bash
-curl -X POST "http://localhost:7777/conversations" \
+curl -X POST "http://localhost:7777/api/conversations" \
   -H "Content-Type: application/json" \
   -d '{
     "type": "DM",
@@ -1508,7 +1495,7 @@ curl -X POST "http://localhost:7777/conversations" \
 ### Create Group Conversation
 
 ```bash
-curl -X POST "http://localhost:7777/conversations" \
+curl -X POST "http://localhost:7777/api/conversations" \
   -F "type=GROUP" \
   -F "title=Acting Batch Group" \
   -F "participant_ids=USER_ID_1" \
@@ -1519,13 +1506,13 @@ curl -X POST "http://localhost:7777/conversations" \
 ### Get My Conversations
 
 ```bash
-curl -X GET "http://localhost:7777/conversations?type=DM&limit=10&cursor=CURSOR_VALUE"
+curl -X GET "http://localhost:7777/api/conversations?type=DM&limit=10&cursor=CURSOR_VALUE"
 ```
 
 ### Mark Conversation As Read
 
 ```bash
-curl -X PATCH "http://localhost:7777/conversations/:conversation_id/read" \
+curl -X PATCH "http://localhost:7777/api/conversations/:conversation_id/read" \
   -H "Content-Type: application/json" \
   -d '{
     "up_to_message_id": "MESSAGE_ID"
@@ -1535,7 +1522,7 @@ curl -X PATCH "http://localhost:7777/conversations/:conversation_id/read" \
 ### Add Conversation Members
 
 ```bash
-curl -X POST "http://localhost:7777/conversations/:conversation_id/members" \
+curl -X POST "http://localhost:7777/api/conversations/:conversation_id/members" \
   -H "Content-Type: application/json" \
   -d '{
     "member_ids": ["USER_ID_1", "USER_ID_2"]
@@ -1545,13 +1532,13 @@ curl -X POST "http://localhost:7777/conversations/:conversation_id/members" \
 ### Get Group Members
 
 ```bash
-curl -X GET "http://localhost:7777/conversations/:conversation_id/members?role=ADMIN"
+curl -X GET "http://localhost:7777/api/conversations/:conversation_id/members?role=ADMIN"
 ```
 
 ### Update Member Role
 
 ```bash
-curl -X PATCH "http://localhost:7777/conversations/:conversation_id/members/:member_id/role" \
+curl -X PATCH "http://localhost:7777/api/conversations/:conversation_id/members/:member_id/role" \
   -H "Content-Type: application/json" \
   -d '{
     "role": "ADMIN"
@@ -1561,31 +1548,31 @@ curl -X PATCH "http://localhost:7777/conversations/:conversation_id/members/:mem
 ### Remove Member
 
 ```bash
-curl -X DELETE "http://localhost:7777/conversations/:conversation_id/members/:member_id"
+curl -X DELETE "http://localhost:7777/api/conversations/:conversation_id/members/:member_id"
 ```
 
 ### Leave Group Conversation
 
 ```bash
-curl -X DELETE "http://localhost:7777/conversations/:conversation_id/leave"
+curl -X DELETE "http://localhost:7777/api/conversations/:conversation_id/leave"
 ```
 
 ### Delete Conversation
 
 ```bash
-curl -X DELETE "http://localhost:7777/conversations/:conversation_id"
+curl -X DELETE "http://localhost:7777/api/conversations/:conversation_id"
 ```
 
 ### Clear Conversation For Me
 
 ```bash
-curl -X PATCH "http://localhost:7777/conversations/:conversation_id/clear"
+curl -X PATCH "http://localhost:7777/api/conversations/:conversation_id/clear"
 ```
 
 ### Update Conversation Silent Until
 
 ```bash
-curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
+curl -X PATCH "http://localhost:7777/api/conversations/:conversation_id/silent" \
   -H "Content-Type: application/json" \
   -d '{
     "mode": "until",
@@ -1596,7 +1583,7 @@ curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
 ### Update Conversation Silent Forever
 
 ```bash
-curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
+curl -X PATCH "http://localhost:7777/api/conversations/:conversation_id/silent" \
   -H "Content-Type: application/json" \
   -d '{
     "mode": "forever"
@@ -1606,7 +1593,7 @@ curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
 ### Turn Off Conversation Silent
 
 ```bash
-curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
+curl -X PATCH "http://localhost:7777/api/conversations/:conversation_id/silent" \
   -H "Content-Type: application/json" \
   -d '{
     "mode": "off"
@@ -1616,13 +1603,13 @@ curl -X PATCH "http://localhost:7777/conversations/:conversation_id/silent" \
 ### Get Conversation Attachments
 
 ```bash
-curl -X GET "http://localhost:7777/conversations/:conversation_id/attachments?type=media&limit=10&cursor=CURSOR_VALUE"
+curl -X GET "http://localhost:7777/api/conversations/:conversation_id/attachments?type=media&limit=10&cursor=CURSOR_VALUE"
 ```
 
 ### Report User From Chat
 
 ```bash
-curl -X POST "http://localhost:7777/conversations/report/:reported_user_id" \
+curl -X POST "http://localhost:7777/api/conversations/report/:reported_user_id" \
   -H "Content-Type: application/json" \
   -d '{
     "reason": "abusive behavior"
@@ -1641,13 +1628,13 @@ Controller source: `src/modules/chat/messages/messages.controller.ts`
 ### Get Conversation Messages
 
 ```bash
-curl -X GET "http://localhost:7777/conversations/:conversation_id/messages?limit=20&cursor=CURSOR_VALUE"
+curl -X GET "http://localhost:7777/api/conversations/:conversation_id/messages?limit=20&cursor=CURSOR_VALUE"
 ```
 
 ### Send Text Message
 
 ```bash
-curl -X POST "http://localhost:7777/conversations/:conversation_id/messages" \
+curl -X POST "http://localhost:7777/api/conversations/:conversation_id/messages" \
   -H "Content-Type: application/json" \
   -d '{
     "kind": "TEXT",
@@ -1660,7 +1647,7 @@ curl -X POST "http://localhost:7777/conversations/:conversation_id/messages" \
 ### Send Reply Message
 
 ```bash
-curl -X POST "http://localhost:7777/conversations/:conversation_id/messages" \
+curl -X POST "http://localhost:7777/api/conversations/:conversation_id/messages" \
   -H "Content-Type: application/json" \
   -d '{
     "kind": "TEXT",
@@ -1674,7 +1661,7 @@ curl -X POST "http://localhost:7777/conversations/:conversation_id/messages" \
 ### Send Message With Attachments
 
 ```bash
-curl -X POST "http://localhost:7777/conversations/:conversation_id/messages" \
+curl -X POST "http://localhost:7777/api/conversations/:conversation_id/messages" \
   -F "kind=FILE" \
   -F "content={\"text\":\"See attachment\"}" \
   -F "attachments=@/path/to/file.pdf" \
@@ -1684,7 +1671,7 @@ curl -X POST "http://localhost:7777/conversations/:conversation_id/messages" \
 ### Delete Message
 
 ```bash
-curl -X DELETE "http://localhost:7777/conversations/messages/:message_id"
+curl -X DELETE "http://localhost:7777/api/conversations/messages/:message_id"
 ```
 
 ---
@@ -1699,25 +1686,25 @@ Controller source: `src/modules/chat/users/users.controller.ts`
 ### Discover Users
 
 ```bash
-curl -X GET "http://localhost:7777/users/discover?search=Moses%20Simmons&type=teacher&limit=10&cursor=CURSOR_VALUE"
+curl -X GET "http://localhost:7777/api/users/discover?search=Moses%20Simmons&type=teacher&limit=10&cursor=CURSOR_VALUE"
 ```
 
 ### Get Block Status
 
 ```bash
-curl -X GET "http://localhost:7777/users/:id/block-status"
+curl -X GET "http://localhost:7777/api/users/:id/block-status"
 ```
 
 ### Block User
 
 ```bash
-curl -X POST "http://localhost:7777/users/:id/block"
+curl -X POST "http://localhost:7777/api/users/:id/block"
 ```
 
 ### Unblock User
 
 ```bash
-curl -X DELETE "http://localhost:7777/users/:id/block"
+curl -X DELETE "http://localhost:7777/api/users/:id/block"
 ```
 
 ---
@@ -1732,19 +1719,19 @@ Controller source: `src/modules/chat/rtc/rtc.controller.ts`
 ### RTC Health
 
 ```bash
-curl -X GET "http://localhost:7777/rtc/health"
+curl -X GET "http://localhost:7777/api/rtc/health"
 ```
 
 ### Get Active Call State
 
 ```bash
-curl -X GET "http://localhost:7777/rtc/conversations/:conversation_id/state"
+curl -X GET "http://localhost:7777/api/rtc/conversations/:conversation_id/state"
 ```
 
 ### Start Video Call
 
 ```bash
-curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/start" \
+curl -X POST "http://localhost:7777/api/rtc/conversations/:conversation_id/start" \
   -H "Content-Type: application/json" \
   -d '{
     "kind": "VIDEO"
@@ -1754,7 +1741,7 @@ curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/start" \
 ### Start Audio Call
 
 ```bash
-curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/start" \
+curl -X POST "http://localhost:7777/api/rtc/conversations/:conversation_id/start" \
   -H "Content-Type: application/json" \
   -d '{
     "kind": "AUDIO"
@@ -1764,37 +1751,37 @@ curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/start" \
 ### Join Active Call
 
 ```bash
-curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/join"
+curl -X POST "http://localhost:7777/api/rtc/conversations/:conversation_id/join"
 ```
 
 ### Issue Call Token
 
 ```bash
-curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/token"
+curl -X POST "http://localhost:7777/api/rtc/conversations/:conversation_id/token"
 ```
 
 ### Decline Incoming Call
 
 ```bash
-curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/decline"
+curl -X POST "http://localhost:7777/api/rtc/conversations/:conversation_id/decline"
 ```
 
 ### Leave Call
 
 ```bash
-curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/leave"
+curl -X POST "http://localhost:7777/api/rtc/conversations/:conversation_id/leave"
 ```
 
 ### End Call For Everyone
 
 ```bash
-curl -X POST "http://localhost:7777/rtc/conversations/:conversation_id/end"
+curl -X POST "http://localhost:7777/api/rtc/conversations/:conversation_id/end"
 ```
 
 ### Update My Participant Media State
 
 ```bash
-curl -X PATCH "http://localhost:7777/rtc/conversations/:conversation_id/participants/me" \
+curl -X PATCH "http://localhost:7777/api/rtc/conversations/:conversation_id/participants/me" \
   -H "Content-Type: application/json" \
   -d '{
     "camera": true,
@@ -1813,7 +1800,7 @@ curl -X PATCH "http://localhost:7777/rtc/conversations/:conversation_id/particip
 ### Create Checkout Session (Course)
 
 ```bash
-curl -X POST "http://localhost:7777/payment/stripe/checkout" \
+curl -X POST "http://localhost:7777/api/payment/stripe/checkout" \
   -H "Content-Type: application/json" \
   -d '{
     "enrollment_id": "ENROLLMENT_ID"
@@ -1823,7 +1810,7 @@ curl -X POST "http://localhost:7777/payment/stripe/checkout" \
 ### Create Checkout Session (Event)
 
 ```bash
-curl -X POST "http://localhost:7777/payment/stripe/checkout" \
+curl -X POST "http://localhost:7777/api/payment/stripe/checkout" \
   -H "Content-Type: application/json" \
   -d '{
     "event_id": "EVENT_ID"
@@ -1833,13 +1820,13 @@ curl -X POST "http://localhost:7777/payment/stripe/checkout" \
 ### Verify Payment Session
 
 ```bash
-curl -X GET "http://localhost:7777/payment/stripe/verify/:session_id"
+curl -X GET "http://localhost:7777/api/payment/stripe/verify/:session_id"
 ```
 
 ### Stripe Webhook
 
 ```bash
-curl -X POST "http://localhost:7777/payment/stripe/webhook" \
+curl -X POST "http://localhost:7777/api/payment/stripe/webhook" \
   -H "stripe-signature: STRIPE_SIGNATURE" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1853,3 +1840,4 @@ curl -X POST "http://localhost:7777/payment/stripe/webhook" \
 ```
 
 </details>
+

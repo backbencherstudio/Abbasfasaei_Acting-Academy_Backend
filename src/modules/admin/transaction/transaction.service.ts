@@ -195,8 +195,6 @@ export class TransactionService implements OnModuleInit {
             select: {
               id: true,
               name: true,
-              username: true,
-              email: true,
             },
           },
           order: {
@@ -226,19 +224,15 @@ export class TransactionService implements OnModuleInit {
         } | null;
 
         return {
-          userId: transaction.user.id,
-          username: transaction.user.name || transaction.user.username || 'N/A',
-          email: transaction.user.email,
-          transactionId: transaction.transaction_ref || `TRX-${transaction.id}`,
+          user_id: transaction.user.id,
+          name: transaction.user.name || 'N/A',
+          transaction_ref:
+            transaction.transaction_ref || `TRX-${transaction.id}`,
           amount: transaction.amount?.toNumber() || 0,
           currency: transaction.currency,
           status: transaction.status,
-          date: transaction.paid_at || transaction.created_at,
-          paymentType:
-            transaction.order?.item_type === OrderItemType.EVENT_TICKET
-              ? 'Event Booking'
-              : 'Course Enrollment',
-          paymentPlan:
+          paid_at: transaction.paid_at || transaction.created_at,
+          payment_plan:
             metadata?.payment_type === 'MONTHLY'
               ? 'Monthly Instalment'
               : 'One Time',
@@ -246,12 +240,12 @@ export class TransactionService implements OnModuleInit {
             transaction.gateway === PaymentGateway.MANUAL
               ? 'Manual Entry'
               : 'Stripe',
-          invoiceFile: transaction.receipt_url || undefined,
+          invoice_file: transaction.receipt_url || undefined,
           order: transaction.order
             ? {
                 id: transaction.order.id,
-                orderNumber: transaction.order.order_number,
-                itemType: transaction.order.item_type,
+                order_number: transaction.order.order_number,
+                item_type: transaction.order.item_type,
                 course: transaction.order.course,
                 event: transaction.order.event,
               }
@@ -262,7 +256,6 @@ export class TransactionService implements OnModuleInit {
         page,
         limit,
         total,
-        total_pages: Math.ceil(total / limit),
         search: normalizedSearch,
         payment_type,
         status,
