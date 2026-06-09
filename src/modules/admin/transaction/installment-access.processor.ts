@@ -1,13 +1,13 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { FinanceService } from '../finance.helper';
+import { TransactionService } from './transaction.service';
 
 @Processor('installment-access-queue')
 export class InstallmentAccessProcessor extends WorkerHost {
   private readonly logger = new Logger(InstallmentAccessProcessor.name);
 
-  constructor(private readonly financeService: FinanceService) {
+  constructor(private readonly transactionService: TransactionService) {
     super();
   }
 
@@ -24,6 +24,6 @@ export class InstallmentAccessProcessor extends WorkerHost {
       return;
     }
 
-    return this.financeService.suspendOverdueInstallmentAccess();
+    return this.transactionService.suspendOverdueInstallmentAccess();
   }
 }

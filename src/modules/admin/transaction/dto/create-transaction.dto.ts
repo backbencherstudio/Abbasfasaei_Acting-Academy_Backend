@@ -2,8 +2,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ItemType,
   OrderStatus,
+  PaymentTransactionStatus,
   PaymentType,
-  TransactionStatus,
 } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -19,37 +19,6 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
-
-export class CreateFinanceDto {
-  @ApiProperty()
-  @IsNotEmpty()
-  @IsString()
-  name: string;
-
-  @ApiProperty()
-  @IsNotEmpty()
-  @IsString()
-  email: string;
-
-  @ApiProperty()
-  @IsNotEmpty()
-  @IsString()
-  phone: string;
-
-  @ApiProperty({ example: 'BEGINNER | INTERMEDIATE | ADVANCED' })
-  @IsOptional()
-  @IsString()
-  experienceLevel: string;
-
-  @IsOptional()
-  @IsString()
-  @ApiProperty({ example: '2026-02-28T12:45:05+06:00', required: false })
-  joined_at?: string;
-
-  @IsNotEmpty()
-  @IsString()
-  password: string;
-}
 
 export class CreateManualPaymentDto {
   @ApiProperty({ example: 'student_user_id' })
@@ -93,12 +62,12 @@ export class CreateManualPaymentDto {
   paymentStatus?: OrderStatus;
 
   @ApiPropertyOptional({
-    enum: TransactionStatus,
-    example: TransactionStatus.SUCCESS,
+    enum: PaymentTransactionStatus,
+    example: PaymentTransactionStatus.SUCCESS,
   })
   @IsOptional()
-  @IsEnum(TransactionStatus)
-  transactionStatus?: TransactionStatus;
+  @IsEnum(PaymentTransactionStatus)
+  transactionStatus?: PaymentTransactionStatus;
 
   @ApiPropertyOptional({ enum: ItemType, example: ItemType.COURSE_ENROLLMENT })
   @IsOptional()
