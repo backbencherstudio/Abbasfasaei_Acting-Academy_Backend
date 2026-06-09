@@ -118,7 +118,19 @@ export class TransactionService implements OnModuleInit {
 
     const where: Prisma.PaymentTransactionWhereInput = {
       ...(payment_type && payment_type !== 'ALL'
-        ? { metadata: { path: ['payment_type'], equals: payment_type } }
+        ? payment_type === 'MONTHLY'
+          ? {
+              // MONTHLY = installment payments
+              order: { payment_mode: PaymentMode.INSTALLMENT },
+            }
+          : {
+              // ONE_TIME = full / manual / free payments
+              order: {
+                payment_mode: {
+                  in: [PaymentMode.FULL, PaymentMode.MANUAL, PaymentMode.FREE],
+                },
+              },
+            }
         : {}),
       ...(status
         ? { status: status as unknown as PaymentTransactionStatus }
@@ -198,7 +210,6 @@ export class TransactionService implements OnModuleInit {
           created_at: true,
           gateway: true,
           payment_method: true,
-          metadata: true,
           status: true,
           currency: true,
           user: {
@@ -212,6 +223,7 @@ export class TransactionService implements OnModuleInit {
               id: true,
               item_type: true,
               order_number: true,
+              payment_mode: true,
               course: { select: { id: true, title: true } },
               event: { select: { id: true, name: true } },
             },
@@ -229,10 +241,6 @@ export class TransactionService implements OnModuleInit {
     return {
       success: true,
       data: transactions.map((transaction) => {
-        const metadata = transaction.metadata as {
-          payment_type?: string;
-        } | null;
-
         return {
           user_id: transaction.user.id,
           name: transaction.user.name || 'N/A',
@@ -243,7 +251,7 @@ export class TransactionService implements OnModuleInit {
           status: transaction.status,
           paid_at: transaction.paid_at || transaction.created_at,
           payment_plan:
-            metadata?.payment_type === 'MONTHLY'
+            transaction.order?.payment_mode === PaymentMode.INSTALLMENT
               ? 'Monthly Instalment'
               : 'One Time',
           source:
