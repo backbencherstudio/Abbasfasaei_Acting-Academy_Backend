@@ -451,7 +451,9 @@ export class CourseService {
       throw new BadRequestException('Course is not active');
 
     let nextClass = null;
+    let is_enrolled = false;
     if (course?.enrollments?.[0]?.status) {
+      is_enrolled = true;
       nextClass = await this.prisma.moduleClass.findFirst({
         where: {
           module: { course_id },
@@ -499,6 +501,7 @@ export class CourseService {
                 : null,
             }
           : null,
+        is_enrolled,
         ...(nextClass && { next_class: nextClass }),
       },
     };
@@ -607,7 +610,11 @@ export class CourseService {
         course: {
           modules: {
             some: {
-              id: class_id,
+              classes: {
+                some: {
+                  id: class_id,
+                },
+              },
             },
           },
         },
@@ -720,9 +727,9 @@ export class CourseService {
                     submission_date: assignment.submission_date
                       .toISOString()
                       .split('T')[0],
-                    status: submission.status ?? 'PENDING',
-                    grade_number: submission.grades?.[0].grade_number,
-                    grade: submission.grades?.[0],
+                    status: submission?.status ?? 'PENDING',
+                    grade_number: submission?.grades?.[0]?.grade_number,
+                    grade: submission?.grades?.[0],
                     due_days: due_days > 0 ? due_days : null,
                   };
                 }),
@@ -1062,9 +1069,9 @@ export class CourseService {
           submission_date: assignment.submission_date
             .toISOString()
             .split('T')[0],
-          status: submission.status ?? 'PENDING',
-          grade_number: submission.grades?.[0].grade_number,
-          grade: submission.grades?.[0],
+          status: submission?.status ?? 'PENDING',
+          grade_number: submission?.grades?.[0]?.grade_number,
+          grade: submission?.grades?.[0],
           due_days: due_days > 0 ? due_days : null,
         };
       }),
@@ -1149,7 +1156,7 @@ export class CourseService {
       throw new BadRequestException(
         'You must be logged in to access this feature',
       );
-    if (!class_id) throw new BadRequestException('Invalid Course Id');
+    if (!class_id) throw new BadRequestException('Invalid class Id');
 
     const moduleClass = await this.prisma.moduleClass.findUnique({
       where: { id: class_id },
@@ -1182,27 +1189,31 @@ export class CourseService {
       message: 'Class assets fetched successfully',
       data: {
         videos:
-          assets?.flatMap((asset) => {
-            if (asset.type === AttachmentType.VIDEO) {
-              return {
-                ...asset,
-                file_path: asset.file_path
-                  ? NajimStorage.url(asset.file_path)
-                  : null,
-              };
-            }
-          }) ?? [],
+          assets?.flatMap((asset) =>
+            asset.type === AttachmentType.VIDEO
+              ? [
+                  {
+                    ...asset,
+                    file_path: asset.file_path
+                      ? NajimStorage.url(asset.file_path)
+                      : null,
+                  },
+                ]
+              : [],
+          ) ?? [],
         files:
-          assets?.flatMap((asset) => {
-            if (asset.type !== AttachmentType.VIDEO) {
-              return {
-                ...asset,
-                file_path: asset.file_path
-                  ? NajimStorage.url(asset.file_path)
-                  : null,
-              };
-            }
-          }) ?? [],
+          assets?.flatMap((asset) =>
+            asset.type !== AttachmentType.VIDEO
+              ? [
+                  {
+                    ...asset,
+                    file_path: asset.file_path
+                      ? NajimStorage.url(asset.file_path)
+                      : null,
+                  },
+                ]
+              : [],
+          ) ?? [],
       },
     };
   }

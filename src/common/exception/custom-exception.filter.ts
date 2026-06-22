@@ -3,19 +3,51 @@ import {
   Catch,
   ArgumentsHost,
   HttpException,
+  HttpStatus,
+  Logger,
 } from '@nestjs/common';
 
-@Catch(HttpException)
+@Catch()
 export class CustomExceptionFilter implements ExceptionFilter {
-  catch(exception: HttpException, host: ArgumentsHost) {
-    const response = host.switchToHttp().getResponse();
-    const status = exception.getStatus();
+  private readonly logger = new Logger(CustomExceptionFilter.name);
 
-    // Return custom error response format
-    response.status(status).json({
+  catch(exception: any, host: ArgumentsHost) {
+    const response = host.switchToHttp().getResponse();
+
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let message: string | string[] = 'Internal server error';
+    let error: any = undefined;
+
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const res = exception.getResponse();
+      if (typeof res === 'object' && res !== null) {
+        message = (res as any).message || exception.message;
+        error = (res as any).error || undefined;
+      } else {
+        message = typeof res === 'string' ? res : exception.message;
+      }
+    } else if (exception instanceof Error) {
+      this.logger.error(
+        `Unhandled Exception: ${exception.message}`,
+        exception.stack,
+      );
+      message = exception.message;
+      error = exception.name !== 'Error' ? exception.name : undefined;
+    } else {
+      this.logger.error(`Unknown Exception: ${String(exception)}`);
+      message = typeof exception === 'string' ? exception : 'An unexpected error occurred';
+    }
+
+    const responseBody: any = {
       success: false,
-      message: (exception.getResponse() as any).message || exception.message,
-      error: (exception.getResponse() as any).error || exception.getResponse(),
-    });
+      message: Array.isArray(message) ? message.join(', ') : message,
+    };
+
+    if (error !== undefined && error !== null) {
+      responseBody.error = error;
+    }
+
+    response.status(status).json(responseBody);
   }
 }

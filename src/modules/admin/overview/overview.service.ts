@@ -186,7 +186,7 @@ export class OverviewService {
           total_teachers: results[1],
           ongoing_courses: results[2],
           monthly_revenue: monthlyRevenue,
-          attendance,
+
           recent_enrollments: recentEnrollments.map((enrollment: any) => ({
             id: enrollment.id,
             status: enrollment.status,
@@ -214,6 +214,7 @@ export class OverviewService {
                 })),
               }
             : {
+                attendance,
                 upcoming_classes: dynamicData.map((cls: any) => ({
                   id: cls.id,
                   class_title: cls.class_title,

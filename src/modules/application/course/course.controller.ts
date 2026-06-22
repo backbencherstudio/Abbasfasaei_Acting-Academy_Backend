@@ -142,7 +142,7 @@ export class CourseController {
     @Param('class_id') class_id: string,
     @GetUser('userId') user_id: string,
   ) {
-    return this.courseService.getAllAssets(user_id, class_id);
+    return this.courseService.getAllAssets(class_id, user_id);
   }
 
   // updated
