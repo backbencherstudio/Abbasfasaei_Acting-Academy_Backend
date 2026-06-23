@@ -36,3 +36,8 @@ export class QueryCommunityAllowedListDto {
   @IsNumber()
   limit?: number = 100;
 }
+
+export class QueryCommunityPostCommentsDto extends OmitType(
+  QueryCommunityFeedDto,
+  ['search', 'user_id'],
+) {}

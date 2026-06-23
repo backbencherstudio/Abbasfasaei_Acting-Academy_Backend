@@ -25,6 +25,7 @@ import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.
 import {
   QueryCommunityAllowedListDto,
   QueryCommunityFeedDto,
+  QueryCommunityPostCommentsDto,
   QueryCommunityPostLikesDto,
 } from './dto/query-community.dto';
 
@@ -133,8 +134,9 @@ export class CommunityController {
   getComments(
     @Param('post_id') post_id: string,
     @GetUser('userId') user_id: string,
+    @Query() query: QueryCommunityPostCommentsDto,
   ) {
-    return this.service.getComments(post_id, user_id);
+    return this.service.getComments(post_id, user_id, query);
   }
 
   // updated

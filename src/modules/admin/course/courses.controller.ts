@@ -47,6 +47,7 @@ import {
   AttendanceQueryDto,
   GetAllAssignmentQueryDto,
   GetAllCourseQueryDto,
+  GetAllEnrolledUserQueryDto,
 } from './dto/query-course.dto';
 
 @ApiBearerAuth()
@@ -211,6 +212,21 @@ export class CoursesController {
     @Param('course_id') course_id: string,
   ) {
     return this.coursesService.deleteCourse(user_id, course_id);
+  }
+
+  @Roles(Role.ADMIN, Role.TEACHER)
+  @ApiOperation({ summary: 'Get all enrolled users of a course' })
+  @Get(':course_id/enrolled_users')
+  getAllEnrolledUserOfCourse(
+    @Param('course_id') course_id: string,
+    @Query() query: GetAllEnrolledUserQueryDto,
+    @GetUser('userId') user_id: string,
+  ) {
+    return this.coursesService.getAllEnrolledUserOfCourse(
+      course_id,
+      query,
+      user_id,
+    );
   }
 
   //---------------------module---------------------//

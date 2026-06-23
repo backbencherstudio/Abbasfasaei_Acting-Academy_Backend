@@ -176,3 +176,34 @@ export class AttendanceQueryDto {
   @IsOptional()
   status?: AttendanceStatus;
 }
+
+export class GetAllEnrolledUserQueryDto {
+  @ApiProperty({
+    description: 'Search query',
+    required: false,
+    example: 'math',
+  })
+  @IsString()
+  @IsOptional()
+  search: string;
+
+  @ApiProperty({
+    description: 'Page number',
+    required: false,
+    example: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  page: number = 1;
+
+  @ApiProperty({
+    description: 'Limit number',
+    required: false,
+    example: 10,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  limit: number = 10;
+}

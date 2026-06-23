@@ -304,7 +304,7 @@ export class UserRepository {
       join_date,
       status,
       role_id = null,
-      type = 'user',
+      type,
     }: {
       name?: string;
       email?: string;
@@ -360,11 +360,6 @@ export class UserRepository {
 
       if (ArrayHelper.inArray(type, Object.values(Role))) {
         data['type'] = type;
-      } else {
-        return {
-          success: false,
-          message: 'Invalid user type',
-        };
       }
 
       const existUser = await prisma.user.findFirst({

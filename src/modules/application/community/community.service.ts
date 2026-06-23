@@ -17,6 +17,7 @@ import { PostStatus, PostType, PostVisibility, Prisma } from '@prisma/client';
 import {
   QueryCommunityAllowedListDto,
   QueryCommunityFeedDto,
+  QueryCommunityPostCommentsDto,
   QueryCommunityPostLikesDto,
 } from './dto/query-community.dto';
 
@@ -351,6 +352,9 @@ export class CommunityService {
         },
         poll_options: {
           select: {
+            id: true,
+            title: true,
+            post_id: true,
             votes: {
               take: 4,
               orderBy: {
@@ -416,6 +420,12 @@ export class CommunityService {
 
         return {
           ...post,
+          author: {
+            ...post.author,
+            avatar: post.author.avatar
+              ? NajimStorage.url(post.author.avatar)
+              : null,
+          },
           is_liked,
           total_likes: likes,
           total_comments: comments,
@@ -432,12 +442,16 @@ export class CommunityService {
             return {
               ...poll_option,
               total_votes,
-              votes: poll_option.votes.map((vote) => ({
-                ...vote,
-                avatar: vote.user?.avatar
+              votes: poll_option.votes.map((vote) => {
+                const avatar = vote.user?.avatar
                   ? NajimStorage.url(vote.user.avatar)
-                  : null,
-              })),
+                  : null;
+                delete vote.user;
+                return {
+                  ...vote,
+                  avatar,
+                };
+              }),
             };
           }),
         };
@@ -641,10 +655,19 @@ export class CommunityService {
 
     await this.ensurePostAccess(post_id, user_id);
 
+    let resolvedParentId = parent_id;
+    let replyToUserId: string | null = null;
+
     if (parent_id) {
       const parentComment = await this.prisma.communityComment.findUnique({
         where: { id: parent_id },
-        select: { id: true, post_id: true, deleted_at: true },
+        select: {
+          id: true,
+          post_id: true,
+          parent_id: true,
+          user_id: true,
+          deleted_at: true,
+        },
       });
       if (!parentComment) {
         throw new BadRequestException('parent comment not found');
@@ -657,10 +680,23 @@ export class CommunityService {
       if (parentComment.deleted_at) {
         throw new BadRequestException('cannot reply to a deleted comment');
       }
+
+      // If the parent comment is itself a reply (i.e. parent_id is not null),
+      // we point to the top-level main comment.
+      resolvedParentId = parentComment.parent_id || parentComment.id;
+
+      // We are replying to the author of the parentComment
+      replyToUserId = parentComment.user_id;
     }
 
     await this.prisma.communityComment.create({
-      data: { post_id, user_id, content, parent_id },
+      data: {
+        post_id,
+        user_id,
+        content,
+        parent_id: resolvedParentId,
+        reply_to_user_id: replyToUserId,
+      },
     });
 
     return {
@@ -750,10 +786,15 @@ export class CommunityService {
     };
   }
 
-  async getComments(postId: string, user_id: string) {
+  async getComments(
+    postId: string,
+    user_id: string,
+    query: QueryCommunityPostCommentsDto,
+  ) {
     if (!user_id) throw new UnauthorizedException('user not found');
     if (!postId) throw new BadRequestException('invalid post id');
 
+    const { limit = 10, cursor } = query;
     await this.ensurePostAccess(postId, user_id);
 
     const comments = await this.prisma.communityComment.findMany({
@@ -773,41 +814,68 @@ export class CommunityService {
               select: { id: true, name: true, username: true, avatar: true },
             },
             likes: { select: { id: true } }, // Fetch likes for the replies
+            reply_to_user: {
+              select: { id: true, name: true, username: true, avatar: true },
+            },
           },
           where: {
             user: { status: 1 }, // Only show replies from active users
           },
+          orderBy: { created_at: 'asc' }, // Order replies oldest to newest
         },
       },
+      cursor: cursor ? { id: cursor } : undefined,
+      skip: cursor ? 1 : 0,
+      take: limit + 1,
       orderBy: { created_at: 'desc' },
     });
 
-    return comments.map((comment) => ({
-      ...comment,
-      content: comment.deleted_at
-        ? 'This comment has been deleted.'
-        : comment.content,
-      user: {
-        ...comment.user,
-        avatar: comment.user.avatar
-          ? NajimStorage.url(comment.user.avatar)
-          : null,
-      },
-      likeCount: comment.likes.length,
-      replies: comment.replies.map((reply) => ({
-        ...reply,
-        content: reply.deleted_at
+    const nextCursor =
+      comments.length > limit ? comments[comments.length - 1].id : null;
+    if (comments.length > limit) comments.pop();
+
+    return {
+      success: true,
+      message: 'Comments fetched successfully',
+      data: comments.map((comment) => ({
+        ...comment,
+        content: comment.deleted_at
           ? 'This comment has been deleted.'
-          : reply.content,
+          : comment.content,
         user: {
-          ...reply.user,
-          avatar: reply.user.avatar
-            ? NajimStorage.url(reply.user.avatar)
+          ...comment.user,
+          avatar: comment.user.avatar
+            ? NajimStorage.url(comment.user.avatar)
             : null,
         },
-        likeCount: reply.likes.length,
+        like_count: comment.likes.length,
+        replies: comment.replies.map((reply) => ({
+          ...reply,
+          content: reply.deleted_at
+            ? 'This comment has been deleted.'
+            : reply.content,
+          user: {
+            ...reply.user,
+            avatar: reply.user.avatar
+              ? NajimStorage.url(reply.user.avatar)
+              : null,
+          },
+          reply_to_user: reply.reply_to_user
+            ? {
+                ...reply.reply_to_user,
+                avatar: reply.reply_to_user.avatar
+                  ? NajimStorage.url(reply.reply_to_user.avatar)
+                  : null,
+              }
+            : null,
+          like_count: reply.likes.length,
+        })),
       })),
-    }));
+      meta_data: {
+        limit,
+        next_cursor: nextCursor,
+      },
+    };
   }
 
   async sharePost(user_id: string, post_id: string, medium?: string) {

@@ -29,8 +29,10 @@ import {
   AttendanceQueryDto,
   GetAllAssignmentQueryDto,
   GetAllCourseQueryDto,
+  GetAllEnrolledUserQueryDto,
 } from './dto/query-course.dto';
 import {
+  AssignmentSubmissionStatus,
   AttachmentType,
   AttendanceStatus,
   CourseStatus,
@@ -1231,6 +1233,168 @@ export class CoursesService {
     return {
       message: 'Course deleted successfully',
       success: true,
+    };
+  }
+
+  async getAllEnrolledUserOfCourse(
+    course_id: string,
+    query: GetAllEnrolledUserQueryDto,
+    user_id: string,
+  ) {
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const course = await this.prisma.course.findUnique({
+      where: { id: course_id },
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    const { search, page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+
+    const whereClause: Prisma.EnrollmentWhereInput = {
+      course_id: course_id,
+      status: EnrollmentStatus.ACTIVE,
+    };
+
+    if (search) {
+      whereClause.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+        {
+          user: {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } },
+              { username: { contains: search, mode: 'insensitive' } },
+            ],
+          },
+        },
+      ];
+    }
+
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        progress_percent: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            avatar: true,
+          },
+        },
+      },
+      skip,
+      take: limit,
+      orderBy: { created_at: 'desc' },
+    });
+
+    const total = await this.prisma.enrollment.count({
+      where: whereClause,
+    });
+
+    const totalAssignments = await this.prisma.assignment.count({
+      where: {
+        class: {
+          module: {
+            course_id: course_id,
+          },
+        },
+      },
+    });
+
+    const totalClasses = await this.prisma.moduleClass.count({
+      where: {
+        module: {
+          course_id: course_id,
+        },
+      },
+    });
+
+    const data = await Promise.all(
+      enrollments.map(async (enrollment) => {
+        const studentId = enrollment.user.id;
+        const submittedAssignments =
+          await this.prisma.assignmentSubmission.count({
+            where: {
+              student_id: studentId,
+              assignment: {
+                class: {
+                  module: {
+                    course_id: course_id,
+                  },
+                },
+              },
+              status: {
+                in: [
+                  AssignmentSubmissionStatus.SUBMITTED,
+                  AssignmentSubmissionStatus.GRADED,
+                ],
+              },
+            },
+          });
+
+        const attendedClasses = await this.prisma.attendance.count({
+          where: {
+            student_id: studentId,
+            status: {
+              in: [AttendanceStatus.PRESENT, AttendanceStatus.LATE],
+            },
+            class: {
+              module: {
+                course_id: course_id,
+              },
+            },
+          },
+        });
+
+        const attendance_percentage =
+          totalClasses > 0
+            ? Math.round((attendedClasses / totalClasses) * 100)
+            : 0;
+
+        return {
+          id: enrollment.user.id,
+          name: enrollment.user.name || enrollment.name,
+          username: enrollment.user.username,
+          student_id: enrollment.user.id,
+          avatar_url: enrollment.user.avatar
+            ? NajimStorage.url(enrollment.user.avatar)
+            : null,
+          attendance_percentage,
+          assignments_completed: submittedAssignments,
+          total_assignments: totalAssignments,
+        };
+      }),
+    );
+
+    return {
+      success: true,
+      message: 'Enrolled users fetched successfully',
+      data,
+      meta_data: {
+        page,
+        limit,
+        total,
+        search,
+      },
     };
   }
 

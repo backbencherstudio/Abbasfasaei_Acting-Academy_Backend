@@ -122,6 +122,7 @@ model User {
   created_assignments   Assignment[]    @relation
   created_courses       Course[]        @relation("creator")
   allowed_friends_posts CommunityPost[] @relation("VisibilityAllowedFriends")
+  comments_replied_to   CommunityComment[] @relation("CommentReplyToUser")
 
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_name_trgm_idx")
   @@index([username(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_username_trgm_idx")
@@ -664,13 +665,15 @@ model CommunityComment {
 
   content String
 
-  parent_id String?
+  parent_id        String?
+  reply_to_user_id String?
 
-  likes   CommunityLike[]
-  replies CommunityComment[] @relation("CommentReplies")
-  user    User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  post    CommunityPost      @relation(fields: [post_id], references: [id], onDelete: Cascade)
-  parent  CommunityComment?  @relation("CommentReplies", fields: [parent_id], references: [id], onDelete: Restrict)
+  likes         CommunityLike[]
+  replies       CommunityComment[] @relation("CommentReplies")
+  user          User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  post          CommunityPost      @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  parent        CommunityComment?  @relation("CommentReplies", fields: [parent_id], references: [id], onDelete: Restrict)
+  reply_to_user User?              @relation("CommentReplyToUser", fields: [reply_to_user_id], references: [id], onDelete: SetNull)
 
   @@index([user_id, post_id, deleted_at], map: "community_comments_user_post_deleted_idx")
   @@map("community_comments")
