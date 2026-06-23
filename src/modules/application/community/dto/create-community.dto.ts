@@ -15,9 +15,9 @@ export class CreatePostDto {
   post_type: PostType = PostType.POST;
 
   @ApiProperty({ example: 'This is my first post!' })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  content: string;
+  content?: string;
 
   @IsOptional()
   @IsArray()

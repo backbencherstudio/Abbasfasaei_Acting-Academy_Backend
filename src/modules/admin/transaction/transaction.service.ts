@@ -111,12 +111,16 @@ export class TransactionService implements OnModuleInit {
   }
 
   async getAllTransactions(query: TransactionsQueryDto) {
-    const { search, payment_type, status, date } = query;
+    const { search, payment_type, status, date, user_id, course_id } = query;
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
     const normalizedSearch = (search || '').trim();
 
     const where: Prisma.PaymentTransactionWhereInput = {
+      ...(user_id && { user_id }),
+
+      ...(course_id && { order: { course_id } }),
+
       ...(payment_type && payment_type !== 'ALL'
         ? payment_type === 'MONTHLY'
           ? {

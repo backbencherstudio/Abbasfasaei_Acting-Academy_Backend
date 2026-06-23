@@ -16,6 +16,16 @@ export enum PaymentType {
 }
 
 export class TransactionsQueryDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  user_id?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  course_id?: string;
+
   @ApiPropertyOptional({ description: 'Search term' })
   @IsOptional()
   @IsString()

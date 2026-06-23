@@ -16,6 +16,15 @@ import {
 
 export class GetAllCourseQueryDto {
   @ApiProperty({
+    description: 'User id',
+    required: false,
+    example: 'user id',
+  })
+  @IsOptional()
+  @IsString()
+  user_id?: string;
+
+  @ApiProperty({
     description: 'Search query',
     required: false,
     example: 'math',

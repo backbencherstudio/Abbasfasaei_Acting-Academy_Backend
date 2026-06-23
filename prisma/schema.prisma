@@ -119,9 +119,9 @@ model User {
   created_module_classes    ModuleClass[]
   course_modules            CourseModule[]
 
-  created_assignments   Assignment[]    @relation
-  created_courses       Course[]        @relation("creator")
-  allowed_friends_posts CommunityPost[] @relation("VisibilityAllowedFriends")
+  created_assignments   Assignment[]       @relation
+  created_courses       Course[]           @relation("creator")
+  allowed_friends_posts CommunityPost[]    @relation("VisibilityAllowedFriends")
   comments_replied_to   CommunityComment[] @relation("CommentReplyToUser")
 
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "users_name_trgm_idx")
@@ -618,7 +618,7 @@ model CommunityPost {
   updated_at DateTime @updatedAt
 
   author_id String
-  content   String
+  content   String?
 
   visibility      PostVisibility @default(PUBLIC)
   allowed_friends User[]         @relation("VisibilityAllowedFriends")

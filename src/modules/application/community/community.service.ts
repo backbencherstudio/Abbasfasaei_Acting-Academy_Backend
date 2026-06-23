@@ -26,6 +26,12 @@ export class CommunityService {
   constructor(private prisma: PrismaService) {}
 
   private async ensurePostAccess(post_id: string, user_id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+    if (user.status !== UserStatus.ACTIVE)
+      throw new UnauthorizedException('your account is inactive');
+
     const post = await this.prisma.communityPost.findFirst({
       where: {
         id: post_id,
@@ -65,6 +71,13 @@ export class CommunityService {
     if (!user_id) throw new UnauthorizedException('user not found');
 
     const { post_type, friends_ids, poll_options, ...postData } = createPostDto;
+
+    if (
+      post_type === PostType.POST &&
+      !postData.content &&
+      attachments?.length === 0
+    )
+      throw new BadRequestException('content or attachment is required');
 
     const attachmentsData: Prisma.AttachmentCreateInput[] = [];
 
@@ -363,6 +376,7 @@ export class CommunityService {
               select: {
                 user: {
                   select: {
+                    id: true,
                     avatar: true,
                   },
                 },
@@ -446,10 +460,14 @@ export class CommunityService {
                 const avatar = vote.user?.avatar
                   ? NajimStorage.url(vote.user.avatar)
                   : null;
+                const user_id = vote.user.id;
+                const is_voted = user_id === my_id ? true : false;
                 delete vote.user;
                 return {
                   ...vote,
+                  user_id,
                   avatar,
+                  is_voted,
                 };
               }),
             };

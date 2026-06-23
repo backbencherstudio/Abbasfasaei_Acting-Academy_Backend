@@ -875,7 +875,13 @@ export class CoursesService {
   }
 
   async getAllCourses(user_id: string, query: GetAllCourseQueryDto) {
-    const { status, search, limit = 10, page = 1 } = query;
+    const {
+      status,
+      search,
+      limit = 10,
+      page = 1,
+      user_id: query_user_id,
+    } = query;
     if (!user_id) {
       throw new UnauthorizedException('Unauthorized');
     }
@@ -885,12 +891,33 @@ export class CoursesService {
     });
 
     if (!user) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
+    const queryUser = query_user_id
+      ? await this.prisma.user.findUnique({
+          where: { id: query_user_id },
+        })
+      : null;
+
+    if (query_user_id && !queryUser) {
       throw new NotFoundException('User not found');
     }
 
     const where: Prisma.CourseWhereInput = {
       status,
       instructor_id: user.type === Role.TEACHER ? user_id : undefined,
+      ...(query_user_id &&
+        queryUser?.type === Role.STUDENT && {
+          enrollments: {
+            some: {
+              user: {
+                type: Role.STUDENT,
+                id: query_user_id,
+              },
+            },
+          },
+        }),
       ...(search && {
         OR: [
           { title: { contains: search, mode: 'insensitive' } },
@@ -906,34 +933,47 @@ export class CoursesService {
       }),
     };
 
-    const courses = await this.prisma.course.findMany({
-      where,
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        seat_capacity: true,
-        fee_pence: true,
-        duration: true,
-        start_date: true,
-        instructor: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
+    const selectFields: Prisma.CourseSelect = {
+      id: true,
+      title: true,
+      status: true,
+      seat_capacity: true,
+      fee_pence: true,
+      duration: true,
+      start_date: true,
+      instructor: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
         },
-        _count: {
-          select: {
-            enrollments: {
-              where: {
-                status: 'ACTIVE',
-                step: 'COMPLETED',
-              },
+      },
+      _count: {
+        select: {
+          enrollments: {
+            where: {
+              status: 'ACTIVE',
+              step: 'COMPLETED',
             },
           },
         },
       },
+    };
+
+    if (query_user_id && queryUser?.type === Role.STUDENT) {
+      selectFields.enrollments = {
+        where: {
+          user_id: query_user_id,
+        },
+        select: {
+          status: true,
+        },
+      };
+    }
+
+    const courses = await this.prisma.course.findMany({
+      where,
+      select: selectFields,
       orderBy: {
         created_at: 'desc',
       },
@@ -949,6 +989,19 @@ export class CoursesService {
       message: 'Courses fetched successfully',
       success: true,
       data: courses.map((course) => {
+        if (query_user_id && queryUser?.type === Role.STUDENT) {
+          const enrollment = (course as any).enrollments?.[0];
+          return {
+            id: course.id,
+            title: course.title,
+            fee: course.fee_pence > 0 ? course.fee_pence / 100 : 0,
+            duration: course.duration,
+            start_date: course.start_date,
+            status: course.status,
+            enrollment_status: enrollment ? enrollment.status : null,
+          };
+        }
+
         const total_enrollments = course._count.enrollments;
         delete course._count;
         return {
