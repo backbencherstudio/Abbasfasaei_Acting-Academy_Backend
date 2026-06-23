@@ -195,6 +195,15 @@ export class CommunityService {
             username: true,
           },
         },
+        attachments: {
+          select: {
+            id: true,
+            file_name: true,
+            file_path: true,
+            type: true,
+            mime_type: true,
+          },
+        },
         poll_options: true,
         _count: {
           select: {
@@ -215,6 +224,10 @@ export class CommunityService {
           ? NajimStorage.url(post.author.avatar)
           : null,
       },
+      attachments: post.attachments.map((attachment) => ({
+        ...attachment,
+        file_path: NajimStorage.url(attachment.file_path),
+      })),
       comments: post._count.comments,
       likes: post._count.likes,
     };
