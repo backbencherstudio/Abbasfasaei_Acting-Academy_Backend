@@ -1538,6 +1538,8 @@ export class CoursesService {
             class_name: true,
             start_at: true,
             end_at: true,
+            class_at: true,
+            duration: true,
           },
           orderBy: { created_at: 'asc' },
         },
@@ -1561,9 +1563,18 @@ export class CoursesService {
         ...moduleItem,
         classes: moduleItem.classes.map((classItem) => {
           let status = 'PENDING';
-          const startTime = new Date(classItem.start_at);
+          const startTime = classItem.start_at
+            ? new Date(classItem.start_at)
+            : classItem.class_at
+              ? new Date(classItem.class_at)
+              : null;
+          const endTime = classItem.end_at
+            ? new Date(classItem.end_at)
+            : startTime && classItem.duration
+              ? new Date(startTime.getTime() + classItem.duration * 60000)
+              : startTime;
 
-          if (startTime < now) {
+          if (endTime && endTime < now) {
             status = 'COMPLETED';
           } else if (nextClass && classItem.id === nextClass.id) {
             status = 'NEXT';
@@ -1737,6 +1748,7 @@ export class CoursesService {
         start_at: true,
         end_at: true,
         module_id: true,
+        duration: true,
       },
     });
 
@@ -1758,10 +1770,18 @@ export class CoursesService {
       success: true,
       data: classes.map((classItem) => {
         let status = 'PENDING';
-        const startTime = new Date(classItem.start_at);
-        const endTime = new Date(classItem.end_at);
+        const startTime = classItem.start_at
+          ? new Date(classItem.start_at)
+          : classItem.class_at
+            ? new Date(classItem.class_at)
+            : null;
+        const endTime = classItem.end_at
+          ? new Date(classItem.end_at)
+          : startTime && classItem.duration
+            ? new Date(startTime.getTime() + classItem.duration * 60000)
+            : startTime;
 
-        if (startTime < now && endTime < now) {
+        if (endTime && endTime < now) {
           status = 'COMPLETED';
         } else if (nextClass && classItem.id === nextClass.id) {
           status = 'NEXT';
@@ -1788,6 +1808,7 @@ export class CoursesService {
         class_name: true,
         class_overview: true,
         duration: true,
+        class_at: true,
         start_at: true,
         end_at: true,
         module_id: true,
@@ -1839,12 +1860,18 @@ export class CoursesService {
       )[0];
 
     let status = 'PENDING';
-    if (
-      classData.start_at &&
-      new Date(classData.start_at) < now &&
-      classData.end_at &&
-      new Date(classData.end_at) < now
-    ) {
+    const startTime = classData.start_at
+      ? new Date(classData.start_at)
+      : classData.class_at
+        ? new Date(classData.class_at)
+        : null;
+    const endTime = classData.end_at
+      ? new Date(classData.end_at)
+      : startTime && classData.duration
+        ? new Date(startTime.getTime() + classData.duration * 60000)
+        : startTime;
+
+    if (endTime && endTime < now) {
       status = 'COMPLETED';
     } else if (nextClass && classData.id === nextClass.id) {
       status = 'NEXT';

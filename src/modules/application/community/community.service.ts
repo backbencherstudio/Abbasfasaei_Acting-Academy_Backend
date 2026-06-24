@@ -768,14 +768,21 @@ export class CommunityService {
 
     const comment = await this.prisma.communityComment.findUnique({
       where: { id: comment_id },
-      select: { user_id: true },
+      select: {
+        user_id: true,
+        post: {
+          select: {
+            author_id: true,
+          },
+        },
+      },
     });
 
     if (!comment) {
       throw new BadRequestException('comment not found');
     }
 
-    if (comment.user_id !== user_id) {
+    if (comment.user_id !== user_id && comment.post.author_id !== user_id) {
       throw new UnauthorizedException(
         'user not authorized to delete this comment',
       );

@@ -30,6 +30,7 @@ export class OverviewService {
       id: true,
       class_title: true,
       class_name: true,
+      class_at: true,
       start_at: true,
       end_at: true,
       module: {
@@ -106,6 +107,7 @@ export class OverviewService {
             id: rawClass.id,
             class_title: rawClass.class_title,
             class_name: rawClass.class_name,
+            class_at: rawClass.class_at,
             start_at: rawClass.start_at,
             end_at: rawClass.end_at,
             module_name: rawClass.module?.module_name,
@@ -173,13 +175,22 @@ export class OverviewService {
       }),
       this.prisma.moduleClass.findFirst({
         where: {
-          start_at: { gt: now },
+          OR: [
+            { start_at: { gt: now } },
+            {
+              start_at: null,
+              class_at: { gt: now },
+            },
+          ],
           module: {
             course: enrolledCourseWhere,
           },
         },
         select: classSelect,
-        orderBy: { start_at: 'asc' },
+        orderBy: [
+          { start_at: 'asc' },
+          { class_at: 'asc' },
+        ],
       }),
       this.prisma.moduleClass.findFirst({
         where: {
