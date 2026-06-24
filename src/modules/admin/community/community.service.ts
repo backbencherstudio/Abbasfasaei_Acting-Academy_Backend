@@ -204,7 +204,17 @@ export class CommunityService {
             mime_type: true,
           },
         },
-        poll_options: true,
+        poll_options: {
+          select: {
+            id: true,
+            title: true,
+            _count: {
+              select: {
+                votes: true,
+              },
+            },
+          },
+        },
         _count: {
           select: {
             comments: true,
@@ -218,6 +228,14 @@ export class CommunityService {
 
     const formatPost = {
       ...post,
+      poll_options: post.poll_options.map((option) => {
+        const count = option._count.votes;
+        delete option._count;
+        return {
+          ...option,
+          votes: count,
+        };
+      }),
       author: {
         ...post.author,
         avatar: post.author.avatar

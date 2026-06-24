@@ -446,31 +446,52 @@ export class AuthService {
     }
   }
 
-  // // verify otp
-  // async verifyOtp({ token }) {
-  //   try {
-  //     const existToken = await UcodeRepository.validateOtp({
-  //       token: token,
-  //     });
+  async verifyForgotPasswordOtp(email: string, otp: string) {
+    try {
+      const user = await UserRepository.exist({
+        field: 'email',
+        value: email,
+      });
 
-  //     if (existToken) {
-  //       return {
-  //         success: true,
-  //         message: 'OTP verified successfully',
-  //       };
-  //     } else {
-  //       return {
-  //         success: false,
-  //         message: 'Invalid OTP',
-  //       };
-  //     }
-  //   } catch (error) {
-  //     return {
-  //       success: false,
-  //       message: error.message,
-  //     };
-  //   }
-  // }
+      if (!user) {
+        throw new NotFoundException('Email not found');
+      }
+
+      const isValidOtp = await UcodeRepository.validateToken({
+        email: email,
+        token: otp,
+      });
+
+      if (!isValidOtp) {
+        return {
+          success: false,
+          message: 'Invalid or expired OTP code',
+        };
+      }
+
+      await UcodeRepository.deleteToken({
+        email: email,
+        token: otp,
+      });
+
+      const resetToken = await UcodeRepository.createToken({
+        userId: user.id,
+        isOtp: false,
+        email: email,
+      });
+
+      return {
+        success: true,
+        message: 'OTP verified successfully',
+        token: resetToken,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message,
+      };
+    }
+  }
 
   async resetPassword({ email, token, password }) {
     try {

@@ -24,10 +24,15 @@ import {
   SubmitAssignmentDto,
 } from './dto/create-course.dto';
 import { Role } from 'src/common/guard/role/role.enum';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class CourseService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @InjectQueue('document-queue') private readonly documentQueue: Queue,
+  ) {}
 
   async getCurrentStep(user_id: string, course_id: string) {
     if (!user_id) throw new UnauthorizedException('User not found');
@@ -143,6 +148,11 @@ export class CourseService {
       });
       if (!updated)
         throw new InternalServerErrorException('Failed to update enrollment');
+
+      await this.documentQueue.add('generateDocument', {
+        enrollmentId: existingEnrollment.id,
+        documentType: 'rules',
+      });
     } else if (step === EnrollmentStep.CONTRACT_SIGNING && existingEnrollment) {
       if (existingEnrollment?.step !== EnrollmentStep.CONTRACT_SIGNING)
         throw new BadRequestException('Invalid step');
@@ -166,6 +176,11 @@ export class CourseService {
       });
       if (!updated)
         throw new InternalServerErrorException('Failed to update enrollment');
+
+      await this.documentQueue.add('generateDocument', {
+        enrollmentId: existingEnrollment.id,
+        documentType: 'contract',
+      });
     } else {
       throw new BadRequestException('Invalid step');
     }

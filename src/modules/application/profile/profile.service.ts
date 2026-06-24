@@ -50,28 +50,6 @@ export class ProfileService {
     return NajimStorage.url(appConfig().storageUrl.media + '/' + filename);
   }
 
-  private formatEnrollment(enrollment: any) {
-    if (!enrollment) return enrollment;
-    if (enrollment.enrolled_documents) {
-      const docs = enrollment.enrolled_documents;
-      if (typeof docs === 'object') {
-        const formattedDocs = { ...docs };
-        if (formattedDocs.rules_signing) {
-          formattedDocs.rules_signing = this.getFileUrl(
-            formattedDocs.rules_signing,
-          );
-        }
-        if (formattedDocs.contract_signing) {
-          formattedDocs.contract_signing = this.getFileUrl(
-            formattedDocs.contract_signing,
-          );
-        }
-        enrollment.enrolled_documents = formattedDocs;
-      }
-    }
-    return enrollment;
-  }
-
   async getCompleteProfile(userId: string) {
     // Step 1: Check if user exists
     const user = await this.prisma.user.findUnique({
@@ -112,7 +90,7 @@ export class ProfileService {
       return {
         ...baseProfile,
         subscriptionPayment: await this.getSubscriptionPayment(userId),
-        contractDocuments: await this.getContractDocuments(userId),
+        contractDocuments: await this.getSignedDocuments(userId),
         feedbackCertificates: await this.getFeedbackCertificates(userId),
       };
     }
@@ -223,42 +201,6 @@ export class ProfileService {
       },
     };
   }
-
-  // async changePassword(
-  //   userId: string,
-  //   passwordData: { currentPassword: string; newPassword: string },
-  // ) {
-  //   const user = await this.prisma.user.findUnique({
-  //     where: { id: userId },
-  //     select: { password: true },
-  //   });
-
-  //   if (!user) {
-  //     throw new NotFoundException('User not found');
-  //   }
-
-  //   // Verify current password
-  //   if (user.password) {
-  //     const isCurrentPasswordValid = await bcrypt.compare(
-  //       passwordData.currentPassword,
-  //       user.password,
-  //     );
-
-  //     if (!isCurrentPasswordValid) {
-  //       throw new ForbiddenException('Current password is incorrect');
-  //     }
-  //   }
-
-  //   // Hash new password
-  //   const hashedNewPassword = await bcrypt.hash(passwordData.newPassword, 12);
-
-  //   await this.prisma.user.update({
-  //     where: { id: userId },
-  //     data: { password: hashedNewPassword },
-  //   });
-
-  //   return { message: 'Password changed successfully' };
-  // }
 
   async disableAccount(userId: string) {
     await this.prisma.user.update({
@@ -442,25 +384,65 @@ export class ProfileService {
     };
   }
 
-  async getContractDocuments(userId: string) {
+  async getSignedDocuments(userId: string) {
     const enrollments = await this.prisma.enrollment.findMany({
       where: { user_id: userId },
       include: {
         course: true,
         digital_contract_signature: true,
         rules_regulations_signature: true,
+        attachments: true,
       },
     });
 
-    return enrollments.map((enrollment) => {
-      const formatted = this.formatEnrollment(enrollment);
+    const data = enrollments.map((enrollment) => {
+      const documents = [];
+
+      const rulesAttachment = enrollment.attachments?.find(
+        (a) => a.type === 'RULES_REGULATIONS',
+      );
+      if (rulesAttachment) {
+        documents.push({
+          type: 'RULES_REGULATIONS',
+          document_name: 'Rules & Regulations Agreement',
+          document_url: this.getFileUrl(
+            rulesAttachment.file_path.split('/').pop(),
+          ),
+          signed_date:
+            enrollment.rules_regulations_signature?.signed_at ||
+            enrollment.updated_at,
+        });
+      }
+
+      const contractAttachment = enrollment.attachments?.find(
+        (a) => a.type === 'DIGITAL_CONTRACT',
+      );
+      if (contractAttachment) {
+        documents.push({
+          type: 'DIGITAL_CONTRACT',
+          document_name: 'Digital Enrollment Contract',
+          document_url: this.getFileUrl(
+            contractAttachment.file_path.split('/').pop(),
+          ),
+          signed_date:
+            enrollment.digital_contract_signature?.signed_at ||
+            enrollment.updated_at,
+        });
+      }
+
       return {
-        course: formatted.course?.title,
-        enrolled_documents: formatted.enrolled_documents,
-        digitalContract: formatted.digital_contract_signature,
-        rulesRegulations: formatted.rules_regulations_signature,
+        course_id: enrollment.course_id,
+        course_name: enrollment.course?.title || 'Unknown Course',
+        enrolled_date: enrollment.created_at,
+        documents,
       };
     });
+
+    return {
+      success: true,
+      message: 'Contract documents fetched successfully',
+      data,
+    };
   }
 
   async getFeedbackCertificates(userId: string) {

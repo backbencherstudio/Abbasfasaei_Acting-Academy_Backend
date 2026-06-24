@@ -229,15 +229,38 @@ export class AuthController {
     }
   }
 
+  @ApiOperation({ summary: 'Verify forgot password OTP' })
+  @Post('verify-forgot-password-otp')
+  async verifyForgotPasswordOtp(
+    @Body() data: { email: string; otp: string },
+  ) {
+    try {
+      const email = data.email;
+      const otp = data.otp;
+      if (!email) {
+        throw new HttpException('Email not provided', HttpStatus.BAD_REQUEST);
+      }
+      if (!otp) {
+        throw new HttpException('OTP not provided', HttpStatus.BAD_REQUEST);
+      }
+      return await this.authService.verifyForgotPasswordOtp(email, otp);
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || 'Failed to verify OTP',
+      };
+    }
+  }
+
   // reset password if user forget the password
   @ApiOperation({ summary: 'Reset password' })
   @Post('reset-password')
   async resetPassword(
-    @Body() data: { email: string; otp: string; new_password: string },
+    @Body() data: { email: string; token: string; new_password: string },
   ) {
     try {
       const email = data.email;
-      const token = data.otp;
+      const token = data.token;
       const password = data.new_password;
       if (!email) {
         throw new HttpException('Email not provided', HttpStatus.UNAUTHORIZED);
@@ -251,6 +274,7 @@ export class AuthController {
           HttpStatus.UNAUTHORIZED,
         );
       }
+
       return await this.authService.resetPassword({
         email: email,
         token: token,
@@ -259,7 +283,7 @@ export class AuthController {
     } catch (error) {
       return {
         success: false,
-        message: 'Something went wrong',
+        message: 'Failed to reset password',
       };
     }
   }

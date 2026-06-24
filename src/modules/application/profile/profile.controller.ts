@@ -89,10 +89,11 @@ export class ProfileController {
   //   return this.profileService.getSubscriptionPayment(req.user.userId);
   // }
 
-  // @Get('contract-documents')
-  // async getContractDocuments(@Request() req) {
-  //   return this.profileService.getContractDocuments(req.user.userId);
-  // }
+  @Get('signed_documents')
+  @DisAllowDeactivated()
+  async getSignedDocuments(@GetUser() user: any) {
+    return this.profileService.getSignedDocuments(user.userId);
+  }
 
   // @Get('feedback-certificates')
   // async getFeedbackCertificates(@Request() req) {

@@ -146,6 +146,7 @@ export class CourseController {
   }
 
   // updated
+  @ApiOperation({ summary: 'Get current step in enrollment' })
   @Get(':course_id/enrollment/current_step')
   getCurrentStep(
     @GetUser('userId') user_id: string,
@@ -155,6 +156,7 @@ export class CourseController {
   }
 
   // updated
+  @ApiOperation({ summary: 'Enroll user in a course' })
   @Post(':course_id/enrollment')
   enrollUser(
     @GetUser('userId') userId: string,
@@ -169,6 +171,7 @@ export class CourseController {
   }
   // --------------------------------------------------------------
 
+  @ApiOperation({ summary: 'Make attendance' })
   @Post('attendance/make')
   makeAttendance(
     @GetUser('userId') user_id: string,

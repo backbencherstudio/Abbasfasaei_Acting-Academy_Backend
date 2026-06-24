@@ -981,10 +981,10 @@ export class CommunityService {
       throw new UnprocessableEntityException('You cannot report yourself');
     }
 
-    await this.prisma.userReport.create({
+    await this.prisma.report.create({
       data: {
         reporter_id: reporter_id,
-        reported_id: reported_id,
+        reported_user_id: reported_id,
         reason,
         description,
       },

@@ -80,7 +80,6 @@ model User {
   blocks_initiated  Block[]           @relation("UserBlocks")
   blocked_by        Block[]           @relation("UserBlockedBy")
   receipts          Receipt[]
-  reports           Report[]
   call_participants CallParticipant[]
 
   // Direct message/notification relations
@@ -106,8 +105,8 @@ model User {
 
   // Conversations (creator/participant)
   creator_conversations    Conversation[] @relation("creator")
-  user_reports_as_reporter UserReport[]   @relation("Reporter")
-  user_reports_as_reported UserReport[]   @relation("ReportedUser")
+  reports_filed            Report[]       @relation("ReporterRelation")
+  reports_against          Report[]       @relation("ReportedUserRelation")
 
   created_qr_sessions QRAttendanceSession[]
 
@@ -631,6 +630,7 @@ model CommunityPost {
   poll_options CommunityPollOption[]
   author       User                  @relation(fields: [author_id], references: [id], onDelete: Cascade)
   shares       CommunityShare[]
+  reports      Report[]
 
   @@index([author_id], map: "community_posts_author_idx")
   @@map("community_posts")
@@ -730,23 +730,7 @@ enum ReportStatus {
   REVIEWED
 }
 
-// updated
-model UserReport {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
 
-  reporter_id String
-  reported_id String
-  reason      String
-  description String?
-  status      ReportStatus @default(OPEN)
-
-  reported_user User @relation("ReportedUser", fields: [reported_id], references: [id], onDelete: Cascade)
-  reporter      User @relation("Reporter", fields: [reporter_id], references: [id], onDelete: Cascade)
-
-  @@map("user_reports")
-}
 
 //
 //---------------------------------- Chat Models -----------------//
@@ -895,16 +879,28 @@ model Block {
 }
 
 model Report {
-  id          String       @id @default(cuid())
-  message_id  String
-  reporter_id String
-  reason      String
-  status      ReportStatus @default(OPEN)
-  created_at  DateTime     @default(now())
-  message     Message      @relation(fields: [message_id], references: [id], onDelete: Cascade)
-  reporter    User         @relation(fields: [reporter_id], references: [id], onDelete: Cascade)
+  id                  String       @id @default(cuid())
+  reporter_id         String
+  reason              String
+  description         String?
+  status              ReportStatus @default(OPEN)
+  created_at          DateTime     @default(now())
+  updated_at          DateTime     @updatedAt
 
-  @@index([message_id])
+  // Optional target fields (mutually exclusive)
+  reported_user_id    String?
+  reported_message_id String?
+  reported_post_id    String?
+
+  // Relations
+  reporter            User          @relation("ReporterRelation", fields: [reporter_id], references: [id], onDelete: Cascade)
+  reported_user       User?         @relation("ReportedUserRelation", fields: [reported_user_id], references: [id], onDelete: Cascade)
+  reported_message    Message?      @relation(fields: [reported_message_id], references: [id], onDelete: Cascade)
+  reported_post       CommunityPost? @relation(fields: [reported_post_id], references: [id], onDelete: Cascade)
+
+  @@index([reported_user_id])
+  @@index([reported_message_id])
+  @@index([reported_post_id])
   @@map("reports")
 }
 

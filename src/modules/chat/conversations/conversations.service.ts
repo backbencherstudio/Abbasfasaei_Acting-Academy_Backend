@@ -1002,10 +1002,10 @@ export class ConversationsService {
       throw new BadRequestException('Reported user not found');
     }
 
-    await this.prisma.userReport.create({
+    await this.prisma.report.create({
       data: {
         reporter_id,
-        reported_id,
+        reported_user_id: reported_id,
         reason: body.reason?.trim() || 'No reason provided',
       },
     });
