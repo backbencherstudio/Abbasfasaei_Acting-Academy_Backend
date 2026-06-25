@@ -50,55 +50,6 @@ export class ProfileService {
     return NajimStorage.url(appConfig().storageUrl.media + '/' + filename);
   }
 
-  async getCompleteProfile(userId: string) {
-    // Step 1: Check if user exists
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone_number: true,
-        experience: true,
-      },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    // Step 2: Count paid payments
-    const paidPaymentCount = await this.prisma.paymentTransaction.count({
-      where: {
-        user_id: userId,
-        status: 'SUCCESS',
-      },
-    });
-
-    const hasPaid = paidPaymentCount > 0;
-    const profileType = hasPaid ? 'active' : 'general';
-
-    // Base profile response for all users
-    const baseProfile = {
-      profileType,
-      personalInfo: await this.getPersonalInfo(userId),
-      hasActiveSubscription: hasPaid,
-    };
-
-    // Add active user features only if they have paid
-    if (hasPaid) {
-      return {
-        ...baseProfile,
-        subscriptionPayment: await this.getSubscriptionPayment(userId),
-        contractDocuments: await this.getSignedDocuments(userId),
-        feedbackCertificates: await this.getFeedbackCertificates(userId),
-      };
-    }
-
-    // Return general profile for users without payments
-    return baseProfile;
-  }
-
   async getPersonalInfo(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -326,18 +277,11 @@ export class ProfileService {
   // }
 
   async logout(userId: string) {
-    // In a real implementation, you might want to:
-    // 1. Add the token to a blacklist
-    // 2. Update user's last logout time
-    // 3. Clear any session data
-
     await this.prisma.user.update({
       where: { id: userId },
       data: { last_active_at: new Date() },
     });
-
     const response = await this.revokeRefreshToken(userId);
-
     return { message: 'Logged out successfully', response };
   }
 
@@ -384,6 +328,42 @@ export class ProfileService {
     };
   }
 
+  // Support (Contact form submission)
+  async submitSupportRequest(
+    user_id: string,
+    body: {
+      name?: string;
+      email?: string;
+      phone_number?: string;
+      reason?: string;
+      message: string;
+    },
+  ) {
+    let user: any;
+    if (user_id) {
+      user = await this.prisma.user.findUnique({
+        where: { id: user_id },
+        select: { name: true, email: true, phone_number: true },
+      });
+    }
+
+    const supportTicket = await this.prisma.contact.create({
+      data: {
+        name: body.name || user?.name,
+        email: body.email || user?.email,
+        phone_number: body.phone_number || user?.phone_number,
+        reason: body.reason || 'Other',
+        message: body.message,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Support request submitted successfully',
+    };
+  }
+
+  // My Documents (Signed Contracts)
   async getSignedDocuments(userId: string) {
     const enrollments = await this.prisma.enrollment.findMany({
       where: { user_id: userId },
@@ -442,49 +422,6 @@ export class ProfileService {
       success: true,
       message: 'Contract documents fetched successfully',
       data,
-    };
-  }
-
-  async getFeedbackCertificates(userId: string) {
-    const assignments = await this.prisma.assignmentGrade.findMany({
-      where: { submission: { student_id: userId } },
-      include: {
-        assignment: {
-          include: {
-            class: {
-              include: {
-                module: {
-                  include: {
-                    course: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    const enrollments = await this.prisma.enrollment.findMany({
-      where: { user_id: userId, status: 'ACTIVE' },
-      include: {
-        course: true,
-      },
-    });
-
-    return {
-      feedback: assignments.map((assignment) => ({
-        course: assignment.assignment.class.module.course.title,
-        assignment: assignment.assignment.title,
-        grade: assignment.grade,
-        feedback: assignment.feedback,
-        gradedAt: assignment.graded_at,
-      })),
-      certificates: enrollments.map((enrollment) => ({
-        course: enrollment.course?.title,
-        completionStatus: enrollment.status,
-        certificateUrl: null, // You might want to add certificate URLs to your schema
-      })),
     };
   }
 }

@@ -15,22 +15,18 @@ import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
 
 @Controller('profile')
-@UseGuards(JwtAuthGuard)
 export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
-  // Get complete profile info (determines type based on payment history)
-  @Get()
-  async getProfile(@GetUser() user: any) {
-    return this.profileService.getCompleteProfile(user.userId);
-  }
 
   // Personal Info endpoints
+  @UseGuards(JwtAuthGuard)
   @Get('personal-info')
   @DisAllowDeactivated()
   async getPersonalInfo(@GetUser() user: any) {
     return this.profileService.getPersonalInfo(user.userId);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Put('personal-info')
   @DisAllowDeactivated()
   async updatePersonalInfo(@GetUser() user: any, @Body() updateData: any) {
@@ -43,18 +39,21 @@ export class ProfileController {
   //   return this.profileService.changePassword(user.userId, passwordData);
   // }
 
+  @UseGuards(JwtAuthGuard)
   @Put('disable-account')
   @DisAllowDeactivated()
   async disableAccount(@GetUser() user: any) {
     return this.profileService.disableAccount(user.userId);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Delete('delete-account')
   @DisAllowDeactivated()
   async deleteAccount(@GetUser() user: any) {
     return this.profileService.deleteAccount(user.userId);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Put('activate-account')
   async activateAccount(@GetUser() user: any) {
     return this.profileService.activateAccount(user.userId);
@@ -71,11 +70,22 @@ export class ProfileController {
   //   return this.profileService.updateNotificationSettings(req.user.userId, settings);
   // }
 
-  // // Support (Contact form submission)
-  // @Post('support')
-  // async submitSupportRequest(@Request() req, @Body() supportData: any) {
-  //   return this.profileService.submitSupportRequest(req.user.userId, supportData);
-  // }
+  // Support (Contact form submission)
+  @UseGuards(JwtAuthGuard)
+  @Post('support')
+  async submitSupportRequest(
+    @GetUser('userId') user_id: string,
+    @Body()
+    Body: {
+      name?: string;
+      email?: string;
+      phone_number?: string;
+      reason?: string;
+      message: string;
+    },
+  ) {
+    return this.profileService.submitSupportRequest(user_id, Body);
+  }
 
   // Logout
   @Post('logout')
@@ -94,9 +104,4 @@ export class ProfileController {
   async getSignedDocuments(@GetUser() user: any) {
     return this.profileService.getSignedDocuments(user.userId);
   }
-
-  // @Get('feedback-certificates')
-  // async getFeedbackCertificates(@Request() req) {
-  //   return this.profileService.getFeedbackCertificates(req.user.userId);
-  // }
 }

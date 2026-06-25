@@ -58,7 +58,8 @@ export class DocumentProcessor extends WorkerHost {
     const courseTitle = enrollment.course?.title || 'Unknown Course';
     const content =
       documentType === 'rules'
-        ? enrollment.course?.rules_regulations || 'No rules regulations defined.'
+        ? enrollment.course?.rules_regulations ||
+          'No rules regulations defined.'
         : enrollment.course?.contract || 'No digital contract terms defined.';
 
     const htmlContent = this.generateHtml(
@@ -142,7 +143,10 @@ export class DocumentProcessor extends WorkerHost {
       );
       return { success: true, fileName };
     } catch (error) {
-      this.logger.error(`Error generating document: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error generating document: ${error.message}`,
+        error.stack,
+      );
       throw new InternalServerErrorException(
         `Failed to generate document: ${error.message}`,
       );

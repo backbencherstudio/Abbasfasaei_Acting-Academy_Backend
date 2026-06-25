@@ -21,9 +21,9 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "cmd": "cross-env PRISMA_ENV=1 ts-node src/cmd.ts",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:gen": "prisma generate",
+    "db:mig": "prisma migrate dev",
+    "db:std": "prisma studio"
   },
   "dependencies": {
     "@casl/ability": "6.7.3",

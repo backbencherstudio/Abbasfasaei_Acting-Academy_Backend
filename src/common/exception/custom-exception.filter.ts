@@ -36,7 +36,10 @@ export class CustomExceptionFilter implements ExceptionFilter {
       error = exception.name !== 'Error' ? exception.name : undefined;
     } else {
       this.logger.error(`Unknown Exception: ${String(exception)}`);
-      message = typeof exception === 'string' ? exception : 'An unexpected error occurred';
+      message =
+        typeof exception === 'string'
+          ? exception
+          : 'An unexpected error occurred';
     }
 
     const responseBody: any = {

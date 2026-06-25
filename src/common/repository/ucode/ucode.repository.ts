@@ -29,10 +29,7 @@ export class UcodeRepository {
       // Delete all old tokens/OTPs for this user/email
       await prisma.ucode.deleteMany({
         where: {
-          OR: [
-            { user_id: userId },
-            { email: targetEmail },
-          ],
+          OR: [{ user_id: userId }, { email: targetEmail }],
         },
       });
 

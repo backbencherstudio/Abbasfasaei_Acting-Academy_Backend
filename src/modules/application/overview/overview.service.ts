@@ -187,10 +187,7 @@ export class OverviewService {
           },
         },
         select: classSelect,
-        orderBy: [
-          { start_at: 'asc' },
-          { class_at: 'asc' },
-        ],
+        orderBy: [{ start_at: 'asc' }, { class_at: 'asc' }],
       }),
       this.prisma.moduleClass.findFirst({
         where: {

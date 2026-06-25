@@ -231,9 +231,7 @@ export class AuthController {
 
   @ApiOperation({ summary: 'Verify forgot password OTP' })
   @Post('verify-forgot-password-otp')
-  async verifyForgotPasswordOtp(
-    @Body() data: { email: string; otp: string },
-  ) {
+  async verifyForgotPasswordOtp(@Body() data: { email: string; otp: string }) {
     try {
       const email = data.email;
       const otp = data.otp;
