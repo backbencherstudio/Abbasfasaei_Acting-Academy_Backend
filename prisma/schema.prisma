@@ -217,16 +217,18 @@ model NotificationEvent {
 
 // updated
 model Notification {
-  id                    String             @id @default(cuid())
-  created_at            DateTime           @default(now())
-  updated_at            DateTime           @default(now())
-  deleted_at            DateTime?
-  read_at               DateTime?
-  status                Int?               @default(1) @db.SmallInt
-  sender_id             String?
-  receiver_id           String?
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+  deleted_at DateTime?
+  read_at    DateTime?
+
+  status      Int?    @default(1) @db.SmallInt
+  sender_id   String?
+  receiver_id String?
+  entity_id   String?
+
   notification_event_id String?
-  entity_id             String?
   notification_event    NotificationEvent? @relation(fields: [notification_event_id], references: [id])
   receiver              User?              @relation("receiver", fields: [receiver_id], references: [id])
   sender                User?              @relation("sender", fields: [sender_id], references: [id])

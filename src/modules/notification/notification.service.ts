@@ -4,32 +4,33 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
-import appConfig from 'src/config/app.config';
 import { Prisma } from '@prisma/client';
+import { QueryNotificationDto } from './dto/query-notification.dto';
 
 @Injectable()
 export class NotificationService {
   constructor(private prisma: PrismaService) {}
 
   // ─── Get All ───────────────────────────────────────────────────────
-  async findAll(
-    userId: string,
-    query?: { page?: string; limit?: string; search?: string },
-  ) {
-    const page = parseInt(query?.page || '1', 10);
-    const limit = parseInt(query?.limit || '10', 10);
-    const skip = (page - 1) * limit;
+  async findAll(userId: string, query: QueryNotificationDto) {
+    const { cursor, limit, search, type } = query;
 
     const where: Prisma.NotificationWhereInput = {
       receiver_id: userId,
     };
 
-    if (query?.search) {
+    if (type) {
+      where.notification_event = {
+        type,
+      };
+    }
+
+    if (search) {
       where.notification_event = {
         OR: [
-          { title: { contains: query.search, mode: 'insensitive' } },
-          { content: { contains: query.search, mode: 'insensitive' } },
+          { title: { contains: search, mode: 'insensitive' } },
+          { content: { contains: search, mode: 'insensitive' } },
+          { type: { contains: search, mode: 'insensitive' } },
         ],
       };
     }
@@ -40,24 +41,21 @@ export class NotificationService {
         where,
         select: {
           id: true,
-          sender_id: true,
-          receiver_id: true,
-          entity_id: true,
-          read_at: true,
           created_at: true,
-          sender: {
-            select: { id: true, name: true, email: true, avatar: true },
-          },
-          receiver: {
-            select: { id: true, name: true, email: true, avatar: true },
-          },
+          read_at: true,
           notification_event: {
-            select: { id: true, type: true, title: true, content: true },
+            select: {
+              id: true,
+              title: true,
+              content: true,
+              type: true,
+            },
           },
         },
         orderBy: { created_at: 'desc' },
-        skip,
-        take: limit,
+        take: limit + 1,
+        cursor: cursor ? { id: cursor } : undefined,
+        skip: cursor ? 1 : undefined,
       }),
       this.prisma.notification.count({
         where: {
@@ -67,24 +65,33 @@ export class NotificationService {
       }),
     ]);
 
-    for (const n of notifications) {
-      if (n.sender) this.attachAvatarUrl(n.sender);
-      if (n.receiver) this.attachAvatarUrl(n.receiver);
-    }
+    const nextCursor =
+      notifications.length > limit
+        ? notifications[notifications.length - 1].id
+        : null;
 
-    const total_pages = Math.ceil(total / limit);
+    if (nextCursor) {
+      notifications.pop();
+    }
 
     return {
       success: true,
-      data: {
-        notifications,
+      data: notifications.map((n) => ({
+        id: n?.id,
+        title: n?.notification_event?.title,
+        content: n?.notification_event?.content,
+        type: n?.notification_event?.type,
+        created_at: n?.created_at,
+        read_at: n?.read_at,
+        is_read: n?.read_at !== null,
+      })),
+      meta_data: {
         unread_count,
-        meta: {
-          total,
-          page,
-          limit,
-          total_pages,
-        },
+        next_cursor: nextCursor,
+        total,
+        limit,
+        search,
+        type,
       },
     };
   }
@@ -147,19 +154,5 @@ export class NotificationService {
       success: true,
       message: `${count} notification(s) deleted successfully`,
     };
-  }
-
-  // ─── Helpers ───────────────────────────────────────────────────────
-  private attachAvatarUrl(user: { avatar?: string; [key: string]: any }) {
-    if (!user.avatar) return;
-    const avatar = String(user.avatar);
-    if (/^https?:\/\//i.test(avatar)) {
-      user['avatar_url'] = avatar;
-    } else {
-      const base = appConfig().storageUrl.avatar.replace(/\/+$/, '');
-      user['avatar_url'] = NajimStorage.url(
-        `${base}/${avatar.replace(/^\/+/, '')}`,
-      );
-    }
   }
 }
