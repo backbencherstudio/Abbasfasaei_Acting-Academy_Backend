@@ -88,6 +88,7 @@ export class ProfileController {
   }
 
   // Logout
+  @UseGuards(JwtAuthGuard)
   @Post('logout')
   async logout(@GetUser() user: any) {
     return this.profileService.logout(user.userId);
@@ -99,9 +100,10 @@ export class ProfileController {
   //   return this.profileService.getSubscriptionPayment(req.user.userId);
   // }
 
+  @UseGuards(JwtAuthGuard)
   @Get('signed_documents')
   @DisAllowDeactivated()
-  async getSignedDocuments(@GetUser() user: any) {
-    return this.profileService.getSignedDocuments(user.userId);
+  async getSignedDocuments(@GetUser('userId') user_id: string) {
+    return this.profileService.getSignedDocuments(user_id);
   }
 }

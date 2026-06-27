@@ -309,13 +309,19 @@ export class ConversationsService {
         },
       },
       orderBy: { updated_at: 'desc' },
-      take: limit,
+      take: limit + 1,
       cursor: cursor
         ? {
             id: cursor,
           }
         : undefined,
     });
+    let nextCursor = null;
+    if (conversations.length > limit) {
+      const lastConversation = conversations[conversations.length - 1];
+      nextCursor = lastConversation?.id;
+      conversations.pop();
+    }
     return {
       success: true,
       message: 'Conversations fetched successfully',
@@ -359,6 +365,12 @@ export class ConversationsService {
             : null,
         };
       }),
+      meta_data: {
+        limit,
+        search,
+        type,
+        next_cursor: nextCursor,
+      },
     };
   }
 

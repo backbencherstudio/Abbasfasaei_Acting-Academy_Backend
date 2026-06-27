@@ -309,16 +309,16 @@ export class UsersService {
           CASE
             WHEN EXISTS (
               SELECT 1
-              FROM "CommunityLike" community_like
-              INNER JOIN "CommunityPost" community_post
+              FROM community_likes community_like
+              INNER JOIN community_posts community_post
                 ON community_post.id = community_like.post_id
               WHERE community_post.author_id = ${user_id}
                 AND community_like.user_id = u.id
             )
             OR EXISTS (
               SELECT 1
-              FROM "CommunityComment" community_comment
-              INNER JOIN "CommunityPost" community_post
+              FROM community_comments community_comment
+              INNER JOIN community_posts community_post
                 ON community_post.id = community_comment.post_id
               WHERE community_post.author_id = ${user_id}
                 AND community_comment.user_id = u.id
@@ -329,7 +329,7 @@ export class UsersService {
               FROM community_poll_votes community_poll_vote
               INNER JOIN community_poll_options community_poll_option
                 ON community_poll_option.id = community_poll_vote.option_id
-              INNER JOIN "CommunityPost" community_post
+              INNER JOIN community_posts community_post
                 ON community_post.id = community_poll_option.post_id
               WHERE community_post.author_id = ${user_id}
                 AND community_poll_vote.user_id = u.id

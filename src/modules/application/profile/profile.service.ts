@@ -1,23 +1,21 @@
-import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { UserRepository } from 'src/common/repository/user/user.repository';
-import * as bcrypt from 'bcrypt';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import appConfig from 'src/config/app.config';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import { UserStatus } from 'src/common/constants/user-status.enum';
 
 @Injectable()
 export class ProfileService {
+  private readonly logger = new Logger(ProfileService.name);
+
   constructor(
     private prisma: PrismaService,
     @InjectRedis() private readonly redis: Redis,
+    @InjectQueue('document-queue') private readonly documentQueue: Queue,
   ) {}
 
   private async revokeRefreshToken(user_id: string) {
@@ -375,48 +373,102 @@ export class ProfileService {
       },
     });
 
-    const data = enrollments.map((enrollment) => {
-      const documents = [];
+    const data = await Promise.all(
+      enrollments.map(async (enrollment) => {
+        const documents = [];
 
-      const rulesAttachment = enrollment.attachments?.find(
-        (a) => a.type === 'RULES_REGULATIONS',
-      );
-      if (rulesAttachment) {
-        documents.push({
-          type: 'RULES_REGULATIONS',
-          document_name: 'Rules & Regulations Agreement',
-          document_url: this.getFileUrl(
-            rulesAttachment.file_path.split('/').pop(),
-          ),
-          signed_date:
-            enrollment.rules_regulations_signature?.signed_at ||
-            enrollment.updated_at,
-        });
-      }
+        // Rules & Regulations
+        const rulesSignature = enrollment.rules_regulations_signature;
+        if (rulesSignature) {
+          const rulesAttachment = enrollment.attachments?.find(
+            (a) => a.type === 'RULES_REGULATIONS',
+          );
 
-      const contractAttachment = enrollment.attachments?.find(
-        (a) => a.type === 'DIGITAL_CONTRACT',
-      );
-      if (contractAttachment) {
-        documents.push({
-          type: 'DIGITAL_CONTRACT',
-          document_name: 'Digital Enrollment Contract',
-          document_url: this.getFileUrl(
-            contractAttachment.file_path.split('/').pop(),
-          ),
-          signed_date:
-            enrollment.digital_contract_signature?.signed_at ||
-            enrollment.updated_at,
-        });
-      }
+          if (rulesAttachment) {
+            documents.push({
+              type: 'RULES_REGULATIONS',
+              document_name: 'Rules & Regulations Agreement',
+              status: 'READY',
+              document_url: this.getFileUrl(
+                rulesAttachment.file_path.split('/').pop(),
+              ),
+              signed_date: rulesSignature.signed_at || enrollment.updated_at,
+            });
+          } else {
+            try {
+              await this.documentQueue.add('generateDocument', {
+                enrollmentId: enrollment.id,
+                documentType: 'rules',
+              });
+              this.logger.log(
+                `On-demand queued rules document generation for enrollment ${enrollment.id}`,
+              );
+            } catch (err) {
+              this.logger.error(
+                `Failed to queue rules document for enrollment ${enrollment.id}: ${err.message}`,
+              );
+            }
 
-      return {
-        course_id: enrollment.course_id,
-        course_name: enrollment.course?.title || 'Unknown Course',
-        enrolled_date: enrollment.created_at,
-        documents,
-      };
-    });
+            documents.push({
+              type: 'RULES_REGULATIONS',
+              document_name: 'Rules & Regulations Agreement',
+              status: 'GENERATING',
+              document_url: null,
+              signed_date: rulesSignature.signed_at || enrollment.updated_at,
+            });
+          }
+        }
+
+        // Digital Contract
+        const contractSignature = enrollment.digital_contract_signature;
+        if (contractSignature) {
+          const contractAttachment = enrollment.attachments?.find(
+            (a) => a.type === 'DIGITAL_CONTRACT',
+          );
+
+          if (contractAttachment) {
+            documents.push({
+              type: 'DIGITAL_CONTRACT',
+              document_name: 'Digital Enrollment Contract',
+              status: 'READY',
+              document_url: this.getFileUrl(
+                contractAttachment.file_path.split('/').pop(),
+              ),
+              signed_date: contractSignature.signed_at || enrollment.updated_at,
+            });
+          } else {
+            try {
+              await this.documentQueue.add('generateDocument', {
+                enrollmentId: enrollment.id,
+                documentType: 'contract',
+              });
+              this.logger.log(
+                `On-demand queued contract document generation for enrollment ${enrollment.id}`,
+              );
+            } catch (err) {
+              this.logger.error(
+                `Failed to queue contract document for enrollment ${enrollment.id}: ${err.message}`,
+              );
+            }
+
+            documents.push({
+              type: 'DIGITAL_CONTRACT',
+              document_name: 'Digital Enrollment Contract',
+              status: 'GENERATING',
+              document_url: null,
+              signed_date: contractSignature.signed_at || enrollment.updated_at,
+            });
+          }
+        }
+
+        return {
+          course_id: enrollment.course_id,
+          course_name: enrollment.course?.title || 'Unknown Course',
+          enrolled_date: enrollment.created_at,
+          documents,
+        };
+      }),
+    );
 
     return {
       success: true,
