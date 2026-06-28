@@ -310,6 +310,11 @@ export class ChatRepository {
         },
       });
 
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: { updated_at: new Date() },
+      });
+
       const members = await tx.membership.findMany({
         where: {
           conversation_id: conversationId,

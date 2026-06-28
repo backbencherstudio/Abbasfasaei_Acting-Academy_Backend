@@ -742,14 +742,15 @@ enum ConversationType {
 }
 
 model Conversation {
-  id            String           @id @default(cuid())
+  id         String   @id @default(cuid())
+  updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+
   creator_id    String?
   avatar        String?
-  created_at    DateTime         @default(now())
   dm_key        String?          @unique
   title         String?
   type          ConversationType
-  updated_at    DateTime         @updatedAt
   call_sessions CallSession[]
   memberships   Membership[]
   creator       User?            @relation("creator", fields: [creator_id], references: [id], onDelete: SetNull)

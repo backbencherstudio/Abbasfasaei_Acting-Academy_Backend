@@ -34,11 +34,13 @@ export class ConversationQueryDto {
 
 export class QueryGroupMembersDto {
   @IsOptional()
-  @Transform(({ value }) =>
-    MemberRole[value.toUpperCase()]
-      ? MemberRole[value.toUpperCase()]
-      : undefined,
-  )
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return undefined;
+    const key = value.toUpperCase();
+    return key in MemberRole
+      ? MemberRole[key as keyof typeof MemberRole]
+      : undefined;
+  })
   @IsEnum(MemberRole)
   role?: MemberRole;
 }
@@ -59,11 +61,13 @@ export class AttachmentsQueryDto {
   limit?: number = 10;
 
   @IsOptional()
-  @Transform(({ value }) =>
-    ATTACHMENT_TYPE[value.toUpperCase()]
-      ? ATTACHMENT_TYPE[value.toUpperCase()]
-      : undefined,
-  )
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return undefined;
+    const key = value.toUpperCase();
+    return key in ATTACHMENT_TYPE
+      ? ATTACHMENT_TYPE[key as keyof typeof ATTACHMENT_TYPE]
+      : undefined;
+  })
   @IsEnum(ATTACHMENT_TYPE)
   type?: ATTACHMENT_TYPE;
 }

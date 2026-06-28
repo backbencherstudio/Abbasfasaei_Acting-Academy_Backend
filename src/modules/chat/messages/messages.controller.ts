@@ -51,7 +51,7 @@ export class MessagesController {
       fileFilter: (_req, file, cb) => {
         if (
           !file.originalname.match(
-            /.(jpg|jpeg|png|gif|mp4|mpeg|mkv|mov|avi|webp|pdf|doc|docx|txt|zip|rar)$/i,
+            /.(jpg|jpeg|png|gif|mp4|mpeg|mkv|mov|avi|webp|pdf|doc|docx|txt|zip|rar|mp3|wav|ogg|m4a|aac|flac|wma)$/i,
           )
         ) {
           return cb(new BadRequestException('Invalid file type'), false);

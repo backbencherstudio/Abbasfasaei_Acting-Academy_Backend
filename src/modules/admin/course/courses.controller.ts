@@ -145,6 +145,16 @@ export class CoursesController {
     return this.coursesService.getEnrollmentDetails(enrollment_id);
   }
 
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Delete enrollment by ID' })
+  @Delete('enrollments/:enrollment_id')
+  deleteEnrollment(
+    @GetUser('userId') user_id: string,
+    @Param('enrollment_id') enrollment_id: string,
+  ) {
+    return this.coursesService.deleteEnrollment(user_id, enrollment_id);
+  }
+
   @Roles(Role.ADMIN, Role.FINANCE)
   @ApiOperation({ summary: 'Update enrollment by ID' })
   @UseInterceptors(
