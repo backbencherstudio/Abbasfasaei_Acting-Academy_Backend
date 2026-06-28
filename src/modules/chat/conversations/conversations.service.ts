@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
 
@@ -24,6 +25,7 @@ import {
   ConversationQueryDto,
   QueryGroupMembersDto,
 } from './dto/query-conversation.dto';
+import { UpdateConversationDto } from './dto/update-conversation.dto';
 
 const FOREVER_MUTE_UNTIL = new Date('9999-12-31T23:59:59.999Z');
 
@@ -206,6 +208,163 @@ export class ConversationsService {
     };
   }
 
+  async getConversation(conversation_id: string, user_id: string) {
+    if (!user_id || !conversation_id)
+      throw new BadRequestException('Invalid user id or conversation id');
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversation_id,
+        memberships: {
+          some: {
+            user_id: user_id,
+            left_at: null,
+          },
+        },
+      },
+      select: {
+        id: true,
+        title: true,
+        avatar: true,
+        type: true,
+        memberships: {
+          where: {
+            left_at: null,
+          },
+          select: {
+            muted_until: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+                avatar: true,
+                last_active_at: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            memberships: true,
+          },
+        },
+      },
+    });
+
+    if (!conversation) throw new BadRequestException('Conversation not found');
+
+    const me = conversation.memberships?.find((m) => m?.user?.id === user_id);
+
+    const silentState = normalizeConversationSilentState(
+      me?.muted_until ?? null,
+    );
+
+    const other_member = conversation.memberships?.find(
+      (m) => m?.user?.id !== user_id,
+    );
+
+    const title =
+      conversation.type === ConversationType.DM
+        ? other_member?.user?.name || conversation.title
+        : conversation.title;
+
+    const avatarPath =
+      conversation.type === ConversationType.DM
+        ? conversation.avatar || other_member?.user?.avatar
+        : conversation.avatar;
+
+    const avatarUrl = avatarPath ? NajimStorage.url(avatarPath) : null;
+
+    return {
+      success: true,
+      message: 'Conversation found successfully',
+      data: {
+        id: conversation.id,
+        title: title,
+        avatar: avatarUrl,
+        type: conversation.type,
+        total_members: conversation._count.memberships,
+        is_silenced: silentState.is_silenced,
+        muted_until: silentState.muted_until,
+        participant: other_member?.user
+          ? {
+              id: other_member.user.id,
+              name: other_member.user.name,
+              username: other_member.user.username,
+              avatar: other_member.user.avatar
+                ? NajimStorage.url(other_member.user.avatar)
+                : null,
+              last_active_at: other_member.user.last_active_at,
+            }
+          : null,
+      },
+    };
+  }
+
+  async updateConversation(
+    conversation_id: string,
+    user_id: string,
+    body: UpdateConversationDto,
+    avatar?: Express.Multer.File,
+  ) {
+    if (!user_id || !conversation_id)
+      throw new BadRequestException('Invalid user id or conversation id');
+    const { title } = body;
+
+    const existConversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversation_id,
+        memberships: {
+          some: {
+            user_id: user_id,
+            left_at: null,
+          },
+        },
+      },
+    });
+
+    if (!existConversation)
+      throw new BadRequestException('Conversation not found');
+
+    if (existConversation.type === ConversationType.DM) {
+      throw new BadRequestException('Cannot update DM conversation');
+    }
+
+    let groupAvatar = existConversation.avatar;
+    if (avatar) {
+      try {
+        if (existConversation.avatar) {
+          await NajimStorage.delete(existConversation.avatar);
+        }
+        const filename = NajimStorage.generateFileName(avatar.originalname);
+        const objectKey =
+          appConfig().storageUrl.conversation_avatar + '/' + filename;
+        await NajimStorage.put(objectKey, avatar.buffer);
+        groupAvatar = objectKey;
+      } catch (error) {
+        throw new BadRequestException('Failed to upload group avatar');
+      }
+    }
+
+    const conversation = await this.prisma.conversation.update({
+      where: {
+        id: conversation_id,
+      },
+      data: {
+        title: title,
+        avatar: groupAvatar,
+      },
+    });
+
+    if (!conversation)
+      throw new InternalServerErrorException('Failed to update conversation');
+    return {
+      success: true,
+      message: 'Conversation updated successfully',
+    };
+  }
+
   async getMyConversations(user_id: string, query: ConversationQueryDto) {
     const { cursor, limit, type, search } = query;
 
@@ -309,13 +468,19 @@ export class ConversationsService {
         },
       },
       orderBy: { updated_at: 'desc' },
-      take: limit,
+      take: limit + 1,
       cursor: cursor
         ? {
             id: cursor,
           }
         : undefined,
     });
+    let nextCursor = null;
+    if (conversations.length > limit) {
+      const lastConversation = conversations[conversations.length - 1];
+      nextCursor = lastConversation?.id;
+      conversations.pop();
+    }
     return {
       success: true,
       message: 'Conversations fetched successfully',
@@ -359,6 +524,12 @@ export class ConversationsService {
             : null,
         };
       }),
+      meta_data: {
+        limit,
+        search,
+        type,
+        next_cursor: nextCursor,
+      },
     };
   }
 
@@ -906,16 +1077,33 @@ export class ConversationsService {
     user_id: string,
     query: AttachmentsQueryDto,
   ) {
+    if (!user_id || !conversation_id)
+      throw new BadRequestException('Invalid user id or conversation id');
+
+    const membership = await this.prisma.membership.findFirst({
+      where: {
+        conversation_id,
+        user_id,
+        left_at: null,
+      },
+      select: {
+        cleared_at: true,
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this conversation');
+    }
+
     const { cursor, limit, type } = query;
 
     const where: Prisma.AttachmentWhereInput = {
       message: {
         conversation_id,
-        receipts: {
-          some: {
-            user_id,
-          },
-        },
+        deleted_at: null,
+        created_at: membership.cleared_at
+          ? { gt: membership.cleared_at }
+          : undefined,
       },
     };
 

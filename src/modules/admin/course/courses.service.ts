@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
   UnprocessableEntityException,
@@ -49,6 +50,8 @@ import * as QRCode from 'qrcode';
 
 @Injectable()
 export class CoursesService {
+  private readonly logger = new Logger(CoursesService.name);
+
   constructor(private prisma: PrismaService) {}
 
   async makeEnrolment(
@@ -1286,6 +1289,138 @@ export class CoursesService {
     return {
       message: 'Course deleted successfully',
       success: true,
+    };
+  }
+
+  async deleteEnrollment(user_id: string, enrollment_id: string) {
+    if (!user_id) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+    const admin = await this.prisma.user.findUnique({
+      where: { id: user_id },
+    });
+    if (!admin) {
+      throw new NotFoundException('Admin user not found');
+    }
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: { id: enrollment_id },
+      include: {
+        attachments: true,
+      },
+    });
+
+    if (!enrollment) {
+      throw new NotFoundException('Enrollment not found');
+    }
+
+    // Retrieve all assignment submissions of this student in this course
+    const submissions = await this.prisma.assignmentSubmission.findMany({
+      where: {
+        student_id: enrollment.user_id,
+        assignment: {
+          class: {
+            module: {
+              course_id: enrollment.course_id,
+            },
+          },
+        },
+      },
+      include: {
+        attachments: true,
+      },
+    });
+
+    // Collect all physical files to delete
+    const filesToDelete: string[] = [];
+
+    // Enrollment attachments (Rules & Contract PDFs)
+    if (enrollment.attachments) {
+      for (const attachment of enrollment.attachments) {
+        if (attachment.file_path) {
+          filesToDelete.push(attachment.file_path);
+        }
+      }
+    }
+
+    // Assignment submission attachments
+    for (const submission of submissions) {
+      if (submission.attachments) {
+        for (const attachment of submission.attachments) {
+          if (attachment.file_path) {
+            filesToDelete.push(attachment.file_path);
+          }
+        }
+      }
+    }
+
+    // Delete files from storage
+    for (const filePath of filesToDelete) {
+      try {
+        await NajimStorage.delete(filePath);
+      } catch (err) {
+        this.logger.warn(`Failed to delete physical file: ${filePath}. Error: ${err.message}`);
+      }
+    }
+
+    // Delete DB records in a transaction
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Delete Attendances for this student in classes of this course
+      await tx.attendance.deleteMany({
+        where: {
+          student_id: enrollment.user_id,
+          class: {
+            module: {
+              course_id: enrollment.course_id,
+            },
+          },
+        },
+      });
+
+      // 2. Delete Assignment Submissions (cascades to grades & DB attachments)
+      await tx.assignmentSubmission.deleteMany({
+        where: {
+          id: {
+            in: submissions.map((s) => s.id),
+          },
+        },
+      });
+
+      // 3. Delete Enrollment attachments (Prisma cascade onDelete is configured, but explicit is safer)
+      await tx.attachment.deleteMany({
+        where: {
+          enrollment_id: enrollment.id,
+        },
+      });
+
+      // 4. Delete the Enrollment itself
+      await tx.enrollment.delete({
+        where: { id: enrollment.id },
+      });
+
+      // 5. Delete digital signatures (if they exist)
+      if (enrollment.rules_regulations_signature_id) {
+        await tx.digitalSignature.delete({
+          where: { id: enrollment.rules_regulations_signature_id },
+        });
+      }
+      if (enrollment.digital_contract_signature_id) {
+        await tx.digitalSignature.delete({
+          where: { id: enrollment.digital_contract_signature_id },
+        });
+      }
+
+      // 6. Delete Order (cascades to transactions, installment plans/installments)
+      if (enrollment.order_id) {
+        await tx.order.delete({
+          where: { id: enrollment.order_id },
+        });
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Enrollment and all related records deleted successfully',
     };
   }
 

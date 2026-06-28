@@ -112,10 +112,21 @@ export class MessagesService {
       cursor: cursor ? { id: cursor } : undefined,
     });
 
+    let nextCursor = null;
+    if (messages.length > limit) {
+      const lastMessage = messages[messages.length - 1];
+      nextCursor = lastMessage?.id;
+      messages.pop();
+    }
+
     return {
       success: true,
       message: 'Message fetched successfully',
       data: messages.map((m) => ChatRepository.formatMessage(m)),
+      meta_data: {
+        limit,
+        next_cursor: nextCursor,
+      },
     };
   }
 

@@ -22,7 +22,7 @@ import {
 } from './dto/create-conversation.dto';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
-import { ConversationType, MemberRole } from '@prisma/client';
+import { MemberRole } from '@prisma/client';
 import { memoryStorage } from 'multer';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOkResponse } from '@nestjs/swagger';
@@ -33,6 +33,7 @@ import {
   ConversationQueryDto,
   QueryGroupMembersDto,
 } from './dto/query-conversation.dto';
+import { UpdateConversationDto } from './dto/update-conversation.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('conversations')
@@ -56,6 +57,34 @@ export class ConversationsController {
     return this.service.createConversation(
       user_id,
       createConversationDto,
+      avatar,
+    );
+  }
+
+  @Get(':conversation_id')
+  getConversation(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+  ) {
+    return this.service.getConversation(conversation_id, user_id);
+  }
+
+  @Patch(':conversation_id')
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      storage: memoryStorage(),
+    }),
+  )
+  updateConversation(
+    @Param('conversation_id') conversation_id: string,
+    @GetUser('userId') user_id: string,
+    @Body() body: UpdateConversationDto,
+    @UploadedFile() avatar?: Express.Multer.File,
+  ) {
+    return this.service.updateConversation(
+      conversation_id,
+      user_id,
+      body,
       avatar,
     );
   }
