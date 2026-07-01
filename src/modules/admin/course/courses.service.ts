@@ -1359,7 +1359,9 @@ export class CoursesService {
       try {
         await NajimStorage.delete(filePath);
       } catch (err) {
-        this.logger.warn(`Failed to delete physical file: ${filePath}. Error: ${err.message}`);
+        this.logger.warn(
+          `Failed to delete physical file: ${filePath}. Error: ${err.message}`,
+        );
       }
     }
 
@@ -2613,6 +2615,7 @@ export class CoursesService {
 
     const getGradeLetter = (grade: number, total: number): string => {
       const percentage = (grade / total) * 100;
+
       if (percentage >= 90) return 'A+';
       if (percentage >= 80) return 'A';
       if (percentage >= 70) return 'B';
@@ -2626,26 +2629,54 @@ export class CoursesService {
       assignment.total_marks,
     );
 
-    const grade = await this.prisma.assignmentSubmission.update({
-      where: { id: submission_id },
+    // Update submission status
+    await this.prisma.assignmentSubmission.update({
+      where: {
+        id: submission_id,
+      },
       data: {
         status: 'GRADED',
-        grades: {
-          create: {
-            feedback: gradeAssignmentDto.feedback,
-            grade: gradeAssignmentDto.grade || gradeLetter || 'F',
-            grade_number: gradeAssignmentDto.grade_number || 0,
-            graded_by: 'TEACHER',
-            assignment: { connect: { id: submission.assignment_id } },
-            creator: { connect: { id: user_id } },
+      },
+    });
+
+    // Create or update grade
+    await this.prisma.assignmentGrade.upsert({
+      where: {
+        submission_id: submission_id,
+      },
+      update: {
+        feedback: gradeAssignmentDto.feedback,
+        grade: gradeAssignmentDto.grade ?? gradeLetter,
+        grade_number: gradeAssignmentDto.grade_number,
+        graded_by: 'TEACHER',
+        creator: {
+          connect: {
+            id: user_id,
+          },
+        },
+      },
+      create: {
+        feedback: gradeAssignmentDto.feedback,
+        grade: gradeAssignmentDto.grade ?? gradeLetter,
+        grade_number: gradeAssignmentDto.grade_number,
+        graded_by: 'TEACHER',
+        assignment: {
+          connect: {
+            id: submission.assignment_id,
+          },
+        },
+        submission: {
+          connect: {
+            id: submission_id,
+          },
+        },
+        creator: {
+          connect: {
+            id: user_id,
           },
         },
       },
     });
-
-    if (!grade) {
-      throw new InternalServerErrorException('Error grading submission');
-    }
 
     return {
       message: 'Submission graded successfully',

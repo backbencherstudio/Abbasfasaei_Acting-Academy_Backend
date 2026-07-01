@@ -492,7 +492,7 @@ export class CoursesController {
   // updated
   @Roles(Role.TEACHER, Role.ADMIN)
   @ApiOperation({ summary: 'Grade a submission by ID' })
-  @Post('modules/classes/assignments/submissions/:submission_id/grade')
+  @Patch('modules/classes/assignments/submissions/:submission_id/grade')
   async gradeSubmission(
     @GetUser('userId') user_id: string,
     @Param('submission_id') submission_id: string,
