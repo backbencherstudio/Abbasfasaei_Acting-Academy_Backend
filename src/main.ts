@@ -24,7 +24,12 @@ async function bootstrap() {
     exclude: [{ path: '/', method: RequestMethod.GET }],
   });
   app.enableCors({
-    origin: '*',
+    origin: [
+      'https://abbasfasaei-fo-11-a9-dcce-387-front.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:3001',
+    ],
+    credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     preflightContinue: false,
   });

@@ -14,7 +14,7 @@ export class TransactionController {
   constructor(private readonly transactionService: TransactionService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.FINANCE)
+  @Roles(Role.ADMIN, Role.FINANCE)
   @Get('stats')
   @ApiResponse({ description: 'Get revenue stats' })
   getStats() {
