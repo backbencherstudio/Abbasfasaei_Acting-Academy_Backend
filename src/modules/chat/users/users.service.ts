@@ -172,8 +172,21 @@ export class UsersService {
       : Prisma.empty;
 
     const typeFilter =
-      type === 'admin'
+      type === 'student'
         ? Prisma.sql`
+            AND (
+              LOWER(COALESCE(u.type, '')) = 'student'
+              OR EXISTS (
+                SELECT 1
+                FROM role_users ru
+                INNER JOIN roles r ON r.id = ru.role_id
+                WHERE ru.user_id = u.id
+                  AND LOWER(COALESCE(r.name, '')) = 'student'
+              )
+            )
+          `
+        : type === 'admin'
+          ? Prisma.sql`
             AND (
               LOWER(COALESCE(u.type, '')) = 'admin'
               OR EXISTS (
@@ -185,8 +198,8 @@ export class UsersService {
               )
             )
           `
-        : type === 'teacher'
-          ? Prisma.sql`
+          : type === 'teacher'
+            ? Prisma.sql`
               AND (
                 LOWER(COALESCE(u.type, '')) = 'teacher'
                 OR EXISTS (
@@ -198,7 +211,7 @@ export class UsersService {
                 )
               )
             `
-          : Prisma.empty;
+            : Prisma.empty;
 
     const cursorFilter = decodedCursor
       ? decodedCursor.search_mode

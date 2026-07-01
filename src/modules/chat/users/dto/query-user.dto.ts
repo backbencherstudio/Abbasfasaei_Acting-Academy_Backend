@@ -3,6 +3,7 @@ import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 
 enum DiscoverUserType {
   ALL = 'all',
+  STUDENT = 'student',
   ADMIN = 'admin',
   TEACHER = 'teacher',
 }
