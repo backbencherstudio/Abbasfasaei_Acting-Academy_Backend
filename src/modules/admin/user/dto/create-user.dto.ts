@@ -23,7 +23,7 @@ export class CreateUserDto {
     description: 'The phone of the user',
     example: '1234567890',
   })
-  phone?: string;
+  phone_number?: string;
 
   @IsNotEmpty()
   @ApiProperty({

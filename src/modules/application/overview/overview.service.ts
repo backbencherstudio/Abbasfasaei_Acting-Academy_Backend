@@ -327,7 +327,7 @@ export class OverviewService {
       ? {
           id: rawCourse.id,
           title: rawCourse.title,
-          fee: rawCourse.fee_pence,
+          fee: rawCourse.fee_pence > 0 ? rawCourse.fee_pence / 100 : 0,
           duration: rawCourse.duration,
           start_date: rawCourse.start_date,
           class_time: rawCourse.class_time,

@@ -10,6 +10,7 @@ import {
   IsEnum,
   Min,
   IsEmail,
+  IsInt,
 } from 'class-validator';
 import { Express } from 'express';
 
@@ -266,7 +267,7 @@ export class CreateEnrollmentDto {
     required: true,
     description: 'PDF file for rules & regulations',
   })
-  @IsNotEmpty()
+  @IsOptional()
   rules_document: Express.Multer.File;
 
   @ApiProperty({
@@ -275,6 +276,18 @@ export class CreateEnrollmentDto {
     required: true,
     description: 'PDF file for contract',
   })
-  @IsNotEmpty()
+  @IsOptional()
   contract_document: Express.Multer.File;
+
+  @ApiProperty({
+    example: 12,
+    required: false,
+    description:
+      'Total number of installments (defaults to 12 if installment enrollment)',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  installment_count?: number;
 }

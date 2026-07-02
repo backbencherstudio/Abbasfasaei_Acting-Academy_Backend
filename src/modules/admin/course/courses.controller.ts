@@ -118,7 +118,7 @@ export class CoursesController {
   }
 
   // updated
-  @Roles(Role.TEACHER, Role.ADMIN)
+  @Roles(Role.TEACHER, Role.ADMIN, Role.FINANCE)
   @ApiOperation({ summary: 'Get all courses' })
   @Get()
   getAllCourses(

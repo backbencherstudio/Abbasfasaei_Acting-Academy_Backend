@@ -94,11 +94,12 @@ export class ProfileController {
     return this.profileService.logout(user.userId);
   }
 
-  // Active User Only Endpoints
-  // @Get('subscription-payment')
-  // async getSubscriptionPayment(@Request() req) {
-  //   return this.profileService.getSubscriptionPayment(req.user.userId);
-  // }
+  @UseGuards(JwtAuthGuard)
+  @Get('subscription-payment')
+  @DisAllowDeactivated()
+  async getSubscriptionPayment(@GetUser('userId') user_id: string) {
+    return this.profileService.getSubscriptionPayment(user_id);
+  }
 
   @UseGuards(JwtAuthGuard)
   @Get('signed_documents')

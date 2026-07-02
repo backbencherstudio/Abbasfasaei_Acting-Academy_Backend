@@ -40,6 +40,8 @@ import {
   EnrollmentStatus,
   EnrollmentStep,
   EnrollmentType,
+  InstallmentPlanStatus,
+  InstallmentStatus,
   OrderItemType,
   OrderStatus,
   PaymentMode,
@@ -116,15 +118,20 @@ export class CoursesService {
       const orderNumber = `MAN-ENR-${Date.now()}-${Math.floor(
         Math.random() * 1000,
       )}`;
-      const totalAmount = Number(course.fee_pence ?? 0);
+      const totalAmount = Number(course.fee_pence ?? 0) / 100;
       const isFree = rest.enrollment_type === EnrollmentType.FREE;
+      const isInstallment = rest.enrollment_type === EnrollmentType.INSTALLMENT;
 
       const order = await tx.order.create({
         data: {
           order_number: orderNumber,
           user_id: student_id,
           item_type: OrderItemType.COURSE_ENROLLMENT,
-          payment_mode: isFree ? PaymentMode.FREE : PaymentMode.MANUAL,
+          payment_mode: isInstallment
+            ? PaymentMode.INSTALLMENT
+            : isFree
+              ? PaymentMode.FREE
+              : PaymentMode.MANUAL,
           status: isFree ? OrderStatus.PAID : OrderStatus.PENDING,
           subtotal_amount: isFree ? 0 : totalAmount,
           total_amount: isFree ? 0 : totalAmount,
@@ -137,6 +144,51 @@ export class CoursesService {
             : `Manual enrollment for ${course.title}`,
         },
       });
+
+      if (isInstallment) {
+        const installmentCount = createEnrollmentDto.installment_count || 12;
+        const totalAmountInCents = Math.round(Number(totalAmount) * 100);
+        const baseInstallmentAmount = Math.floor(
+          totalAmountInCents / installmentCount,
+        );
+        const remainderAmount = totalAmountInCents % installmentCount;
+
+        const dueDates = Array.from(
+          { length: installmentCount },
+          (_, index) => {
+            const date = new Date();
+            date.setMonth(date.getMonth() + index);
+            return date;
+          },
+        );
+
+        await tx.installmentPlan.create({
+          data: {
+            order_id: order.id,
+            total_amount: totalAmount,
+            paid_amount: 0,
+            due_amount: totalAmount,
+            installment_count: installmentCount,
+            start_date: dueDates[0],
+            end_date: dueDates[dueDates.length - 1],
+            next_due_date: dueDates[0],
+            status: InstallmentPlanStatus.ACTIVE,
+            installments: {
+              create: dueDates.map((dueDate, index) => {
+                const amountInCents =
+                  baseInstallmentAmount + (index < remainderAmount ? 1 : 0);
+
+                return {
+                  installment_no: index + 1,
+                  amount: Number((amountInCents / 100).toFixed(2)),
+                  due_date: dueDate,
+                  status: InstallmentStatus.PENDING,
+                };
+              }),
+            },
+          },
+        });
+      }
 
       return tx.enrollment.create({
         data: {
@@ -262,6 +314,47 @@ export class CoursesService {
             total_amount: true,
             paid_amount: true,
             due_amount: true,
+            installment_plan: {
+              select: {
+                id: true,
+                total_amount: true,
+                paid_amount: true,
+                due_amount: true,
+                installment_count: true,
+                status: true,
+                installments: {
+                  select: {
+                    id: true,
+                    installment_no: true,
+                    amount: true,
+                    due_date: true,
+                    status: true,
+                    paid_at: true,
+                  },
+                  orderBy: {
+                    installment_no: 'asc',
+                  },
+                },
+              },
+            },
+            transactions: {
+              select: {
+                id: true,
+                transaction_ref: true,
+                amount: true,
+                currency: true,
+                status: true,
+                gateway: true,
+                payment_method: true,
+                card_last4: true,
+                receipt_url: true,
+                paid_at: true,
+                created_at: true,
+              },
+              orderBy: {
+                created_at: 'desc',
+              },
+            },
           },
         },
         attachments: {
@@ -411,10 +504,10 @@ export class CoursesService {
             status: isFree ? OrderStatus.PAID : OrderStatus.PENDING,
             subtotal_amount: isFree
               ? 0
-              : Number(enrollment.course.fee_pence ?? 0),
-            total_amount: isFree ? 0 : Number(enrollment.course.fee_pence ?? 0),
+              : Number(enrollment.course.fee_pence ?? 0) / 100,
+            total_amount: isFree ? 0 : Number(enrollment.course.fee_pence ?? 0) / 100,
             paid_amount: 0,
-            due_amount: isFree ? 0 : Number(enrollment.course.fee_pence ?? 0),
+            due_amount: isFree ? 0 : Number(enrollment.course.fee_pence ?? 0) / 100,
             course_id: enrollment.course.id,
             created_by_admin_id: admin_id,
             notes: isFree
@@ -441,7 +534,7 @@ export class CoursesService {
             where: { id: orderId },
           });
           if (currentOrder && currentOrder.payment_mode === PaymentMode.FREE) {
-            const courseFee = Number(enrollment.course?.fee_pence ?? 0);
+            const courseFee = Number(enrollment.course?.fee_pence ?? 0) / 100;
             await tx.order.update({
               where: { id: orderId },
               data: {
@@ -1017,6 +1110,7 @@ export class CoursesService {
           user_id: query_user_id,
         },
         select: {
+          id: true,
           status: true,
         },
       };
@@ -1041,7 +1135,7 @@ export class CoursesService {
       success: true,
       data: courses.map((course) => {
         if (query_user_id && queryUser?.type === Role.STUDENT) {
-          const enrollment = (course as any).enrollments?.[0];
+          const enrollment = course.enrollments?.[0];
           return {
             id: course.id,
             title: course.title,
@@ -1049,6 +1143,7 @@ export class CoursesService {
             duration: course.duration,
             start_date: course.start_date,
             status: course.status,
+            enrollments_id: enrollment?.id,
             enrollment_status: enrollment ? enrollment.status : null,
           };
         }

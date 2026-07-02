@@ -288,71 +288,72 @@ export class TransactionService implements OnModuleInit {
   }
 
   async addManualPayment(body: CreateManualPaymentDto) {
-    if (!body.studentId) {
-      throw new BadRequestException('Student ID is required');
-    }
-
-    const amount = Number(body.amount);
-    if (!amount || amount <= 0) {
-      throw new BadRequestException('Amount must be greater than zero');
-    }
-
-    const itemType = body.itemType || ItemType.COURSE_ENROLLMENT;
-    let paymentType = body.paymentType;
+    const itemType = body.item_type || ItemType.COURSE_ENROLLMENT;
+    let paymentType = body.payment_type;
     const transactionStatus =
-      body.transactionStatus || PaymentTransactionStatus.SUCCESS;
+      body.transaction_status || PaymentTransactionStatus.SUCCESS;
     const isSuccess = transactionStatus === PaymentTransactionStatus.SUCCESS;
     const currency = (body.currency || 'USD').toUpperCase();
-    const paymentMethod = body.paymentMethod || 'manual';
+    const paymentMethod = body.payment_method || 'manual';
 
-    if (
-      itemType === ItemType.COURSE_ENROLLMENT &&
-      !body.courseId &&
-      !body.enrollmentId
-    ) {
-      throw new BadRequestException(
-        'Course ID or enrollment ID is required for course payments',
-      );
-    }
+    let studentId = body.student_id;
+    let courseId = body.course_id;
+    let enrollment = null;
 
-    if (itemType === ItemType.EVENT_TICKET && !body.eventId) {
-      throw new BadRequestException('Event ID is required for event payments');
+    if (itemType === ItemType.COURSE_ENROLLMENT) {
+      if (body.enrollment_id) {
+        enrollment = await this.prisma.enrollment.findUnique({
+          where: { id: body.enrollment_id },
+          include: {
+            course: { select: { id: true, title: true, fee_pence: true } },
+            order: {
+              include: {
+                installment_plan: { include: { installments: true } },
+              },
+            },
+          },
+        });
+        if (!enrollment) throw new NotFoundException('Enrollment not found');
+        studentId = enrollment.user_id;
+        courseId = enrollment.course_id;
+      } else {
+        if (!studentId || !courseId) {
+          throw new BadRequestException(
+            'Enrollment ID or both Student ID and Course ID are required',
+          );
+        }
+        enrollment = await this.prisma.enrollment.findFirst({
+          where: {
+            user_id: studentId,
+            course_id: courseId,
+          },
+          include: {
+            course: { select: { id: true, title: true, fee_pence: true } },
+            order: {
+              include: {
+                installment_plan: { include: { installments: true } },
+              },
+            },
+          },
+        });
+        if (!enrollment) throw new NotFoundException('Enrollment not found');
+      }
+    } else {
+      if (!studentId) {
+        throw new BadRequestException('Student ID is required');
+      }
     }
 
     const student = await this.prisma.user.findUnique({
-      where: { id: body.studentId },
+      where: { id: studentId },
       select: { id: true, name: true, username: true, email: true },
     });
     if (!student) throw new NotFoundException('Student not found');
 
-    const enrollment =
-      itemType === ItemType.COURSE_ENROLLMENT
-        ? await this.prisma.enrollment.findFirst({
-            where: {
-              user_id: student.id,
-              ...(body.enrollmentId
-                ? { id: body.enrollmentId }
-                : { course_id: body.courseId }),
-            },
-            include: {
-              course: { select: { id: true, title: true, fee_pence: true } },
-              order: {
-                include: {
-                  installment_plan: { include: { installments: true } },
-                },
-              },
-            },
-          })
-        : null;
-
-    if (itemType === ItemType.COURSE_ENROLLMENT && !enrollment) {
-      throw new NotFoundException('Enrollment not found');
-    }
-
     const event =
       itemType === ItemType.EVENT_TICKET
         ? await this.prisma.event.findUnique({
-            where: { id: body.eventId },
+            where: { id: body.event_id },
             select: { id: true, name: true, amount_pence: true },
           })
         : null;
@@ -381,10 +382,80 @@ export class TransactionService implements OnModuleInit {
       paymentType = paymentType || PaymentType.ONE_TIME;
     }
 
-    if (body.transactionRef) {
+    let resolvedAmount =
+      body.amount !== undefined && body.amount !== null
+        ? Number(body.amount)
+        : null;
+
+    if (
+      itemType === ItemType.COURSE_ENROLLMENT &&
+      paymentType === PaymentType.MONTHLY
+    ) {
+      if (resolvedAmount === null) {
+        const installmentPlan = enrollment?.order?.installment_plan;
+        if (installmentPlan) {
+          const openInstallments = [...installmentPlan.installments]
+            .filter(
+              (inst) =>
+                inst.status === InstallmentStatus.PENDING ||
+                inst.status === InstallmentStatus.OVERDUE,
+            )
+            .sort((a, b) => a.installment_no - b.installment_no);
+
+          if (body.installment_numbers?.length) {
+            const matching = openInstallments.filter((inst) =>
+              body.installment_numbers.includes(inst.installment_no),
+            );
+            if (matching.length === 0) {
+              throw new BadRequestException(
+                'No payable installments found for selected numbers',
+              );
+            }
+            resolvedAmount = matching.reduce(
+              (sum, inst) => sum + Number(inst.amount),
+              0,
+            );
+          } else {
+            if (openInstallments.length === 0) {
+              throw new BadRequestException(
+                'All installments have already been paid',
+              );
+            }
+            resolvedAmount = Number(openInstallments[0].amount);
+          }
+        } else {
+          // If there's no plan, calculate first installment amount
+          const installmentCount = 12;
+          const totalCourseAmount = Number(course?.fee_pence ?? 0) / 100;
+          const totalAmountInCents = Math.round(totalCourseAmount * 100);
+          const baseInstallmentAmount = Math.floor(
+            totalAmountInCents / installmentCount,
+          );
+          const remainderAmount = totalAmountInCents % installmentCount;
+          // First installment amount
+          const firstInstallmentCents =
+            baseInstallmentAmount + (0 < remainderAmount ? 1 : 0);
+          resolvedAmount = Number((firstInstallmentCents / 100).toFixed(2));
+        }
+      }
+    } else {
+      if (resolvedAmount === null) {
+        throw new BadRequestException(
+          'Amount is required for this payment type',
+        );
+      }
+    }
+
+    if (!resolvedAmount || resolvedAmount <= 0) {
+      throw new BadRequestException('Amount must be greater than zero');
+    }
+
+    const amount = resolvedAmount;
+
+    if (body.transaction_ref) {
       const existingTransaction =
         await this.prisma.paymentTransaction.findUnique({
-          where: { transaction_ref: body.transactionRef },
+          where: { transaction_ref: body.transaction_ref },
           select: { id: true },
         });
       if (existingTransaction) {
@@ -393,14 +464,18 @@ export class TransactionService implements OnModuleInit {
     }
 
     const transactionRef =
-      body.transactionRef ||
+      body.transaction_ref ||
       `MANUAL-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const totalAmount =
         itemType === ItemType.COURSE_ENROLLMENT
-          ? Number(course?.fee_pence ?? amount)
-          : Number(event?.amount_pence ?? amount);
+          ? course?.fee_pence
+            ? Number(course.fee_pence) / 100
+            : amount
+          : event?.amount_pence
+            ? Number(event.amount_pence) / 100
+            : amount;
 
       let order = enrollment?.order;
       if (!order) {
@@ -479,13 +554,15 @@ export class TransactionService implements OnModuleInit {
           gateway: PaymentGateway.MANUAL,
           payment_method: paymentMethod,
           paid_at: isSuccess
-            ? body.paymentDate
-              ? new Date(body.paymentDate)
+            ? body.payment_date
+              ? new Date(body.payment_date)
               : new Date()
             : null,
+          card_last4: body.card_last4 || null,
+          receipt_url: body.receipt_url || null,
           metadata: {
             manual: true,
-            studentId: student.id,
+            student_id: student.id,
             itemType,
             courseId: course?.id,
             eventId: event?.id,
@@ -581,25 +658,13 @@ export class TransactionService implements OnModuleInit {
 
     let installmentPlan = order.installment_plan;
     if (!installmentPlan) {
-      const installmentCount =
-        body.installmentCount || body.installmentDueDates?.length || 1;
-      if (installmentCount < 1) {
-        throw new BadRequestException('Installment count must be at least one');
-      }
+      const installmentCount = 12;
 
-      const dueDates =
-        body.installmentDueDates?.map((date) => new Date(date)) ||
-        Array.from({ length: installmentCount }, (_, index) => {
-          const date = new Date();
-          date.setMonth(date.getMonth() + index);
-          return date;
-        });
-
-      if (dueDates.length !== installmentCount) {
-        throw new BadRequestException(
-          'Installment due dates must match installment count',
-        );
-      }
+      const dueDates = Array.from({ length: installmentCount }, (_, index) => {
+        const date = new Date();
+        date.setMonth(date.getMonth() + index);
+        return date;
+      });
 
       const totalAmountInCents = Math.round(Number(order.total_amount) * 100);
       const baseInstallmentAmount = Math.floor(
@@ -636,6 +701,15 @@ export class TransactionService implements OnModuleInit {
       });
     }
 
+    if (
+      installmentPlan.status === InstallmentPlanStatus.COMPLETED ||
+      Number(installmentPlan.due_amount) <= 0
+    ) {
+      throw new BadRequestException(
+        'All installments for this course have already been fully paid',
+      );
+    }
+
     const openInstallments = [...installmentPlan.installments]
       .filter(
         (installment) =>
@@ -643,14 +717,29 @@ export class TransactionService implements OnModuleInit {
           installment.status === InstallmentStatus.OVERDUE,
       )
       .filter((installment) =>
-        body.installmentNumbers?.length
-          ? body.installmentNumbers.includes(installment.installment_no)
+        body.installment_numbers?.length
+          ? body.installment_numbers.includes(installment.installment_no)
           : true,
       )
       .sort((a, b) => a.installment_no - b.installment_no);
 
     if (!openInstallments.length) {
       throw new BadRequestException('No payable installments found');
+    }
+
+    // Validation: Ensure no unpaid installment exists with an installment number smaller than the ones being paid
+    const minInstallmentNo = Math.min(
+      ...openInstallments.map((i) => i.installment_no),
+    );
+    const hasUnpaidPrior = installmentPlan.installments.some(
+      (inst) =>
+        inst.installment_no < minInstallmentNo &&
+        inst.status !== InstallmentStatus.PAID,
+    );
+    if (hasUnpaidPrior) {
+      throw new BadRequestException(
+        'Cannot pay a future installment when a previous installment is still unpaid',
+      );
     }
 
     let remainingAmount = amount;
@@ -678,7 +767,11 @@ export class TransactionService implements OnModuleInit {
       );
     }
 
-    const paidAt = body.paymentDate ? new Date(body.paymentDate) : new Date();
+    const paidAt = isSuccess
+      ? body.payment_date
+        ? new Date(body.payment_date)
+        : new Date()
+      : null;
     const transaction = await tx.paymentTransaction.create({
       data: {
         transaction_ref: transactionRef,
@@ -690,7 +783,9 @@ export class TransactionService implements OnModuleInit {
         status: transactionStatus,
         gateway: PaymentGateway.MANUAL,
         payment_method: paymentMethod,
-        paid_at: isSuccess ? paidAt : null,
+        paid_at: paidAt,
+        card_last4: body.card_last4 || null,
+        receipt_url: body.receipt_url || null,
         metadata: {
           manual: true,
           enrollmentId,

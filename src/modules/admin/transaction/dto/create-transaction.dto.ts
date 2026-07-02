@@ -21,20 +21,21 @@ import {
 } from 'class-validator';
 
 export class CreateManualPaymentDto {
-  @ApiProperty({ example: 'student_user_id' })
+  @ApiPropertyOptional({ example: 'student_user_id' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  studentId: string;
+  student_id?: string;
 
   @ApiPropertyOptional({ example: 'enrollment_id' })
   @IsOptional()
   @IsString()
-  enrollmentId?: string;
+  enrollment_id?: string;
 
-  @ApiProperty({ example: 2500 })
-  @Transform(({ value }) => Number(value))
+  @ApiPropertyOptional({ example: 2500 })
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
   @IsNumber()
-  amount: number;
+  amount?: number;
 
   @ApiPropertyOptional({ example: 'USD', default: 'USD' })
   @IsOptional()
@@ -44,22 +45,22 @@ export class CreateManualPaymentDto {
   @ApiPropertyOptional({ example: 'stripe', default: 'stripe' })
   @IsOptional()
   @IsString()
-  paymentMethod?: string;
+  payment_method?: string;
 
   @ApiPropertyOptional({ example: 'TXN-2026-001' })
   @IsOptional()
   @IsString()
-  transactionRef?: string;
+  transaction_ref?: string;
 
   @ApiPropertyOptional({ enum: PaymentType, example: PaymentType.ONE_TIME })
   @IsOptional()
   @IsEnum(PaymentType)
-  paymentType?: PaymentType;
+  payment_type?: PaymentType;
 
   @ApiPropertyOptional({ enum: OrderStatus, example: OrderStatus.PAID })
   @IsOptional()
   @IsEnum(OrderStatus)
-  paymentStatus?: OrderStatus;
+  payment_status?: OrderStatus;
 
   @ApiPropertyOptional({
     enum: PaymentTransactionStatus,
@@ -67,42 +68,22 @@ export class CreateManualPaymentDto {
   })
   @IsOptional()
   @IsEnum(PaymentTransactionStatus)
-  transactionStatus?: PaymentTransactionStatus;
+  transaction_status?: PaymentTransactionStatus;
 
   @ApiPropertyOptional({ enum: ItemType, example: ItemType.COURSE_ENROLLMENT })
   @IsOptional()
   @IsEnum(ItemType)
-  itemType?: ItemType;
+  item_type?: ItemType;
 
   @ApiPropertyOptional({ example: 'course_id' })
   @ValidateIf(
     (dto) =>
-      (dto.itemType === ItemType.COURSE_ENROLLMENT || !dto.itemType) &&
-      !dto.enrollmentId,
+      (dto.item_type === ItemType.COURSE_ENROLLMENT || !dto.item_type) &&
+      !dto.enrollment_id,
   )
   @IsNotEmpty()
   @IsString()
-  courseId?: string;
-
-  @ApiPropertyOptional({
-    example: 6,
-    description: 'Required when creating a new installment plan',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  installmentCount?: number;
-
-  @ApiPropertyOptional({
-    example: ['2026-07-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z'],
-    description: 'Due dates for a new installment plan',
-  })
-  @IsOptional()
-  @IsArray()
-  @ArrayNotEmpty()
-  @IsDateString({}, { each: true })
-  installmentDueDates?: string[];
+  course_id?: string;
 
   @ApiPropertyOptional({
     example: [1, 2],
@@ -114,21 +95,31 @@ export class CreateManualPaymentDto {
   @ArrayNotEmpty()
   @Type(() => Number)
   @IsInt({ each: true })
-  installmentNumbers?: number[];
+  installment_numbers?: number[];
 
   @ApiPropertyOptional({ example: 'event_id' })
-  @ValidateIf((dto) => dto.itemType === ItemType.EVENT_TICKET)
+  @ValidateIf((dto) => dto.item_type === ItemType.EVENT_TICKET)
   @IsNotEmpty()
   @IsString()
-  eventId?: string;
+  event_id?: string;
 
   @ApiPropertyOptional({ example: '2026-04-11T12:00:00.000Z' })
   @IsOptional()
   @IsDateString()
-  paymentDate?: string;
+  payment_date?: string;
 
   @ApiPropertyOptional({ example: 'Manual entry by finance team' })
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({ example: '1234' })
+  @IsOptional()
+  @IsString()
+  card_last4?: string;
+
+  @ApiPropertyOptional({ example: 'https://example.com/receipt.pdf' })
+  @IsOptional()
+  @IsString()
+  receipt_url?: string;
 }
