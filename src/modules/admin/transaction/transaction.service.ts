@@ -8,6 +8,7 @@ import {
 import {
   EnrollmentStatus,
   EnrollmentStep,
+  EnrollmentType,
   InstallmentPlanStatus,
   InstallmentStatus,
   ItemType,
@@ -297,7 +298,7 @@ export class TransactionService implements OnModuleInit {
     }
 
     const itemType = body.itemType || ItemType.COURSE_ENROLLMENT;
-    const paymentType = body.paymentType || PaymentType.ONE_TIME;
+    let paymentType = body.paymentType;
     const transactionStatus =
       body.transactionStatus || PaymentTransactionStatus.SUCCESS;
     const isSuccess = transactionStatus === PaymentTransactionStatus.SUCCESS;
@@ -362,6 +363,22 @@ export class TransactionService implements OnModuleInit {
     const course = enrollment?.course;
     if (itemType === ItemType.COURSE_ENROLLMENT && !course) {
       throw new NotFoundException('Course not found');
+    }
+
+    if (itemType === ItemType.COURSE_ENROLLMENT && enrollment) {
+      if (enrollment.enrollment_type === EnrollmentType.FREE) {
+        throw new BadRequestException(
+          'This enrollment is marked as FREE and does not require manual payments',
+        );
+      }
+      if (!paymentType) {
+        paymentType =
+          enrollment.enrollment_type === EnrollmentType.INSTALLMENT
+            ? PaymentType.MONTHLY
+            : PaymentType.ONE_TIME;
+      }
+    } else {
+      paymentType = paymentType || PaymentType.ONE_TIME;
     }
 
     if (body.transactionRef) {

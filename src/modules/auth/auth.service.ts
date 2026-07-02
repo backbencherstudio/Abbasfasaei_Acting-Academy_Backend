@@ -233,7 +233,9 @@ export class AuthService {
   async login({ email, userId }) {
     const payload = { email: email, sub: userId };
 
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: appConfig().jwt.expiry || '7d',
+    });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
     const user = await UserRepository.getUserDetails(userId);
@@ -286,7 +288,9 @@ export class AuthService {
       }
 
       const payload = { email: userDetails.email, sub: userDetails.id };
-      const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
+      const accessToken = this.jwtService.sign(payload, {
+        expiresIn: appConfig().jwt.expiry || '7d',
+      });
 
       return {
         success: true,
@@ -874,7 +878,9 @@ export class AuthService {
       sub: user.id,
     };
 
-    return this.jwtService.sign(payload, { expiresIn: '1h' });
+    return this.jwtService.sign(payload, {
+      expiresIn: appConfig().jwt.expiry || '7d',
+    });
   }
   // --------- end facebook --------- \\
 }

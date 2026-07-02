@@ -117,21 +117,24 @@ export class CoursesService {
         Math.random() * 1000,
       )}`;
       const totalAmount = Number(course.fee_pence ?? 0);
+      const isFree = rest.enrollment_type === EnrollmentType.FREE;
 
       const order = await tx.order.create({
         data: {
           order_number: orderNumber,
           user_id: student_id,
           item_type: OrderItemType.COURSE_ENROLLMENT,
-          payment_mode: PaymentMode.MANUAL,
-          status: OrderStatus.PENDING,
-          subtotal_amount: totalAmount,
-          total_amount: totalAmount,
+          payment_mode: isFree ? PaymentMode.FREE : PaymentMode.MANUAL,
+          status: isFree ? OrderStatus.PAID : OrderStatus.PENDING,
+          subtotal_amount: isFree ? 0 : totalAmount,
+          total_amount: isFree ? 0 : totalAmount,
           paid_amount: 0,
-          due_amount: totalAmount,
+          due_amount: isFree ? 0 : totalAmount,
           course_id,
           created_by_admin_id: user_id,
-          notes: `Manual enrollment for ${course.title}`,
+          notes: isFree
+            ? `Free manual enrollment for ${course.title}`
+            : `Manual enrollment for ${course.title}`,
         },
       });
 
@@ -140,8 +143,8 @@ export class CoursesService {
           user_id: student_id,
           course_id,
           order_id: order.id,
-          status: EnrollmentStatus.PENDING,
-          step: EnrollmentStep.PAYMENT,
+          status: isFree ? EnrollmentStatus.ACTIVE : EnrollmentStatus.PENDING,
+          step: isFree ? EnrollmentStep.COMPLETED : EnrollmentStep.PAYMENT,
           enrolled_by_admin_id: user_id,
           rules_regulations_accepted: true,
           digital_contract_accepted: true,
@@ -391,6 +394,10 @@ export class CoursesService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       let orderId = enrollment.order_id;
+      const isFree =
+        data.enrollment_type === EnrollmentType.FREE ||
+        (!data.enrollment_type &&
+          enrollment.enrollment_type === EnrollmentType.FREE);
 
       if (!orderId && enrollment.course) {
         const order = await tx.order.create({
@@ -400,24 +407,65 @@ export class CoursesService {
             )}`,
             user_id: enrollment.user_id,
             item_type: OrderItemType.COURSE_ENROLLMENT,
-            payment_mode: PaymentMode.MANUAL,
-            status: OrderStatus.PENDING,
-            subtotal_amount: Number(enrollment.course.fee_pence ?? 0),
-            total_amount: Number(enrollment.course.fee_pence ?? 0),
+            payment_mode: isFree ? PaymentMode.FREE : PaymentMode.MANUAL,
+            status: isFree ? OrderStatus.PAID : OrderStatus.PENDING,
+            subtotal_amount: isFree
+              ? 0
+              : Number(enrollment.course.fee_pence ?? 0),
+            total_amount: isFree ? 0 : Number(enrollment.course.fee_pence ?? 0),
             paid_amount: 0,
-            due_amount: Number(enrollment.course.fee_pence ?? 0),
+            due_amount: isFree ? 0 : Number(enrollment.course.fee_pence ?? 0),
             course_id: enrollment.course.id,
             created_by_admin_id: admin_id,
-            notes: `Manual enrollment recovery for ${enrollment.course.title}`,
+            notes: isFree
+              ? `Free manual enrollment recovery for ${enrollment.course.title}`
+              : `Manual enrollment recovery for ${enrollment.course.title}`,
           },
         });
         orderId = order.id;
+      } else if (orderId) {
+        if (isFree) {
+          await tx.order.update({
+            where: { id: orderId },
+            data: {
+              payment_mode: PaymentMode.FREE,
+              status: OrderStatus.PAID,
+              subtotal_amount: 0,
+              total_amount: 0,
+              paid_amount: 0,
+              due_amount: 0,
+            },
+          });
+        } else {
+          const currentOrder = await tx.order.findUnique({
+            where: { id: orderId },
+          });
+          if (currentOrder && currentOrder.payment_mode === PaymentMode.FREE) {
+            const courseFee = Number(enrollment.course?.fee_pence ?? 0);
+            await tx.order.update({
+              where: { id: orderId },
+              data: {
+                payment_mode: PaymentMode.MANUAL,
+                status: OrderStatus.PENDING,
+                subtotal_amount: courseFee,
+                total_amount: courseFee,
+                paid_amount: 0,
+                due_amount: courseFee,
+              },
+            });
+          }
+        }
       }
+
+      const finalStatus = isFree ? EnrollmentStatus.ACTIVE : data.status;
+      const finalStep = isFree ? EnrollmentStep.COMPLETED : data.step;
 
       return tx.enrollment.update({
         where: { id: enrollment_id },
         data: {
           ...data,
+          ...(finalStatus ? { status: finalStatus } : {}),
+          ...(finalStep ? { step: finalStep } : {}),
           ...(orderId && !enrollment.order_id
             ? { order: { connect: { id: orderId } } }
             : {}),
