@@ -9,6 +9,10 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
+import {
+  NotificationRepository,
+  NotificationType,
+} from 'src/common/repository/notification/notification.repository';
 import appConfig from 'src/config/app.config';
 import { CreatePostDto } from './dto/create-community.dto';
 import { UpdatePostDto } from './dto/update-community.dto';
@@ -24,6 +28,21 @@ import {
 @Injectable()
 export class CommunityService {
   constructor(private prisma: PrismaService) {}
+
+  private notifyUser(params: {
+    sender_id?: string;
+    receiver_id?: string;
+    title: string;
+    content: string;
+    type: NotificationType;
+    entity_id: string;
+  }) {
+    if (!params.receiver_id || params.sender_id === params.receiver_id) return;
+
+    NotificationRepository.createNotification(params).catch((error) =>
+      console.error('Failed to create notification:', error),
+    );
+  }
 
   private async ensurePostAccess(post_id: string, user_id: string) {
     const user = await this.prisma.user.findUnique({
@@ -598,6 +617,12 @@ export class CommunityService {
   }
 
   async likePost(post_id: string, user_id: string) {
+    const post = await this.prisma.communityPost.findUnique({
+      where: { id: post_id },
+      select: { id: true, author_id: true },
+    });
+    if (!post) throw new NotFoundException('post not found');
+
     const existingLike = await this.prisma.communityLike.findFirst({
       where: { post_id: post_id, user_id: user_id },
     });
@@ -621,9 +646,19 @@ export class CommunityService {
         throw new UnauthorizedException('user not found');
       }
 
-      await this.prisma.communityLike.create({
+      const like = await this.prisma.communityLike.create({
         data: { post_id, user_id },
       });
+
+      this.notifyUser({
+        sender_id: user_id,
+        receiver_id: post.author_id,
+        title: 'Post liked',
+        content: 'Someone liked your post.',
+        type: NotificationType.COMMUNITY_POST_LIKED,
+        entity_id: like.id,
+      });
+
       return {
         success: true,
         message: 'Post liked successfully',
@@ -673,6 +708,11 @@ export class CommunityService {
 
     await this.ensurePostAccess(post_id, user_id);
 
+    const post = await this.prisma.communityPost.findUnique({
+      where: { id: post_id },
+      select: { id: true, author_id: true },
+    });
+
     let resolvedParentId = parent_id;
     let replyToUserId: string | null = null;
 
@@ -707,7 +747,7 @@ export class CommunityService {
       replyToUserId = parentComment.user_id;
     }
 
-    await this.prisma.communityComment.create({
+    const comment = await this.prisma.communityComment.create({
       data: {
         post_id,
         user_id,
@@ -715,6 +755,17 @@ export class CommunityService {
         parent_id: resolvedParentId,
         reply_to_user_id: replyToUserId,
       },
+    });
+
+    this.notifyUser({
+      sender_id: user_id,
+      receiver_id: replyToUserId ?? post?.author_id,
+      title: replyToUserId ? 'New reply' : 'New comment',
+      content: replyToUserId
+        ? 'Someone replied to your comment.'
+        : 'Someone commented on your post.',
+      type: NotificationType.COMMUNITY_COMMENT_ADDED,
+      entity_id: comment.id,
     });
 
     return {
@@ -729,7 +780,7 @@ export class CommunityService {
 
     const comment = await this.prisma.communityComment.findFirst({
       where: { id: comment_id },
-      select: { id: true, post_id: true, deleted_at: true },
+      select: { id: true, post_id: true, user_id: true, deleted_at: true },
     });
 
     if (!comment || comment.deleted_at) {
@@ -751,11 +802,20 @@ export class CommunityService {
         message: 'Like removed successfully',
       };
     } else {
-      await this.prisma.communityLike.create({
+      const like = await this.prisma.communityLike.create({
         data: {
           comment_id: comment_id,
           user_id: user_id,
         },
+      });
+
+      this.notifyUser({
+        sender_id: user_id,
+        receiver_id: comment.user_id,
+        title: 'Comment liked',
+        content: 'Someone liked your comment.',
+        type: NotificationType.COMMUNITY_COMMENT_LIKED,
+        entity_id: like.id,
       });
 
       return { success: true, message: 'Like added successfully' };
@@ -909,18 +969,27 @@ export class CommunityService {
 
     const post = await this.prisma.communityPost.findUnique({
       where: { id: post_id },
-      select: { id: true },
+      select: { id: true, author_id: true },
     });
     if (!post) {
       throw new NotFoundException('post not found');
     }
 
-    await this.prisma.communityShare.create({
+    const share = await this.prisma.communityShare.create({
       data: {
         post_id,
         user_id,
         medium: medium,
       },
+    });
+
+    this.notifyUser({
+      sender_id: user_id,
+      receiver_id: post.author_id,
+      title: 'Post shared',
+      content: 'Someone shared your post.',
+      type: NotificationType.COMMUNITY_POST_SHARED,
+      entity_id: share.id,
     });
 
     return {

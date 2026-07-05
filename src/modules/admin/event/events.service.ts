@@ -5,6 +5,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import {
+  NotificationRepository,
+  NotificationType,
+} from 'src/common/repository/notification/notification.repository';
+import { UserStatus } from 'src/common/constants/user-status.enum';
+import { Role } from 'src/common/guard/role/role.enum';
 import { addEventDto } from './dto/addevent.dto';
 import { updateEventDto } from './dto/updateEventDto';
 import {
@@ -17,6 +23,21 @@ import { Prisma } from '@prisma/client';
 @Injectable()
 export class EventsService {
   constructor(private prisma: PrismaService) {}
+
+  private notifyUser(params: {
+    sender_id?: string;
+    receiver_id?: string;
+    title: string;
+    content: string;
+    type: NotificationType;
+    entity_id: string;
+  }) {
+    if (!params.receiver_id || params.sender_id === params.receiver_id) return;
+
+    NotificationRepository.createNotification(params).catch((error) =>
+      console.error('Failed to create notification:', error),
+    );
+  }
 
   async getAllEvents(user_id: string, query: QueryEventDto) {
     if (!user_id) throw new UnauthorizedException('User not found');
@@ -250,6 +271,22 @@ export class EventsService {
       },
     });
     if (!event) throw new BadRequestException('Failed to create event');
+
+    const students = await this.prisma.user.findMany({
+      where: { status: UserStatus.ACTIVE, type: Role.STUDENT },
+      select: { id: true },
+    });
+
+    students.forEach((student) =>
+      this.notifyUser({
+        sender_id: user_id,
+        receiver_id: student.id,
+        title: 'New event',
+        content: `${event.name} has been added.`,
+        type: NotificationType.EVENT_CREATED,
+        entity_id: event.id,
+      }),
+    );
 
     return {
       success: true,

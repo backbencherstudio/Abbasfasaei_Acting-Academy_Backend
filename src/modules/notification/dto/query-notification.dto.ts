@@ -1,5 +1,6 @@
-import { IsOptional, IsString, IsInt } from 'class-validator';
+import { IsOptional, IsString, IsInt, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
+import { NotificationType } from '../../../common/repository/notification/notification.repository';
 
 export class QueryNotificationDto {
   @IsString()
@@ -15,7 +16,7 @@ export class QueryNotificationDto {
   @IsOptional()
   search?: string;
 
-  @IsString()
+  @IsEnum(NotificationType)
   @IsOptional()
-  type?: string;
+  type?: NotificationType;
 }

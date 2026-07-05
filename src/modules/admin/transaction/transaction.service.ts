@@ -22,6 +22,10 @@ import {
 } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { PrismaService } from 'src/prisma/prisma.service';
+import {
+  NotificationRepository,
+  NotificationType,
+} from 'src/common/repository/notification/notification.repository';
 import { TransactionsQueryDto } from './dto/query-transaction.dto';
 import { CreateManualPaymentDto } from './dto/create-transaction.dto';
 
@@ -32,6 +36,21 @@ export class TransactionService implements OnModuleInit {
     @InjectQueue('installment-access-queue')
     private readonly installmentAccessQueue: Queue,
   ) {}
+
+  private notifyUser(params: {
+    sender_id?: string;
+    receiver_id?: string;
+    title: string;
+    content: string;
+    type: NotificationType;
+    entity_id: string;
+  }) {
+    if (!params.receiver_id || params.sender_id === params.receiver_id) return;
+
+    NotificationRepository.createNotification(params).catch((error) =>
+      console.error('Failed to create notification:', error),
+    );
+  }
 
   async onModuleInit() {
     await this.installmentAccessQueue.add(
@@ -620,6 +639,25 @@ export class TransactionService implements OnModuleInit {
 
       return { order: updatedOrder, transaction };
     });
+
+    if (isSuccess && result?.transaction?.id) {
+      this.notifyUser({
+        receiver_id: student.id,
+        title:
+          itemType === ItemType.COURSE_ENROLLMENT
+            ? 'Course payment received'
+            : 'Event payment received',
+        content:
+          itemType === ItemType.COURSE_ENROLLMENT
+            ? `Your payment for ${course?.title ?? 'a course'} has been recorded.`
+            : `Your payment for ${event?.name ?? 'an event'} has been recorded.`,
+        type:
+          paymentType === PaymentType.MONTHLY
+            ? NotificationType.INSTALLMENT_PAYMENT_RECEIVED
+            : NotificationType.PAYMENT_RECEIVED,
+        entity_id: result.transaction.id,
+      });
+    }
 
     return {
       success: true,

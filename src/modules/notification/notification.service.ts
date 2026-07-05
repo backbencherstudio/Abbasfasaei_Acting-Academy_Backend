@@ -43,6 +43,7 @@ export class NotificationService {
           id: true,
           created_at: true,
           read_at: true,
+          entity_id: true,
           notification_event: {
             select: {
               id: true,
@@ -81,6 +82,7 @@ export class NotificationService {
         title: n?.notification_event?.title,
         content: n?.notification_event?.content,
         type: n?.notification_event?.type,
+        entity_id: n?.entity_id,
         created_at: n?.created_at,
         read_at: n?.read_at,
         is_read: n?.read_at !== null,

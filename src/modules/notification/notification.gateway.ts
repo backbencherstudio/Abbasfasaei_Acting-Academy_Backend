@@ -43,12 +43,7 @@ export class NotificationGateway
       const data = JSON.parse(message);
       const receiverId = data.receiver_id || data.userId;
       if (receiverId) {
-        const targetSocketId = this.clients.get(receiverId);
-        if (targetSocketId) {
-          this.server.to(targetSocketId).emit('notification', data);
-        }
-      } else {
-        this.server.emit('notification', data);
+        this.server.to(receiverId).emit('notification', data);
       }
     });
   }
@@ -61,6 +56,7 @@ export class NotificationGateway
     const userId = client.handshake.query.userId as string;
     if (userId) {
       this.clients.set(userId, client.id);
+      client.join(userId);
     }
   }
 
@@ -73,8 +69,8 @@ export class NotificationGateway
 
   @SubscribeMessage('sendNotification')
   async handleNotification(@MessageBody() data: any) {
-    const targetSocketId = this.clients.get(data.userId);
-    if (targetSocketId) {
+    const userId = data.receiver_id || data.userId;
+    if (userId) {
       await this.redisPub.publish('notification', JSON.stringify(data));
     }
   }

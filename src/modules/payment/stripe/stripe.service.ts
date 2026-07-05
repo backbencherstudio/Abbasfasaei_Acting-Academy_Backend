@@ -9,6 +9,10 @@ import {
   PaymentMode,
 } from '@prisma/client';
 import appConfig from '../../../config/app.config';
+import {
+  NotificationRepository,
+  NotificationType,
+} from '../../../common/repository/notification/notification.repository';
 
 @Injectable()
 export class StripeService {
@@ -16,6 +20,21 @@ export class StripeService {
 
   private toMajorUnitAmount(amountInSmallestUnit: number) {
     return Number((amountInSmallestUnit / 100).toFixed(2));
+  }
+
+  private notifyUser(params: {
+    sender_id?: string;
+    receiver_id?: string;
+    title: string;
+    content: string;
+    type: NotificationType;
+    entity_id: string;
+  }) {
+    if (!params.receiver_id || params.sender_id === params.receiver_id) return;
+
+    NotificationRepository.createNotification(params).catch((error) =>
+      console.error('Failed to create notification:', error),
+    );
   }
 
   // ─── PUBLIC: Create Checkout Session ────────────────────────────────
@@ -316,6 +335,7 @@ export class StripeService {
     if (flow === 'COURSE_FULL' && metadata.enrollmentId) {
       const enrollment = await this.prisma.enrollment.findUnique({
         where: { id: metadata.enrollmentId },
+        include: { course: { select: { title: true } } },
       });
       if (enrollment) {
         await this.prisma.enrollment.update({
@@ -326,11 +346,31 @@ export class StripeService {
             ...(enrollment.order_id ? {} : { order_id: transaction.order_id }),
           },
         });
+
+        this.notifyUser({
+          receiver_id: userId,
+          title: 'Course payment received',
+          content: `Your payment for ${enrollment.course?.title ?? 'a course'} has been recorded.`,
+          type: NotificationType.PAYMENT_RECEIVED,
+          entity_id: transaction.id,
+        });
+
+        this.notifyUser({
+          receiver_id: userId,
+          title: 'Course enrollment created',
+          content: `You have been enrolled in ${enrollment.course?.title ?? 'a course'}.`,
+          type: NotificationType.COURSE_ENROLLMENT,
+          entity_id: enrollment.id,
+        });
       }
     }
 
     // Event registration
     if (flow === 'EVENT_FULL' && metadata.eventId) {
+      const event = await this.prisma.event.findUnique({
+        where: { id: metadata.eventId },
+        select: { name: true },
+      });
       const exists = await this.prisma.eventRegistration.findFirst({
         where: { user_id: userId, event_id: metadata.eventId },
       });
@@ -344,6 +384,14 @@ export class StripeService {
             ticket_number: ticket,
             status: 'CONFIRMED',
           },
+        });
+
+        this.notifyUser({
+          receiver_id: userId,
+          title: 'Event payment received',
+          content: `Your payment for ${event?.name ?? 'an event'} has been recorded.`,
+          type: NotificationType.PAYMENT_RECEIVED,
+          entity_id: transaction.id,
         });
       }
     }

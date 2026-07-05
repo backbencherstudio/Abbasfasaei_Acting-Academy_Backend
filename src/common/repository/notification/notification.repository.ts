@@ -10,6 +10,22 @@ const redisPublisher = new Redis({
   password: appConfig().redis.password,
 });
 
+export enum NotificationType {
+  COURSE_ENROLLMENT = 'COURSE_ENROLLMENT',
+  ENROLLMENT_UPDATED = 'ENROLLMENT_UPDATED',
+  PAYMENT_RECEIVED = 'PAYMENT_RECEIVED',
+  INSTALLMENT_PAYMENT_RECEIVED = 'INSTALLMENT_PAYMENT_RECEIVED',
+  EVENT_CREATED = 'EVENT_CREATED',
+  ASSIGNMENT_CREATED = 'ASSIGNMENT_CREATED',
+  ASSIGNMENT_SUBMITTED = 'ASSIGNMENT_SUBMITTED',
+  ASSIGNMENT_GRADED = 'ASSIGNMENT_GRADED',
+  COMMUNITY_POST_LIKED = 'COMMUNITY_POST_LIKED',
+  COMMUNITY_COMMENT_ADDED = 'COMMUNITY_COMMENT_ADDED',
+  COMMUNITY_COMMENT_LIKED = 'COMMUNITY_COMMENT_LIKED',
+  COMMUNITY_POST_SHARED = 'COMMUNITY_POST_SHARED',
+  CHAT_MESSAGE = 'CHAT_MESSAGE',
+}
+
 export class NotificationRepository {
   /**
    * Create a notification
@@ -33,32 +49,14 @@ export class NotificationRepository {
     receiver_id?: string;
     title?: string;
     content?: string;
-    type?:
-      | 'message'
-      | 'comment'
-      | 'review'
-      | 'booking'
-      | 'payment_transaction'
-      | 'package'
-      | 'blog';
+    type?: NotificationType;
     entity_id?: string;
   }): Promise<Notification> {
-    const notificationEventData = {};
-    if (type) {
-      notificationEventData['type'] = type;
-    }
-    if (title) {
-      notificationEventData['title'] = title;
-    }
-    if (content) {
-      notificationEventData['content'] = content;
-    }
     const notificationEvent = await prisma.notificationEvent.create({
       data: {
         type: type,
         title: title,
         content: content,
-        ...notificationEventData,
       },
     });
 
@@ -88,6 +86,7 @@ export class NotificationRepository {
         content: notificationEvent.content,
         type: notificationEvent.type,
         entity_id: notification.entity_id,
+        receiver_id: notification.receiver_id,
       }),
     );
 

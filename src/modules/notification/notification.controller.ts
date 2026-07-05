@@ -39,7 +39,10 @@ export class NotificationController {
   }
 
   @Delete(':notification_id')
-  remove(@GetUser('userId') userId: string, @Param('id') id: string) {
+  remove(
+    @GetUser('userId') userId: string,
+    @Param('notification_id') id: string,
+  ) {
     return this.notificationService.remove(id, userId);
   }
 

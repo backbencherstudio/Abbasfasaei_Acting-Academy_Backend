@@ -24,6 +24,10 @@ import {
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateModuleDto, UpdateClassDto } from './dto/update-course.dto';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
+import {
+  NotificationRepository,
+  NotificationType,
+} from 'src/common/repository/notification/notification.repository';
 import appConfig from 'src/config/app.config';
 import { Role } from 'src/common/guard/role/role.enum';
 import {
@@ -53,8 +57,66 @@ import * as QRCode from 'qrcode';
 @Injectable()
 export class CoursesService {
   private readonly logger = new Logger(CoursesService.name);
+  private readonly enrollmentDocumentMaxSizeBytes = 10 * 1024 * 1024;
 
   constructor(private prisma: PrismaService) {}
+
+  private validateEnrollmentDocument(file: Express.Multer.File, label: string) {
+    const isPdf =
+      file.mimetype === 'application/pdf' ||
+      file.originalname?.toLowerCase().endsWith('.pdf');
+
+    if (!isPdf) {
+      throw new BadRequestException(`${label} must be a PDF file`);
+    }
+
+    if (file.size > this.enrollmentDocumentMaxSizeBytes) {
+      throw new BadRequestException(`${label} must be 10MB or smaller`);
+    }
+  }
+
+  private buildInstallmentSchedule(totalAmount: number, installmentCount = 12) {
+    const totalAmountInCents = Math.round(totalAmount * 100);
+    const baseInstallmentAmount = Math.floor(
+      totalAmountInCents / installmentCount,
+    );
+    const remainderAmount = totalAmountInCents % installmentCount;
+    const dueDates = Array.from({ length: installmentCount }, (_, index) => {
+      const date = new Date();
+      date.setMonth(date.getMonth() + index);
+      return date;
+    });
+
+    return {
+      dueDates,
+      installments: dueDates.map((dueDate, index) => {
+        const amountInCents =
+          baseInstallmentAmount + (index < remainderAmount ? 1 : 0);
+
+        return {
+          installment_no: index + 1,
+          amount: Number((amountInCents / 100).toFixed(2)),
+          due_date: dueDate,
+          status: InstallmentStatus.PENDING,
+        };
+      }),
+    };
+  }
+
+  private notifyUser(params: {
+    sender_id?: string;
+    receiver_id?: string;
+    title: string;
+    content: string;
+    type: NotificationType;
+    entity_id: string;
+  }) {
+    if (!params.receiver_id || params.sender_id === params.receiver_id) return;
+
+    NotificationRepository.createNotification(params).catch((error) =>
+      this.logger.error(`Failed to create notification: ${error.message}`),
+    );
+  }
 
   async makeEnrolment(
     user_id: string,
@@ -67,8 +129,19 @@ export class CoursesService {
       where: { id: course_id, status: CourseStatus.ACTIVE },
     });
 
-    const { student_id, rules_document, contract_document, ...rest } =
-      createEnrollmentDto;
+    const {
+      student_id,
+      name,
+      email,
+      phone,
+      address,
+      date_of_birth,
+      experience,
+      enrollment_type,
+      installment_count,
+      rules_document,
+      contract_document,
+    } = createEnrollmentDto;
 
     if (!rules_document)
       throw new BadRequestException('Rules documents are required');
@@ -78,11 +151,20 @@ export class CoursesService {
     if (!course)
       throw new NotFoundException('Course not found or not enrollable');
 
+    const student = await this.prisma.user.findUnique({
+      where: { id: student_id },
+      select: { id: true },
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
     const alreadyEnrolled = await this.prisma.enrollment.findFirst({
       where: { user_id: student_id, course_id },
     });
     if (alreadyEnrolled)
       throw new ConflictException('Student already enrolled in this course');
+
+    this.validateEnrollmentDocument(rules_document, 'Rules document');
+    this.validateEnrollmentDocument(contract_document, 'Contract document');
 
     const rulesDocumentFilename = NajimStorage.generateFileName(
       rules_document.originalname,
@@ -95,175 +177,183 @@ export class CoursesService {
     const contractDocumentObjectKey =
       appConfig().storageUrl.enrollment + '/' + contractDocumentFilename;
 
-    const storedRulesDocument = await NajimStorage.put(
-      rulesDocumentObjectKey,
-      rules_document.buffer,
-      { contentType: rules_document.mimetype },
-    );
-    if (!storedRulesDocument) {
-      throw new InternalServerErrorException('Failed to store rules documents');
-    }
-    const storedContractFile = await NajimStorage.put(
-      contractDocumentObjectKey,
-      contract_document.buffer,
-      { contentType: contract_document.mimetype },
-    );
-    if (!storedContractFile) {
-      throw new InternalServerErrorException(
-        'Failed to store contract documents',
+    const storedDocumentKeys: string[] = [];
+    let enrollment;
+
+    try {
+      const storedRulesDocument = await NajimStorage.put(
+        rulesDocumentObjectKey,
+        rules_document.buffer,
+        { contentType: rules_document.mimetype },
       );
-    }
-
-    const enrollment = await this.prisma.$transaction(async (tx) => {
-      const orderNumber = `MAN-ENR-${Date.now()}-${Math.floor(
-        Math.random() * 1000,
-      )}`;
-      const totalAmount = Number(course.fee_pence ?? 0) / 100;
-      const isFree = rest.enrollment_type === EnrollmentType.FREE;
-      const isInstallment = rest.enrollment_type === EnrollmentType.INSTALLMENT;
-
-      const order = await tx.order.create({
-        data: {
-          order_number: orderNumber,
-          user_id: student_id,
-          item_type: OrderItemType.COURSE_ENROLLMENT,
-          payment_mode: isInstallment
-            ? PaymentMode.INSTALLMENT
-            : isFree
-              ? PaymentMode.FREE
-              : PaymentMode.MANUAL,
-          status: isFree ? OrderStatus.PAID : OrderStatus.PENDING,
-          subtotal_amount: isFree ? 0 : totalAmount,
-          total_amount: isFree ? 0 : totalAmount,
-          paid_amount: 0,
-          due_amount: isFree ? 0 : totalAmount,
-          course_id,
-          created_by_admin_id: user_id,
-          notes: isFree
-            ? `Free manual enrollment for ${course.title}`
-            : `Manual enrollment for ${course.title}`,
-        },
-      });
-
-      if (isInstallment) {
-        const installmentCount = createEnrollmentDto.installment_count || 12;
-        const totalAmountInCents = Math.round(Number(totalAmount) * 100);
-        const baseInstallmentAmount = Math.floor(
-          totalAmountInCents / installmentCount,
+      if (!storedRulesDocument) {
+        throw new InternalServerErrorException(
+          'Failed to store rules documents',
         );
-        const remainderAmount = totalAmountInCents % installmentCount;
+      }
+      storedDocumentKeys.push(rulesDocumentObjectKey);
 
-        const dueDates = Array.from(
-          { length: installmentCount },
-          (_, index) => {
-            const date = new Date();
-            date.setMonth(date.getMonth() + index);
-            return date;
-          },
+      const storedContractFile = await NajimStorage.put(
+        contractDocumentObjectKey,
+        contract_document.buffer,
+        { contentType: contract_document.mimetype },
+      );
+      if (!storedContractFile) {
+        throw new InternalServerErrorException(
+          'Failed to store contract documents',
         );
+      }
+      storedDocumentKeys.push(contractDocumentObjectKey);
 
-        await tx.installmentPlan.create({
+      enrollment = await this.prisma.$transaction(async (tx) => {
+        const orderNumber = `MAN-ENR-${Date.now()}-${Math.floor(
+          Math.random() * 1000,
+        )}`;
+        const totalAmount = Number(course.fee_pence ?? 0) / 100;
+        const isFree = enrollment_type === EnrollmentType.FREE;
+        const isInstallment = enrollment_type === EnrollmentType.INSTALLMENT;
+
+        const order = await tx.order.create({
           data: {
-            order_id: order.id,
-            total_amount: totalAmount,
+            order_number: orderNumber,
+            user_id: student_id,
+            item_type: OrderItemType.COURSE_ENROLLMENT,
+            payment_mode: isInstallment
+              ? PaymentMode.INSTALLMENT
+              : isFree
+                ? PaymentMode.FREE
+                : PaymentMode.MANUAL,
+            status: isFree ? OrderStatus.PAID : OrderStatus.PENDING,
+            subtotal_amount: isFree ? 0 : totalAmount,
+            total_amount: isFree ? 0 : totalAmount,
             paid_amount: 0,
-            due_amount: totalAmount,
-            installment_count: installmentCount,
-            start_date: dueDates[0],
-            end_date: dueDates[dueDates.length - 1],
-            next_due_date: dueDates[0],
-            status: InstallmentPlanStatus.ACTIVE,
-            installments: {
-              create: dueDates.map((dueDate, index) => {
-                const amountInCents =
-                  baseInstallmentAmount + (index < remainderAmount ? 1 : 0);
+            due_amount: isFree ? 0 : totalAmount,
+            course_id,
+            created_by_admin_id: user_id,
+            notes: isFree
+              ? `Free manual enrollment for ${course.title}`
+              : `Manual enrollment for ${course.title}`,
+          },
+        });
 
-                return {
-                  installment_no: index + 1,
-                  amount: Number((amountInCents / 100).toFixed(2)),
-                  due_date: dueDate,
-                  status: InstallmentStatus.PENDING,
-                };
-              }),
+        if (isInstallment) {
+          const installmentCount = installment_count || 12;
+          const { dueDates, installments } = this.buildInstallmentSchedule(
+            totalAmount,
+            installmentCount,
+          );
+
+          await tx.installmentPlan.create({
+            data: {
+              order_id: order.id,
+              total_amount: totalAmount,
+              paid_amount: 0,
+              due_amount: totalAmount,
+              installment_count: installmentCount,
+              start_date: dueDates[0],
+              end_date: dueDates[dueDates.length - 1],
+              next_due_date: dueDates[0],
+              status: InstallmentPlanStatus.ACTIVE,
+              installments: { create: installments },
+            },
+          });
+        }
+
+        return tx.enrollment.create({
+          data: {
+            user_id: student_id,
+            course_id,
+            order_id: order.id,
+            name,
+            email,
+            phone,
+            address,
+            date_of_birth,
+            experience,
+            enrollment_type,
+            status: isFree ? EnrollmentStatus.ACTIVE : EnrollmentStatus.PENDING,
+            step: isFree ? EnrollmentStep.COMPLETED : EnrollmentStep.PAYMENT,
+            enrolled_by_admin_id: user_id,
+            rules_regulations_accepted: true,
+            digital_contract_accepted: true,
+            attachments: {
+              create: [
+                {
+                  file_name: rulesDocumentFilename,
+                  file_path: rulesDocumentObjectKey,
+                  type: AttachmentType.RULES_REGULATIONS,
+                  size_bytes: rules_document.size,
+                  mime_type: rules_document.mimetype,
+                },
+                {
+                  file_name: contractDocumentFilename,
+                  file_path: contractDocumentObjectKey,
+                  type: AttachmentType.DIGITAL_CONTRACT,
+                  size_bytes: contract_document.size,
+                  mime_type: contract_document.mimetype,
+                },
+              ],
+            },
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            date_of_birth: true,
+            address: true,
+            experience: true,
+            status: true,
+            step: true,
+            admin_note: true,
+            enrollment_type: true,
+            user_id: true,
+
+            course: {
+              select: {
+                id: true,
+                title: true,
+                status: true,
+              },
+            },
+            order: {
+              select: {
+                id: true,
+                order_number: true,
+                status: true,
+                subtotal_amount: true,
+                total_amount: true,
+                paid_amount: true,
+                due_amount: true,
+              },
+            },
+            attachments: {
+              select: {
+                id: true,
+                file_name: true,
+                file_path: true,
+                type: true,
+                mime_type: true,
+              },
             },
           },
         });
-      }
-
-      return tx.enrollment.create({
-        data: {
-          user_id: student_id,
-          course_id,
-          order_id: order.id,
-          status: isFree ? EnrollmentStatus.ACTIVE : EnrollmentStatus.PENDING,
-          step: isFree ? EnrollmentStep.COMPLETED : EnrollmentStep.PAYMENT,
-          enrolled_by_admin_id: user_id,
-          rules_regulations_accepted: true,
-          digital_contract_accepted: true,
-          ...rest,
-          attachments: {
-            create: [
-              {
-                file_name: rulesDocumentFilename,
-                file_path: rulesDocumentObjectKey,
-                type: AttachmentType.RULES_REGULATIONS,
-                size_bytes: rules_document.size,
-                mime_type: rules_document.mimetype,
-              },
-              {
-                file_name: contractDocumentFilename,
-                file_path: contractDocumentObjectKey,
-                type: AttachmentType.DIGITAL_CONTRACT,
-                size_bytes: contract_document.size,
-                mime_type: contract_document.mimetype,
-              },
-            ],
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          phone: true,
-          date_of_birth: true,
-          address: true,
-          experience: true,
-          status: true,
-          step: true,
-          admin_note: true,
-          enrollment_type: true,
-          user_id: true,
-
-          course: {
-            select: {
-              id: true,
-              title: true,
-              status: true,
-            },
-          },
-          order: {
-            select: {
-              id: true,
-              order_number: true,
-              status: true,
-              subtotal_amount: true,
-              total_amount: true,
-              paid_amount: true,
-              due_amount: true,
-            },
-          },
-          attachments: {
-            select: {
-              id: true,
-              file_name: true,
-              file_path: true,
-              type: true,
-              mime_type: true,
-            },
-          },
-        },
       });
+    } catch (error) {
+      await Promise.allSettled(
+        storedDocumentKeys.map((objectKey) => NajimStorage.delete(objectKey)),
+      );
+      throw error;
+    }
+    this.notifyUser({
+      sender_id: user_id,
+      receiver_id: enrollment.user_id,
+      title: 'Course enrollment created',
+      content: `You have been enrolled in ${enrollment.course?.title ?? 'a course'}.`,
+      type: NotificationType.COURSE_ENROLLMENT,
+      entity_id: enrollment.id,
     });
+
     return {
       success: true,
       message: 'Enrollment created successfully',
@@ -399,17 +489,44 @@ export class CoursesService {
       where: { id: enrollment_id },
       include: {
         course: { select: { id: true, title: true, fee_pence: true } },
-        order: true,
+        order: { include: { installment_plan: true } },
         attachments: true,
       },
     });
 
     if (!enrollment) throw new NotFoundException('Enrollment not found');
 
-    const { rules_document, contract_document, ...rest } = updateEnrollmentDto;
+    const {
+      student_id: _studentId,
+      installment_count,
+      rules_document,
+      contract_document,
+      name,
+      email,
+      phone,
+      address,
+      date_of_birth,
+      experience,
+      enrollment_type,
+      status,
+      step,
+      admin_note,
+    } = updateEnrollmentDto as UpdateEnrollmentDto & {
+      admin_note?: string;
+      step?: EnrollmentStep;
+    };
 
     const data: Prisma.EnrollmentUpdateInput = {
-      ...rest,
+      ...(name !== undefined ? { name } : {}),
+      ...(email !== undefined ? { email } : {}),
+      ...(phone !== undefined ? { phone } : {}),
+      ...(address !== undefined ? { address } : {}),
+      ...(date_of_birth !== undefined ? { date_of_birth } : {}),
+      ...(experience !== undefined ? { experience } : {}),
+      ...(enrollment_type !== undefined ? { enrollment_type } : {}),
+      ...(status !== undefined ? { status } : {}),
+      ...(step !== undefined ? { step } : {}),
+      ...(admin_note !== undefined ? { admin_note } : {}),
       enrolled_by_admin_id: enrollment.enrolled_by_admin_id ?? admin_id,
     };
 
@@ -427,6 +544,7 @@ export class CoursesService {
       throw new BadRequestException('Contract document is required');
     }
     if (rules_document) {
+      this.validateEnrollmentDocument(rules_document, 'Rules document');
       const filename = NajimStorage.generateFileName(
         rules_document.originalname,
       );
@@ -456,6 +574,7 @@ export class CoursesService {
       });
     }
     if (contract_document) {
+      this.validateEnrollmentDocument(contract_document, 'Contract document');
       const filename = NajimStorage.generateFileName(
         contract_document.originalname,
       );
@@ -487,38 +606,42 @@ export class CoursesService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       let orderId = enrollment.order_id;
-      const isFree =
-        data.enrollment_type === EnrollmentType.FREE ||
-        (!data.enrollment_type &&
-          enrollment.enrollment_type === EnrollmentType.FREE);
+      let order = enrollment.order;
+      const courseFee = Number(enrollment.course?.fee_pence ?? 0) / 100;
+      const nextEnrollmentType = enrollment_type ?? enrollment.enrollment_type;
+      const isFree = nextEnrollmentType === EnrollmentType.FREE;
+      const isInstallment = nextEnrollmentType === EnrollmentType.INSTALLMENT;
 
       if (!orderId && enrollment.course) {
-        const order = await tx.order.create({
+        order = await tx.order.create({
           data: {
             order_number: `MAN-ENR-${Date.now()}-${Math.floor(
               Math.random() * 1000,
             )}`,
             user_id: enrollment.user_id,
             item_type: OrderItemType.COURSE_ENROLLMENT,
-            payment_mode: isFree ? PaymentMode.FREE : PaymentMode.MANUAL,
+            payment_mode: isInstallment
+              ? PaymentMode.INSTALLMENT
+              : isFree
+                ? PaymentMode.FREE
+                : PaymentMode.MANUAL,
             status: isFree ? OrderStatus.PAID : OrderStatus.PENDING,
-            subtotal_amount: isFree
-              ? 0
-              : Number(enrollment.course.fee_pence ?? 0) / 100,
-            total_amount: isFree ? 0 : Number(enrollment.course.fee_pence ?? 0) / 100,
+            subtotal_amount: isFree ? 0 : courseFee,
+            total_amount: isFree ? 0 : courseFee,
             paid_amount: 0,
-            due_amount: isFree ? 0 : Number(enrollment.course.fee_pence ?? 0) / 100,
+            due_amount: isFree ? 0 : courseFee,
             course_id: enrollment.course.id,
             created_by_admin_id: admin_id,
             notes: isFree
               ? `Free manual enrollment recovery for ${enrollment.course.title}`
               : `Manual enrollment recovery for ${enrollment.course.title}`,
           },
+          include: { installment_plan: true },
         });
         orderId = order.id;
       } else if (orderId) {
         if (isFree) {
-          await tx.order.update({
+          order = await tx.order.update({
             where: { id: orderId },
             data: {
               payment_mode: PaymentMode.FREE,
@@ -528,26 +651,53 @@ export class CoursesService {
               paid_amount: 0,
               due_amount: 0,
             },
+            include: { installment_plan: true },
           });
         } else {
-          const currentOrder = await tx.order.findUnique({
+          order = await tx.order.update({
             where: { id: orderId },
+            data: {
+              payment_mode: isInstallment
+                ? PaymentMode.INSTALLMENT
+                : PaymentMode.MANUAL,
+              status: OrderStatus.PENDING,
+              subtotal_amount: courseFee,
+              total_amount: courseFee,
+              paid_amount:
+                order && Number(order.total_amount) === courseFee
+                  ? order.paid_amount
+                  : 0,
+              due_amount:
+                order && Number(order.total_amount) === courseFee
+                  ? order.due_amount
+                  : courseFee,
+            },
+            include: { installment_plan: true },
           });
-          if (currentOrder && currentOrder.payment_mode === PaymentMode.FREE) {
-            const courseFee = Number(enrollment.course?.fee_pence ?? 0) / 100;
-            await tx.order.update({
-              where: { id: orderId },
-              data: {
-                payment_mode: PaymentMode.MANUAL,
-                status: OrderStatus.PENDING,
-                subtotal_amount: courseFee,
-                total_amount: courseFee,
-                paid_amount: 0,
-                due_amount: courseFee,
-              },
-            });
-          }
         }
+      }
+
+      if (isInstallment && order && !order.installment_plan) {
+        const installmentCount = installment_count || 12;
+        const { dueDates, installments } = this.buildInstallmentSchedule(
+          Number(order.total_amount),
+          installmentCount,
+        );
+
+        await tx.installmentPlan.create({
+          data: {
+            order_id: order.id,
+            total_amount: order.total_amount,
+            paid_amount: 0,
+            due_amount: order.total_amount,
+            installment_count: installmentCount,
+            start_date: dueDates[0],
+            end_date: dueDates[dueDates.length - 1],
+            next_due_date: dueDates[0],
+            status: InstallmentPlanStatus.ACTIVE,
+            installments: { create: installments },
+          },
+        });
       }
 
       const finalStatus = isFree ? EnrollmentStatus.ACTIVE : data.status;
@@ -605,6 +755,15 @@ export class CoursesService {
           },
         },
       });
+    });
+
+    this.notifyUser({
+      sender_id: admin_id,
+      receiver_id: updated.user_id,
+      title: 'Enrollment updated',
+      content: `Your enrollment for ${updated.course?.title ?? 'a course'} has been updated.`,
+      type: NotificationType.ENROLLMENT_UPDATED,
+      entity_id: updated.id,
     });
 
     return {
@@ -2383,6 +2542,33 @@ export class CoursesService {
       throw new InternalServerErrorException('Assignment not created');
     }
 
+    const enrolledStudents = await this.prisma.enrollment.findMany({
+      where: {
+        status: EnrollmentStatus.ACTIVE,
+        course: {
+          modules: {
+            some: {
+              classes: {
+                some: { id: classId },
+              },
+            },
+          },
+        },
+      },
+      select: { user_id: true },
+    });
+
+    enrolledStudents.forEach((student) =>
+      this.notifyUser({
+        sender_id: userId,
+        receiver_id: student.user_id,
+        title: 'New assignment',
+        content: `A new assignment "${assignment.title}" has been posted.`,
+        type: NotificationType.ASSIGNMENT_CREATED,
+        entity_id: assignment.id,
+      }),
+    );
+
     return {
       message: 'Assignment created successfully',
       success: true,
@@ -2819,6 +3005,15 @@ export class CoursesService {
           },
         },
       },
+    });
+
+    this.notifyUser({
+      sender_id: user_id,
+      receiver_id: submission.student_id,
+      title: 'Assignment graded',
+      content: `Your submission for "${assignment.title}" has been graded.`,
+      type: NotificationType.ASSIGNMENT_GRADED,
+      entity_id: submission_id,
     });
 
     return {

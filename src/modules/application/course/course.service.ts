@@ -18,6 +18,10 @@ import {
 } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
+import {
+  NotificationRepository,
+  NotificationType,
+} from 'src/common/repository/notification/notification.repository';
 import appConfig from 'src/config/app.config';
 import {
   CreateEnrollmentDto,
@@ -33,6 +37,21 @@ export class CourseService {
     private prisma: PrismaService,
     @InjectQueue('document-queue') private readonly documentQueue: Queue,
   ) {}
+
+  private notifyUser(params: {
+    sender_id?: string;
+    receiver_id?: string;
+    title: string;
+    content: string;
+    type: NotificationType;
+    entity_id: string;
+  }) {
+    if (!params.receiver_id || params.sender_id === params.receiver_id) return;
+
+    NotificationRepository.createNotification(params).catch((error) =>
+      console.error('Failed to create notification:', error),
+    );
+  }
 
   async getCurrentStep(user_id: string, course_id: string) {
     if (!user_id) throw new UnauthorizedException('User not found');
@@ -915,11 +934,18 @@ export class CourseService {
       where: { id: assignment_id },
       select: {
         id: true,
+        title: true,
+        creator_id: true,
         class: {
           select: {
             module: {
               select: {
                 course_id: true,
+                course: {
+                  select: {
+                    instructor_id: true,
+                  },
+                },
               },
             },
           },
@@ -994,6 +1020,17 @@ export class CourseService {
 
     if (!submission)
       throw new InternalServerErrorException('Failed to submit assignment');
+
+    const receiverId =
+      assignment.creator_id ?? assignment.class.module.course.instructor_id;
+    this.notifyUser({
+      sender_id: user_id,
+      receiver_id: receiverId,
+      title: 'Assignment submitted',
+      content: `A submission was added for "${assignment.title}".`,
+      type: NotificationType.ASSIGNMENT_SUBMITTED,
+      entity_id: submission.id,
+    });
 
     return {
       success: true,

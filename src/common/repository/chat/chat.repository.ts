@@ -4,6 +4,7 @@ import Redis from 'ioredis';
 import appConfig from 'src/config/app.config';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 
+
 /**
  * Standalone PrismaClient for ChatRepository's static methods.
  * Cannot use NestJS-managed PrismaService because this is a static class
@@ -368,6 +369,7 @@ export class ChatRepository {
         }),
       )
       .catch((err) => console.error('Redis chat publish failed:', err));
+
 
     return formattedMessage;
   }
