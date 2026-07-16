@@ -459,9 +459,23 @@ export class TransactionService implements OnModuleInit {
       }
     } else {
       if (resolvedAmount === null) {
-        throw new BadRequestException(
-          'Amount is required for this payment type',
-        );
+        if (itemType === ItemType.COURSE_ENROLLMENT) {
+          resolvedAmount = enrollment?.order?.due_amount
+            ? Number(enrollment.order.due_amount)
+            : course?.fee_pence
+              ? Number(course.fee_pence) / 100
+              : 0;
+        } else if (itemType === ItemType.EVENT_TICKET) {
+          resolvedAmount = event?.amount_pence
+            ? Number(event.amount_pence) / 100
+            : 0;
+        }
+
+        if (!resolvedAmount) {
+          throw new BadRequestException(
+            'Amount is required when the fee is not set on the item',
+          );
+        }
       }
     }
 
