@@ -372,10 +372,10 @@ model Attendance {
 }
 
 model QRAttendanceSession {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-  expires_at DateTime
+  id         String    @id @default(cuid())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now())
+  expires_at DateTime?
 
   token      String  @unique
   class_id   String
