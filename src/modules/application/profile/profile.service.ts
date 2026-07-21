@@ -7,6 +7,7 @@ import { Queue } from 'bullmq';
 import appConfig from 'src/config/app.config';
 import { NajimStorage } from 'src/common/lib/Disk/NajimStorage';
 import { UserStatus } from 'src/common/constants/user-status.enum';
+import { QueryPaymentHistoryDto } from './dto/query-profile.dto';
 
 @Injectable()
 export class ProfileService {
@@ -188,67 +189,98 @@ export class ProfileService {
     return { message: 'Account deleted successfully', response };
   }
 
-  // async getNotificationSettings(userId: string) {
-  //   const settings = await this.prisma.userSetting.findMany({
-  //     where: {
-  //       user_id: userId,
-  //       setting: {
-  //         category: 'notification',
-  //       },
-  //     },
-  //     include: {
-  //       setting: true,
-  //     },
-  //   });
+  async getNotificationSettings(userId: string) {
+    const userSetting = await this.prisma.userSetting.findFirst({
+      where: {
+        user_id: userId,
+        setting: {
+          key: 'is_notification_enabled',
+        },
+      },
+      include: {
+        setting: true,
+      },
+    });
 
-  //   // Default notification settings if none exist
-  //   if (settings.length === 0) {
-  //     return {
-  //       pushNotifications: true,
-  //       emailNotifications: true,
-  //       smsNotifications: false,
-  //       courseUpdates: true,
-  //       eventReminders: true,
-  //     };
-  //   }
+    const is_notification_enabled = userSetting
+      ? userSetting.value === 'true' || userSetting.value === '1'
+      : true;
 
-  //   // Transform settings into a more usable format
-  //   const notificationSettings = {};
-  //   settings.forEach((setting) => {
-  //     notificationSettings[setting.setting.key] = setting.value === 'true';
-  //   });
+    return {
+      success: true,
+      data: {
+        is_notification_enabled,
+      },
+    };
+  }
 
-  //   return notificationSettings;
-  // }
+  async updateNotificationSettings(
+    userId: string,
+    settingsDto?: { is_notification_enabled?: boolean; [key: string]: any },
+  ) {
+    const key = 'is_notification_enabled';
 
-  // async updateNotificationSettings(userId: string, settings: any) {
-  //   const settingKeys = Object.keys(settings);
+    let setting = await this.prisma.setting.findUnique({
+      where: { key },
+    });
 
-  //   for (const key of settingKeys) {
-  //     const setting = await this.prisma.setting.findUnique({
-  //       where: { key },
-  //     });
+    if (!setting) {
+      setting = await this.prisma.setting.create({
+        data: {
+          key,
+          category: 'notification',
+          label: 'Notification Enabled',
+          default_value: 'true',
+        },
+      });
+    }
 
-  //     if (setting) {
-  //       await this.prisma.userSetting.upsert({
-  //         where: {
-  //           user_id: userId,
-  //           setting_id: setting.id,
-  //         },
-  //         update: {
-  //           value: settings[key].toString(),
-  //         },
-  //         create: {
-  //           user_id: userId,
-  //           setting_id: setting.id,
-  //           value: settings[key].toString(),
-  //         },
-  //       });
-  //     }
-  //   }
+    const existingUserSetting = await this.prisma.userSetting.findFirst({
+      where: {
+        user_id: userId,
+        setting_id: setting.id,
+      },
+    });
 
-  //   return { message: 'Notification settings updated successfully' };
-  // }
+    const currentState = existingUserSetting
+      ? existingUserSetting.value === 'true' ||
+        existingUserSetting.value === '1'
+      : true;
+
+    let isEnabled: boolean;
+    if (settingsDto?.is_notification_enabled !== undefined) {
+      isEnabled = Boolean(settingsDto.is_notification_enabled);
+    } else if (settingsDto?.enabled !== undefined) {
+      isEnabled = Boolean(settingsDto.enabled);
+    } else {
+      isEnabled = !currentState;
+    }
+
+    const stringValue = String(isEnabled);
+
+    if (existingUserSetting) {
+      await this.prisma.userSetting.update({
+        where: { id: existingUserSetting.id },
+        data: { value: stringValue },
+      });
+    } else {
+      await this.prisma.userSetting.create({
+        data: {
+          user_id: userId,
+          setting_id: setting.id,
+          value: stringValue,
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: `Notification turned ${isEnabled ? 'on' : 'off'} successfully`,
+      data: {
+        is_notification_enabled: isEnabled,
+      },
+    };
+  }
 
   // async submitSupportRequest(userId: string, supportData: any) {
   //   const user = await this.prisma.user.findUnique({
@@ -323,6 +355,88 @@ export class ProfileService {
         IsPaymentCompleted: enrollment.step === 'COMPLETED',
         startDate: enrollment.created_at,
       })),
+    };
+  }
+
+  async getPaymentHistory(userId: string, query: QueryPaymentHistoryDto) {
+    const limit = query.limit ? Number(query.limit) : 10;
+    const cursor = query.cursor;
+
+    const where = { user_id: userId };
+
+    const [total, payments] = await Promise.all([
+      this.prisma.paymentTransaction.count({ where }),
+      this.prisma.paymentTransaction.findMany({
+        where,
+        include: {
+          order: {
+            include: {
+              course: {
+                select: {
+                  title: true,
+                },
+              },
+              event: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+          installment: true,
+        },
+        orderBy: { created_at: 'desc' },
+        take: limit + 1,
+        cursor: cursor ? { id: cursor } : undefined,
+        skip: cursor ? 1 : undefined,
+      }),
+    ]);
+
+    let nextCursor: string | null = null;
+    if (payments.length > limit) {
+      const nextItem = payments.pop();
+      nextCursor = nextItem.id;
+    }
+
+    const data = payments.map((payment) => {
+      let title = 'Payment';
+      if (payment.order?.course?.title) {
+        title = payment.order.course.title;
+        if (
+          payment.installment ||
+          payment.order.payment_mode === 'INSTALLMENT'
+        ) {
+          title += ' - Monthly Payment';
+        }
+      } else if (payment.order?.event?.name) {
+        title = payment.order.event.name;
+        if (payment.order.item_type === 'EVENT_TICKET') {
+          title += ' - Event Ticket';
+        }
+      } else if (payment.order?.notes) {
+        title = payment.order.notes;
+      }
+
+      return {
+        id: payment.id,
+        title,
+        transaction_id: payment.transaction_ref || payment.id,
+        amount: payment.amount,
+        currency: payment.currency,
+        payment_date: payment.paid_at || payment.created_at,
+        status: payment.status,
+      };
+    });
+
+    return {
+      success: true,
+      data,
+      meta_data: {
+        total,
+        limit,
+        next_cursor: nextCursor,
+        has_more: nextCursor !== null,
+      },
     };
   }
 

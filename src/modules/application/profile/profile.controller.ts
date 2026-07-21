@@ -5,14 +5,16 @@ import {
   Post,
   Delete,
   Body,
-  Param,
+  Query,
   UseGuards,
-  Request,
 } from '@nestjs/common';
 import { ProfileService } from './profile.service';
 import { JwtAuthGuard } from 'src/modules/auth/guards/jwt-auth.guard';
 import { GetUser } from 'src/modules/auth/decorators/get-user.decorator';
 import { DisAllowDeactivated } from 'src/common/decorators/disallow-deactivated.decorator';
+
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { QueryPaymentHistoryDto } from './dto/query-profile.dto';
 
 @Controller('profile')
 export class ProfileController {
@@ -59,16 +61,16 @@ export class ProfileController {
     return this.profileService.activateAccount(user.userId);
   }
 
-  // // Push Notification Settings
-  // @Get('notification-settings')
-  // async getNotificationSettings(@Request() req) {
-  //   return this.profileService.getNotificationSettings(req.user.userId);
-  // }
-
-  // @Put('notification-settings')
-  // async updateNotificationSettings(@Request() req, @Body() settings: any) {
-  //   return this.profileService.updateNotificationSettings(req.user.userId, settings);
-  // }
+  // Push Notification Settings Toggle
+  @UseGuards(JwtAuthGuard)
+  @Put('notification-settings')
+  @DisAllowDeactivated()
+  async updateNotificationSettings(
+    @GetUser('userId') user_id: string,
+    @Body() settings: UpdateProfileDto,
+  ) {
+    return this.profileService.updateNotificationSettings(user_id, settings);
+  }
 
   // Support (Contact form submission)
   @UseGuards(JwtAuthGuard)
@@ -106,5 +108,15 @@ export class ProfileController {
   @DisAllowDeactivated()
   async getSignedDocuments(@GetUser('userId') user_id: string) {
     return this.profileService.getSignedDocuments(user_id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('payment-history')
+  @DisAllowDeactivated()
+  async getPaymentHistory(
+    @GetUser('userId') user_id: string,
+    @Query() query: QueryPaymentHistoryDto,
+  ) {
+    return this.profileService.getPaymentHistory(user_id, query);
   }
 }
