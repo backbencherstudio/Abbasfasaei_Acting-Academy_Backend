@@ -282,30 +282,6 @@ export class ProfileService {
     };
   }
 
-  // async submitSupportRequest(userId: string, supportData: any) {
-  //   const user = await this.prisma.user.findUnique({
-  //     where: { id: userId },
-  //     select: { name: true, email: true },
-  //   });
-
-  //   // Create a support ticket (you might want to create a SupportTicket model)
-  //   // For now, we'll use the Contact model
-  //   const supportTicket = await this.prisma.contact.create({
-  //     data: {
-  //       first_name: user.name?.split(' ')[0] || 'User',
-  //       last_name: user.name?.split(' ').slice(1).join(' ') || '',
-  //       email: user.email,
-  //       phone_number: supportData.phone,
-  //       message: supportData.message,
-  //     },
-  //   });
-
-  //   return {
-  //     message: 'Support request submitted successfully',
-  //     ticketId: supportTicket.id,
-  //   };
-  // }
-
   async logout(userId: string) {
     await this.prisma.user.update({
       where: { id: userId },
@@ -313,49 +289,6 @@ export class ProfileService {
     });
     const response = await this.revokeRefreshToken(userId);
     return { message: 'Logged out successfully', response };
-  }
-
-  // Active User Only Methods
-  async getSubscriptionPayment(userId: string) {
-    const payments = await this.prisma.paymentTransaction.findMany({
-      where: { user_id: userId },
-      include: {
-        order: {
-          include: {
-            course: true,
-          },
-        },
-      },
-      orderBy: { paid_at: 'desc' },
-    });
-
-    const enrollments = await this.prisma.enrollment.findMany({
-      where: { user_id: userId },
-      include: {
-        course: {
-          select: {
-            title: true,
-          },
-        },
-      },
-    });
-
-    return {
-      paymentHistory: payments.map((payment) => ({
-        id: payment.id,
-        amount: payment.amount,
-        currency: payment.currency,
-        paymentDate: payment.paid_at,
-        status: payment.status,
-        course: payment.order?.course?.title,
-      })),
-      currentSubscriptions: enrollments.map((enrollment) => ({
-        course: enrollment.course?.title,
-        status: enrollment.status,
-        IsPaymentCompleted: enrollment.step === 'COMPLETED',
-        startDate: enrollment.created_at,
-      })),
-    };
   }
 
   async getPaymentHistory(userId: string, query: QueryPaymentHistoryDto) {
@@ -436,6 +369,200 @@ export class ProfileService {
         limit,
         next_cursor: nextCursor,
         has_more: nextCursor !== null,
+      },
+    };
+  }
+
+  async getMyCourses(userId: string) {
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: { user_id: userId },
+      include: {
+        course: true,
+        order: {
+          include: {
+            installment_plan: {
+              include: {
+                installments: {
+                  orderBy: { installment_no: 'asc' },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    const data = enrollments.map((enrollment) => {
+      const isInstallment =
+        enrollment.enrollment_type === 'INSTALLMENT' ||
+        enrollment.order?.payment_mode === 'INSTALLMENT' ||
+        !!enrollment.order?.installment_plan;
+
+      const baseTitle = enrollment.course?.title || 'Course';
+      const title = isInstallment
+        ? `${baseTitle} - Monthly Payment`
+        : baseTitle;
+
+      if (isInstallment && enrollment.order?.installment_plan) {
+        const plan = enrollment.order.installment_plan;
+        const totalInstallments =
+          plan.installment_count || plan.installments.length || 0;
+        const paidInstallments = plan.installments.filter(
+          (i) => i.status === 'PAID',
+        ).length;
+        const sampleAmount = plan.installments[0]?.amount
+          ? Number(plan.installments[0].amount)
+          : plan.total_amount
+            ? Number(plan.total_amount) / (totalInstallments || 1)
+            : 0;
+
+        const currency = enrollment.order?.currency || 'USD';
+
+        return {
+          id: enrollment.id,
+          enrollment_id: enrollment.id,
+          course_id: enrollment.course_id,
+          order_id: enrollment.order_id,
+          title,
+          is_installment: true,
+          monthly_amount: sampleAmount,
+          currency,
+          total_installments: totalInstallments,
+          paid_installments: paidInstallments,
+          monthly_payment_text: `$${sampleAmount.toFixed(2)}/month • ${totalInstallments} months`,
+          installment_progress_text: `${paidInstallments} of ${totalInstallments} paid`,
+          progress_percentage:
+            totalInstallments > 0
+              ? Math.round((paidInstallments / totalInstallments) * 100)
+              : 0,
+          status: enrollment.status,
+          created_at: enrollment.created_at,
+        };
+      }
+
+      return {
+        id: enrollment.id,
+        enrollment_id: enrollment.id,
+        course_id: enrollment.course_id,
+        order_id: enrollment.order_id,
+        title,
+        is_installment: false,
+        total_amount: enrollment.order?.total_amount
+          ? Number(enrollment.order.total_amount)
+          : enrollment.course?.fee_pence
+            ? enrollment.course.fee_pence / 100
+            : 0,
+        currency: enrollment.order?.currency || 'USD',
+        status: enrollment.status,
+        created_at: enrollment.created_at,
+      };
+    });
+
+    return {
+      success: true,
+      data,
+    };
+  }
+
+  async getCourseDetails(userId: string, id: string) {
+    const enrollment = await this.prisma.enrollment.findFirst({
+      where: {
+        user_id: userId,
+        OR: [{ id }, { course_id: id }, { order_id: id }],
+      },
+      include: {
+        course: true,
+        order: {
+          include: {
+            installment_plan: {
+              include: {
+                installments: {
+                  orderBy: { installment_no: 'asc' },
+                },
+              },
+            },
+            transactions: {
+              orderBy: { created_at: 'desc' },
+            },
+          },
+        },
+      },
+    });
+
+    if (!enrollment) {
+      throw new NotFoundException('Enrolled course not found');
+    }
+
+    const isInstallment =
+      enrollment.enrollment_type === 'INSTALLMENT' ||
+      enrollment.order?.payment_mode === 'INSTALLMENT' ||
+      !!enrollment.order?.installment_plan;
+
+    const baseTitle = enrollment.course?.title || 'Course';
+    const title = isInstallment ? `${baseTitle} - Monthly Payment` : baseTitle;
+
+    const currency = enrollment.order?.currency || 'USD';
+
+    if (isInstallment && enrollment.order?.installment_plan) {
+      const plan = enrollment.order.installment_plan;
+      const totalInstallments =
+        plan.installment_count || plan.installments.length || 0;
+      const paidInstallments = plan.installments.filter(
+        (i) => i.status === 'PAID',
+      ).length;
+
+      const items = plan.installments.map((inst) => ({
+        id: inst.id,
+        title: `Installment #${inst.installment_no}`,
+        installment_no: inst.installment_no,
+        status: inst.status,
+        date: inst.paid_at || inst.due_date,
+        amount: Number(inst.amount),
+        currency,
+      }));
+
+      return {
+        success: true,
+        data: {
+          id: enrollment.id,
+          enrollment_id: enrollment.id,
+          course_id: enrollment.course_id,
+          order_id: enrollment.order_id,
+          title,
+          is_installment: true,
+          total_installments: totalInstallments,
+          paid_installments: paidInstallments,
+          installment_progress_text: `${paidInstallments} of ${totalInstallments} paid`,
+          status: enrollment.status,
+          items,
+        },
+      };
+    }
+
+    // Full Payment / Non-installment
+    const transactions = enrollment.order?.transactions || [];
+    const items = transactions.map((tx) => ({
+      id: tx.id,
+      title: title,
+      transaction_id: tx.transaction_ref || tx.id,
+      status: tx.status,
+      date: tx.paid_at || tx.created_at,
+      amount: Number(tx.amount),
+      currency: tx.currency || currency,
+    }));
+
+    return {
+      success: true,
+      data: {
+        id: enrollment.id,
+        enrollment_id: enrollment.id,
+        course_id: enrollment.course_id,
+        order_id: enrollment.order_id,
+        title,
+        is_installment: false,
+        status: enrollment.status,
+        items,
       },
     };
   }

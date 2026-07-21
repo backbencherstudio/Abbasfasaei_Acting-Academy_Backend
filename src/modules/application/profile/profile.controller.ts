@@ -5,6 +5,7 @@ import {
   Post,
   Delete,
   Body,
+  Param,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -34,12 +35,6 @@ export class ProfileController {
   async updatePersonalInfo(@GetUser() user: any, @Body() updateData: any) {
     return this.profileService.updatePersonalInfo(user.userId, updateData);
   }
-
-  // Account Settings endpoints
-  // @Post('change-password')
-  // async changePassword(@GetUser() user: any, @Body() passwordData: any) {
-  //   return this.profileService.changePassword(user.userId, passwordData);
-  // }
 
   @UseGuards(JwtAuthGuard)
   @Put('disable-account')
@@ -97,13 +92,6 @@ export class ProfileController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('subscription-payment')
-  @DisAllowDeactivated()
-  async getSubscriptionPayment(@GetUser('userId') user_id: string) {
-    return this.profileService.getSubscriptionPayment(user_id);
-  }
-
-  @UseGuards(JwtAuthGuard)
   @Get('signed_documents')
   @DisAllowDeactivated()
   async getSignedDocuments(@GetUser('userId') user_id: string) {
@@ -118,5 +106,22 @@ export class ProfileController {
     @Query() query: QueryPaymentHistoryDto,
   ) {
     return this.profileService.getPaymentHistory(user_id, query);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('my-courses')
+  @DisAllowDeactivated()
+  async getMyCourses(@GetUser('userId') user_id: string) {
+    return this.profileService.getMyCourses(user_id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('my-courses/:id/details')
+  @DisAllowDeactivated()
+  async getCourseDetails(
+    @GetUser('userId') user_id: string,
+    @Param('id') id: string,
+  ) {
+    return this.profileService.getCourseDetails(user_id, id);
   }
 }
